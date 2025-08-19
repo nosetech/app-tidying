@@ -25,7 +25,7 @@ if [ "$IS_RUNNING" = "false" ]; then
     
     # ウィンドウが表示されるまで最大10秒待機
     for i in {1..10}; do
-        WINDOW_COUNT=$(osascript -e "tell application \"System Events\" to try to get count of windows of process \"$APP_NAME\"" 2>/dev/null || echo "0")
+        WINDOW_COUNT=$(osascript -e "tell application \"System Events\" to get count of windows of process \"$APP_NAME\"" 2>/dev/null || echo "0")
         echo "現在のウィンドウ数: $WINDOW_COUNT"
         if [ "$WINDOW_COUNT" -gt 0 ]; then
             echo "ウィンドウが表示されました"
