@@ -5,7 +5,7 @@
 echo "=== ディスプレイ情報 ==="
 
 # JXAを使用してディスプレイ情報を取得
-# 物理解像度、UI解像度（論理解像度）、スケーリング係数を取得
+# ディスプレイ名、物理解像度、UI解像度（論理解像度）、スケーリング係数を取得
 osascript -l JavaScript << 'JXASCRIPT'
 ObjC.import('AppKit')
 
@@ -17,6 +17,9 @@ for (let i = 0; i < screens.count; i++) {
     const frame = screen.frame
     const scaleFactor = screen.backingScaleFactor
 
+    // ディスプレイ名を取得（NSScreen.localizedNameを使用）
+    const displayName = ObjC.unwrap(screen.localizedName) || "不明"
+
     // 物理解像度
     const physicalWidth = Math.round(frame.size.width)
     const physicalHeight = Math.round(frame.size.height)
@@ -27,9 +30,9 @@ for (let i = 0; i < screens.count; i++) {
 
     // メインディスプレイの判定
     const isMainDisplay = screen.isEqual($.NSScreen.mainScreen)
-    const displayType = isMainDisplay ? "メイン" : "外部"
+    const displayType = isMainDisplay ? "（メイン）" : ""
 
-    result.push(`ディスプレイ ${i}: ${displayType}`)
+    result.push(`ディスプレイ ${i}: ${displayName} ${displayType}`)
     result.push(`  物理解像度: ${physicalWidth}x${physicalHeight}`)
     result.push(`  UI解像度: ${uiWidth}x${uiHeight}`)
     result.push(`  スケール係数: ${scaleFactor}x`)
