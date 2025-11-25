@@ -4,19 +4,39 @@
 
 echo "=== ディスプレイ情報 ==="
 
-# system_profilerを使用してディスプレイ情報を取得し、解像度部分を抽出
-system_profiler SPDisplaysDataType | grep -E "(Display Type|Resolution|UI Looks like)" | while read line; do
-    if [[ $line == *"Display Type"* ]]; then
-        display_name=$(echo "$line" | sed 's/.*Display Type: //')
-        echo "ディスプレイ: $display_name"
-    elif [[ $line == *"Resolution"* ]]; then
-        resolution=$(echo "$line" | sed 's/.*Resolution: //' | sed 's/ (.*//')
-        echo "  解像度: $resolution"
-    elif [[ $line == *"UI Looks like"* ]]; then
-        ui_resolution=$(echo "$line" | sed 's/.*UI Looks like: //' | sed 's/ @.*//')
-        echo "  UI解像度: $ui_resolution"
-    fi
-done
+# JXAを使用してディスプレイ情報を取得
+# 物理解像度、UI解像度（論理解像度）、スケーリング係数を取得
+osascript -l JavaScript << 'JXASCRIPT'
+ObjC.import('AppKit')
+
+const screens = $.NSScreen.screens
+const result = []
+
+for (let i = 0; i < screens.count; i++) {
+    const screen = screens.objectAtIndex(i)
+    const frame = screen.frame
+    const scaleFactor = screen.backingScaleFactor
+
+    // 物理解像度
+    const physicalWidth = Math.round(frame.size.width)
+    const physicalHeight = Math.round(frame.size.height)
+
+    // UI解像度（論理解像度）
+    const uiWidth = Math.round(physicalWidth / scaleFactor)
+    const uiHeight = Math.round(physicalHeight / scaleFactor)
+
+    // メインディスプレイの判定
+    const isMainDisplay = screen.isEqual($.NSScreen.mainScreen)
+    const displayType = isMainDisplay ? "メイン" : "外部"
+
+    result.push(`ディスプレイ ${i}: ${displayType}`)
+    result.push(`  物理解像度: ${physicalWidth}x${physicalHeight}`)
+    result.push(`  UI解像度: ${uiWidth}x${uiHeight}`)
+    result.push(`  スケール係数: ${scaleFactor}x`)
+}
+
+result.join('\n')
+JXASCRIPT
 
 echo ""
 echo "=== 画面境界情報 ==="
@@ -26,7 +46,7 @@ osascript -e '
 tell application "Finder"
     set screenBounds to bounds of window of desktop
     set leftX to item 1 of screenBounds
-    set topY to item 2 of screenBounds  
+    set topY to item 2 of screenBounds
     set rightX to item 3 of screenBounds
     set bottomY to item 4 of screenBounds
     return "全体の境界: " & leftX & ", " & topY & ", " & rightX & ", " & bottomY
