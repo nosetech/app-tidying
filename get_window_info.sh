@@ -1,42 +1,100 @@
 #!/bin/bash
 
 # Macで実行中のアプリケーションのウィンドウ情報を取得するスクリプト
-# ウィンドウのあるディスプレイ名を表示
+# システム設定ファイルからディスプレイ配置情報を取得して正確に判定
 
-# すべてのディスプレイ情報をJXAで取得
-# AppleScript内で直接使用するために、複数行の出力形式にする
-DISPLAYS_INFO=$(osascript -l JavaScript << 'JXASCRIPT'
+# システム設定ファイルからディスプレイ情報を取得する関数
+get_system_display_config() {
+    local plist_file=""
+    # ByHost ディレクトリから windowserver.displays plist を探す
+    plist_file=$(find ~/Library/Preferences/ByHost -name "com.apple.windowserver.displays.*.plist" 2>/dev/null | head -1)
+
+    if [[ -z "$plist_file" ]]; then
+        return 1
+    fi
+
+    # Python を使用してディスプレイ設定をパース
+    python3 << PYTHON
+import plistlib
+import sys
+
+with open("$plist_file", 'rb') as f:
+    plist = plistlib.load(f)
+
+# DisplaySets の最初の設定（ConfigVersion=1）を取得
+if 'DisplaySets' in plist and 'Configs' in plist['DisplaySets']:
+    configs = plist['DisplaySets']['Configs']
+    for config in configs:
+        if config.get('ConfigVersion') == 1:
+            # debug: ConfigVersion=1が見つかったことを出力
+            # print("DEBUG: Found ConfigVersion=1", file=sys.stderr)
+            for display_config in config.get('DisplayConfig', []):
+                current_info = display_config.get('CurrentInfo', {})
+                uuid = display_config.get('UUID', '')
+                origin_x = int(current_info.get('OriginX', 0))
+                origin_y = int(current_info.get('OriginY', 0))
+                wide = int(current_info.get('Wide', 0))
+                high = int(current_info.get('High', 0))
+
+                # debug: 各ディスプレイの情報
+                # print(f"DEBUG: UUID={uuid}, OriginX={origin_x}, OriginY={origin_y}, Wide={wide}, High={high}", file=sys.stderr)
+                print(f"{uuid}|{origin_x}|{origin_y}|{wide}|{high}")
+            break
+PYTHON
+}
+
+# JXAでディスプレイ名とUUIDの対応を取得
+get_display_name_mapping() {
+    osascript -l JavaScript << 'JXASCRIPT'
 ObjC.import('AppKit')
 const screens = $.NSScreen.screens
 const result = []
 
 for (let i = 0; i < screens.count; i++) {
     const screen = screens.objectAtIndex(i)
-    const frame = screen.frame
     const displayName = ObjC.unwrap(screen.localizedName) || "不明"
-    const bounds = {
-        left: Math.round(frame.origin.x),
-        top: Math.round(frame.origin.y),
-        right: Math.round(frame.origin.x + frame.size.width),
-        bottom: Math.round(frame.origin.y + frame.size.height)
-    }
 
-    result.push(`${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}|${displayName}`)
+    result.push(displayName)
 }
 
 result.join('\n')
 JXASCRIPT
-)
+}
 
-# Bash側でディスプレイ情報をパース（複数行で処理）
+# システム設定からディスプレイ設定を取得
+SYSTEM_DISPLAYS=$(get_system_display_config)
+
+# JXAでディスプレイ名を取得
+DISPLAY_NAMES=$(get_display_name_mapping)
+
+# ディスプレイ情報をパースして AppleScript 用の配列を生成
 DISPLAY_LIST=""
-while IFS='|' read -r bounds display_name; do
-    if [[ -n "$bounds" && -n "$display_name" ]]; then
-        IFS=',' read -r left top right bottom <<< "$bounds"
+DISPLAY_NAME_ARRAY=()
+
+# ディスプレイ名を配列に格納
+while IFS= read -r name; do
+    DISPLAY_NAME_ARRAY+=("$name")
+done <<< "$DISPLAY_NAMES"
+
+# システム設定から取得したディスプレイ配置を処理
+display_index=0
+while IFS='|' read -r uuid origin_x origin_y wide high; do
+    if [[ -n "$uuid" ]]; then
+        # ディスプレイ名を取得（インデックスに対応）
+        display_name="${DISPLAY_NAME_ARRAY[$display_index]:-不明}"
+
+        # 境界座標を計算
+        left=$origin_x
+        top=$origin_y
+        right=$((origin_x + wide))
+        bottom=$((origin_y + high))
+
         # AppleScript用の配列形式を生成
         DISPLAY_LIST+="{$left, $top, $right, $bottom, \"$display_name\"}, "
+
+        ((display_index++))
     fi
-done <<< "$DISPLAYS_INFO"
+done <<< "$SYSTEM_DISPLAYS"
 
 # 最後のカンマとスペースを削除
 DISPLAY_LIST=${DISPLAY_LIST%, }
@@ -50,6 +108,9 @@ on findDisplayName(winX, winY, winW, winH, displaysInfo)
     set centerX to winX + (winW / 2)
     set centerY to winY + (winH / 2)
 
+    -- debug: ウィンドウ中心座標
+    -- log "DEBUG: Window center: (" & centerX & ", " & centerY & ")"
+
     -- ウィンドウの中心がディスプレイ内に含まれるか確認
     repeat with i from 1 to (count of displaysInfo)
         set displayInfo to item i of displaysInfo
@@ -59,12 +120,22 @@ on findDisplayName(winX, winY, winW, winH, displaysInfo)
         set displayBottom to item 4 of displayInfo
         set displayName to item 5 of displayInfo
 
+        -- debug: 各ディスプレイの境界
+        -- log "DEBUG: Display " & i & " (" & displayName & "): L=" & displayLeft & " T=" & displayTop & " R=" & displayRight & " B=" & displayBottom
+
         if centerX ≥ displayLeft and centerX ≤ displayRight and centerY ≥ displayTop and centerY ≤ displayBottom then
+            -- log "DEBUG: Matched center in display " & displayName
             return displayName
         end if
     end repeat
 
-    -- ウィンドウの境界がディスプレイと重なっているか確認
+    -- ウィンドウが複数のディスプレイと重なっている場合、最大の重なり面積を持つディスプレイを返す
+    set maxOverlapArea to 0
+    set displayNameWithMaxOverlap to ""
+
+    set winRight to winX + winW
+    set winBottom to winY + winH
+
     repeat with i from 1 to (count of displaysInfo)
         set displayInfo to item i of displaysInfo
         set displayLeft to item 1 of displayInfo
@@ -73,14 +144,50 @@ on findDisplayName(winX, winY, winW, winH, displaysInfo)
         set displayBottom to item 4 of displayInfo
         set displayName to item 5 of displayInfo
 
-        set winRight to winX + winW
-        set winBottom to winY + winH
-
         -- AABB衝突判定（軸並行境界ボックス）
-        if winX ≤ displayRight and winRight ≥ displayLeft and winY ≤ displayBottom and winBottom ≥ displayTop then
-            return displayName
+        if winX < displayRight and winRight > displayLeft and winY < displayBottom and winBottom > displayTop then
+            -- 重なり領域を計算
+            if displayLeft > winX then
+                set overlapLeft to displayLeft
+            else
+                set overlapLeft to winX
+            end if
+
+            if displayTop > winY then
+                set overlapTop to displayTop
+            else
+                set overlapTop to winY
+            end if
+
+            if displayRight < winRight then
+                set overlapRight to displayRight
+            else
+                set overlapRight to winRight
+            end if
+
+            if displayBottom < winBottom then
+                set overlapBottom to displayBottom
+            else
+                set overlapBottom to winBottom
+            end if
+
+            set overlapWidth to overlapRight - overlapLeft
+            set overlapHeight to overlapBottom - overlapTop
+
+            if overlapWidth > 0 and overlapHeight > 0 then
+                set overlapArea to overlapWidth * overlapHeight
+
+                if overlapArea > maxOverlapArea then
+                    set maxOverlapArea to overlapArea
+                    set displayNameWithMaxOverlap to displayName
+                end if
+            end if
         end if
     end repeat
+
+    if displayNameWithMaxOverlap ≠ "" then
+        return displayNameWithMaxOverlap
+    end if
 
     -- どのディスプレイとも重ならない場合は、最も近いディスプレイを返す
     set closestDisplayIndex to 1
