@@ -15,27 +15,27 @@ is_stage_manager_enabled() {
 
 # ステージマネージャの有効状態を表示
 echo "========================================="
-echo "Stage Manager Status Check"
+echo "ステージマネージャの状態確認"
 echo "========================================="
 echo ""
 
 # macOS バージョンを確認
 os_version=$(sw_vers -productVersion)
-echo "macOS Version: $os_version"
+echo "macOS バージョン: $os_version"
 echo ""
 
 # ステージマネージャが有効か確認
 stage_manager_enabled=$(is_stage_manager_enabled)
-echo "Stage Manager Enabled: $stage_manager_enabled"
+echo "ステージマネージャ有効: $stage_manager_enabled"
 
 # com.apple.WindowManager の全キーを表示
 echo ""
-echo "com.apple.WindowManager Settings:"
+echo "com.apple.WindowManager 設定:"
 defaults read com.apple.WindowManager 2>/dev/null
 
 echo ""
 echo "========================================="
-echo "Stage Manager Window Behavior Test"
+echo "ステージマネージャのウィンドウ動作テスト"
 echo "========================================="
 echo ""
 
@@ -62,15 +62,15 @@ tell application "System Events"
                         set winH to item 2 of winSize
 
                         -- ウィンドウ情報を記録
-                        set windowInfo to procName & " | " & winTitle & " | Position: (" & winX & ", " & winY & ") | Size: " & winW & "x" & winH
+                        set windowInfo to procName & " | " & winTitle & " | 位置: (" & winX & ", " & winY & ") | サイズ: " & winW & "x" & winH
                         set end of windowInfoList to windowInfo
                     on error errMsg
-                        log "Error getting window info: " & errMsg
+                        log "ウィンドウ情報の取得エラー: " & errMsg
                     end try
                 end repeat
             end if
         on error
-            -- Skip
+            -- スキップ
         end try
     end repeat
 
@@ -79,13 +79,13 @@ tell application "System Events"
         log info
     end repeat
 
-    log "Total windows found: " & (count of windowInfoList)
+    log "見つかったウィンドウの合計: " & (count of windowInfoList)
 end tell
 APPLESCRIPT
 
 echo ""
 echo "========================================="
-echo "Stage Manager Group Information"
+echo "ステージマネージャグループ情報"
 echo "========================================="
 echo ""
 
@@ -96,54 +96,54 @@ tell application "System Events"
     try
         -- Dock.app から Mission Control の状態を確認
         set missionControlActive to exists (process "Dock")
-        log "Mission Control check: " & missionControlActive
+        log "Mission Control の確認: " & missionControlActive
 
         -- ステージマネージャのグループ管理は AppleScript では直接アクセス不可
         -- グループ化されたウィンドウの情報は Window Server の内部データ構造に存在
-        log "Note: Stage Manager groups are managed by WindowServer and not directly accessible via AppleScript"
+        log "注: ステージマネージャのグループは WindowServer によって管理されており、AppleScript では直接アクセスできません"
 
     on error errMsg
-        log "Error: " & errMsg
+        log "エラー: " & errMsg
     end try
 end tell
 APPLESCRIPT
 
 echo ""
 echo "========================================="
-echo "Potential Limitations with Stage Manager"
+echo "ステージマネージャの制限事項"
 echo "========================================="
 echo ""
 
 cat << 'EOF'
-When Stage Manager is enabled:
+ステージマネージャが有効な場合:
 
-1. Window Access Limitations:
-   - Only windows in the active group are fully accessible via AppleScript
-   - Background group windows may return partial or incorrect position/size data
-   - Some window operations may fail on non-active group windows
+1. ウィンドウアクセスの制限:
+   - アクティブなグループ内のウィンドウのみが AppleScript で完全にアクセス可能
+   - バックグラウンドグループのウィンドウは不完全または不正な位置・サイズデータを返す可能性
+   - 非アクティブなグループのウィンドウでは一部の操作が失敗する可能性
 
-2. Window Position/Size Impact:
-   - Window positions may be relative to the group rather than screen coordinates
-   - Window sizes may not reflect the actual visual size due to grouping
+2. ウィンドウの位置・サイズへの影響:
+   - ウィンドウの位置がグループに相対的であり、画面座標では表現されない可能性
+   - グループ化によりウィンドウサイズが実際の表示サイズを反映していない可能性
 
-3. Multi-App Groups:
-   - Multiple applications can be grouped together in a single Stage Manager group
-   - Grouped windows move together as a unit
-   - Ungrouping operations may not be supported via AppleScript
+3. 複数アプリのグループ化:
+   - 複数のアプリケーションが1つのステージマネージャグループにグループ化される可能性
+   - グループ化されたウィンドウは1つのユニットとして移動
+   - AppleScript ではグループ化解除操作はサポートされない可能性
 
-4. Implementation Recommendations:
-   - Check Stage Manager status before performing window operations
-   - Consider adding a flag to disable app when Stage Manager is enabled
-   - Document that window layout restoration may not work properly with Stage Manager
-   - Offer user warning when attempting to manage windows with Stage Manager active
+4. 実装時の推奨事項:
+   - ウィンドウ操作前にステージマネージャの状態をチェック
+   - ステージマネージャが有効な場合はアプリを無効化するフラグの追加を検討
+   - ステージマネージャ有効時のウィンドウレイアウト復元は正常に機能しないことを文書化
+   - ステージマネージャがアクティブな場合、ウィンドウ管理時にユーザーに警告を表示
 
-5. workarounds:
-   - Toggle Stage Manager off temporarily for window management
-   - Use AppleScript to activate the target application first
-   - Implement retry logic if window operations fail
+5. 回避策:
+   - ウィンドウ管理の際、ステージマネージャを一時的に無効化
+   - AppleScript を使用してターゲットアプリケーションを事前にアクティベート
+   - ウィンドウ操作失敗時のリトライロジックを実装
 EOF
 
 echo ""
 echo "========================================="
-echo "Verification Complete"
+echo "検証完了"
 echo "========================================="

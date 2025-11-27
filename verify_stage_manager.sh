@@ -5,14 +5,14 @@
 
 # System Information を取得する関数
 get_system_info() {
-    echo "=== macOS System Information ==="
-    system_profiler SPSoftwareDataType 2>/dev/null | grep -E "System Version|Kernel Version" || echo "Not available"
+    echo "=== macOS システム情報 ==="
+    system_profiler SPSoftwareDataType 2>/dev/null | grep -E "System Version|Kernel Version" || echo "取得できません"
     echo ""
 }
 
 # ステージマネージャの状態を取得する関数（AppleScript）
 check_stage_manager_applescript() {
-    echo "=== Stage Manager Status (AppleScript) ==="
+    echo "=== ステージマネージャの状態 (AppleScript) ==="
 
     osascript << 'APPLESCRIPT'
 tell application "System Events"
@@ -44,25 +44,25 @@ APPLESCRIPT
 
 # defaults コマンドを使ってステージマネージャの設定を確認
 check_stage_manager_defaults() {
-    echo "=== Stage Manager Status (defaults read) ==="
+    echo "=== ステージマネージャの状態 (defaults read) ==="
 
     # Desktop ドメインでステージマネージャ関連のキーを検索
-    echo "Checking com.apple.WindowManager..."
-    defaults read com.apple.WindowManager 2>/dev/null | grep -i "stage" || echo "No stage-related keys found"
+    echo "com.apple.WindowManager を確認中..."
+    defaults read com.apple.WindowManager 2>/dev/null | grep -i "stage" || echo "ステージマネージャ関連のキーが見つかりません"
 
     echo ""
-    echo "Checking com.apple.dock for stage manager settings..."
-    defaults read com.apple.dock 2>/dev/null | grep -i -E "stage|expose" || echo "No stage-related keys found"
+    echo "com.apple.dock のステージマネージャ設定を確認中..."
+    defaults read com.apple.dock 2>/dev/null | grep -i -E "stage|expose" || echo "ステージマネージャ関連のキーが見つかりません"
 
     echo ""
 }
 
 # ステージマネージャ関連の設定キーをすべて探索
 search_stage_manager_settings() {
-    echo "=== Searching for Stage Manager Settings ==="
+    echo "=== ステージマネージャ設定の検索 ==="
 
     # ホームディレクトリの全てのプリファレンスを探索
-    echo "Searching in ~/Library/Preferences/..."
+    echo "~/Library/Preferences/ で検索中..."
 
     local found_keys=0
 
@@ -70,11 +70,11 @@ search_stage_manager_settings() {
     # 代わりに既知のドメインをチェック
     for domain in com.apple.dock com.apple.WindowManager com.apple.Expose com.apple.spaces; do
         echo ""
-        echo "Domain: $domain"
+        echo "ドメイン: $domain"
         if defaults read "$domain" 2>/dev/null | head -20; then
             found_keys=$((found_keys + 1))
         else
-            echo "  (not found)"
+            echo "  (見つかりません)"
         fi
     done
 
@@ -83,23 +83,23 @@ search_stage_manager_settings() {
 
 # System Preferences から直接読み込み
 check_system_settings() {
-    echo "=== Stage Manager from System Settings ==="
+    echo "=== システム設定からのステージマネージャ ==="
 
     # macOS 13+ のシステム設定で Desktop & Dock セクションをチェック
-    defaults read com.apple.desktop 2>/dev/null | grep -i stage || echo "No Desktop setting found"
+    defaults read com.apple.desktop 2>/dev/null | grep -i stage || echo "デスクトップ設定が見つかりません"
 
     echo ""
 }
 
 # ウィンドウ動作の検証
 verify_window_behavior() {
-    echo "=== Window Behavior Verification ==="
+    echo "=== ウィンドウの動作検証 ==="
 
     # ステージマネージャが有効な場合とそうでない場合のウィンドウ取得の違いを検証
     osascript << 'APPLESCRIPT'
 tell application "System Events"
     set processCount to count of processes
-    log "Total processes: " & processCount
+    log "総プロセス数: " & processCount
 
     set visibleProcesses to 0
     set hiddenProcesses to 0
@@ -113,14 +113,14 @@ tell application "System Events"
                 set procName to name of proc
                 set windowCount to count of windows of proc
                 if windowCount > 0 then
-                    log procName & ": " & windowCount & " windows"
+                    log procName & ": " & windowCount & " ウィンドウ"
                 end if
             end if
         end try
     end repeat
 
-    log "Visible processes: " & visibleProcesses
-    log "Background processes: " & hiddenProcesses
+    log "表示中のプロセス: " & visibleProcesses
+    log "バックグラウンドプロセス: " & hiddenProcesses
 end tell
 APPLESCRIPT
 
@@ -129,7 +129,7 @@ APPLESCRIPT
 
 # JXA (JavaScript for Automation) を使用した確認
 check_with_jxa() {
-    echo "=== Stage Manager Status (JXA) ==="
+    echo "=== ステージマネージャの状態 (JXA) ==="
 
     osascript -l JavaScript << 'JXASCRIPT'
 ObjC.import('AppKit')
@@ -150,12 +150,12 @@ const stageManagerKeys = [
 try {
     // NSScreen 情報から仮想デスクトップの情報を取得
     const screens = $.NSScreen.screens
-    console.log("Number of screens: " + screens.count)
+    console.log("スクリーン数: " + screens.count)
 
     // Desktop & Dock プリファレンスを読み込む
     const plistPath = $.NSHomeDirectory() + "/Library/Preferences/com.apple.WindowManager.plist"
     const plistExists = fm.fileExistsAtPath(plistPath)
-    console.log("WindowManager plist exists: " + plistExists)
+    console.log("WindowManager plist が存在: " + plistExists)
 
     if (plistExists) {
         const plist = $.NSMutableDictionary.dictionaryWithContentsOfFile(plistPath)
@@ -164,14 +164,14 @@ try {
             for (let i = 0; i < keys.count; i++) {
                 const key = $.NSString(keys.objectAtIndex(i))
                 if (ObjC.unwrap(key).toLowerCase().includes('stage')) {
-                    console.log("Found Stage Manager key: " + key + " = " + plist.objectForKey(key))
+                    console.log("ステージマネージャキーを検出: " + key + " = " + plist.objectForKey(key))
                 }
             }
         }
     }
 
 } catch (e) {
-    console.log("Error: " + e)
+    console.log("エラー: " + e)
 }
 JXASCRIPT
 
@@ -180,16 +180,16 @@ JXASCRIPT
 
 # ステージマネージャが有効な場合のウィンドウへの影響を検証
 verify_stage_manager_impact() {
-    echo "=== Potential Stage Manager Impact on Windows ==="
+    echo "=== ステージマネージャがウィンドウに与える潜在的な影響 ==="
 
-    echo "When Stage Manager is enabled:"
-    echo "1. Only windows in the active group are fully visible"
-    echo "2. Window positions may be affected by group management"
-    echo "3. Multiple windows may be managed as groups"
-    echo "4. AppleScript window position/size queries may return different results"
+    echo "ステージマネージャが有効な場合:"
+    echo "1. アクティブなグループ内のウィンドウのみが完全に表示される"
+    echo "2. ウィンドウの位置がグループ管理の影響を受ける可能性がある"
+    echo "3. 複数のウィンドウはグループとして管理される可能性がある"
+    echo "4. AppleScript でウィンドウの位置・サイズの取得が異なる結果を返す可能性"
     echo ""
 
-    echo "Testing window accessibility..."
+    echo "ウィンドウアクセスをテスト中..."
     osascript << 'APPLESCRIPT'
 tell application "System Events"
     set appCount to 0
@@ -212,13 +212,13 @@ tell application "System Events"
                 end try
             end repeat
         on error
-            -- Skip processes that don't have windows
+            -- ウィンドウのないプロセスはスキップ
         end try
     end repeat
 
-    log "Applications with windows: " & appCount
-    log "Total windows accessible: " & windowCount
-    log "Windows with inaccessible position/size: " & inaccessibleCount
+    log "ウィンドウを持つアプリケーション数: " & appCount
+    log "アクセス可能なウィンドウの合計: " & windowCount
+    log "位置・サイズ取得が不可能なウィンドウ: " & inaccessibleCount
 end tell
 APPLESCRIPT
 
@@ -228,7 +228,7 @@ APPLESCRIPT
 # メイン処理
 main() {
     echo "========================================="
-    echo "Stage Manager Verification Script"
+    echo "ステージマネージャ検証スクリプト"
     echo "========================================="
     echo ""
 
@@ -242,7 +242,7 @@ main() {
     search_stage_manager_settings
 
     echo "========================================="
-    echo "Verification Complete"
+    echo "検証完了"
     echo "========================================="
 }
 
