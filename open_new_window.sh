@@ -106,12 +106,12 @@ tell application "System Events"
       -- メニューアイテムを取得
       set menuItems to (every menu item of fileMenu)
 
-      -- 「New Window」「新規ウインドウ」を検索してクリック
+      -- 「New Window」「新規ウインドウ」「新規Finderウインドウ」を検索してクリック
       repeat with mi in menuItems
         try
           set itemName to name of mi
           -- 英語と日本語の両方に対応
-          if (itemName contains "New Window") or (itemName contains "新規ウインドウ") then
+          if (itemName contains "New Window") or (itemName contains "新規ウインドウ") or (itemName contains "新規Finderウインドウ") then
             click mi
             return "Success: New window opened"
           end if
