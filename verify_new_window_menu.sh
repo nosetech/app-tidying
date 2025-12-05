@@ -161,7 +161,7 @@ tell application "System Events"
       repeat with mi in menuItems
         try
           set itemName to name of mi
-          if itemName contains "New" then
+          if (itemName contains "New") or (itemName contains "新規") then
             return "Success: Found menu item in Safari: " & itemName
           end if
         end try
