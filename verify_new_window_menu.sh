@@ -46,21 +46,23 @@ test_menu_structure_access() {
         return 0
     fi
 
-    osascript > /tmp/test1.txt << 'APPLESCRIPT'
-tell application "Finder"
-    activate
+    local result
+    result=$(osascript << 'APPLESCRIPT'
+tell application "System Events"
+  tell process "Finder"
     try
-        set menu_bar to menu bar 1
-        set menu_count to (count of menus of menu_bar)
-        return "Success: Found " & menu_count & " menus in menu bar"
+      set menubar to menu bar 1
+      set allMenus to (every menu of menubar)
+      set menuCount to count of allMenus
+      return "Success: Found " & menuCount & " menus in menu bar"
     on error err_msg
-        return "Error: " & err_msg
+      return "Error: " & err_msg
     end try
+  end tell
 end tell
 APPLESCRIPT
+    )
 
-    local result
-    result=$(cat /tmp/test1.txt)
     if [[ "$result" == "Success"* ]]; then
         log_success "$result"
     else
@@ -77,31 +79,45 @@ test_list_file_menu_items() {
         return 0
     fi
 
-    osascript > /tmp/test2.txt << 'APPLESCRIPT'
-tell application "Finder"
-    activate
+    local result
+    result=$(osascript << 'APPLESCRIPT'
+tell application "System Events"
+  tell process "Finder"
     try
-        set file_menu to menu "File" of menu bar 1
-        set item_count to (count of menu items of file_menu)
+      set menubar to menu bar 1
+      set allMenus to (every menu of menubar)
+      set fileMenu to {}
 
-        set found_items to ""
-        repeat with i from 1 to item_count
-            try
-                set menu_item to menu item i of file_menu
-                set item_title to title of menu_item
-                set found_items to found_items & item_title & ", "
-            end try
-        end repeat
+      repeat with m in allMenus
+        if name of m is "ファイル" or name of m is "File" then
+          set fileMenu to m
+          exit repeat
+        end if
+      end repeat
 
-        return "Success: File menu items (" & item_count & "): " & found_items
+      if fileMenu is {} then
+        return "Error: File menu not found"
+      end if
+
+      set menuItems to (every menu item of fileMenu)
+      set itemCount to count of menuItems
+      set itemNames to {}
+
+      repeat with mi in menuItems
+        try
+          set end of itemNames to name of mi
+        end try
+      end repeat
+
+      return "Success: File menu has " & itemCount & " items"
     on error err_msg
-        return "Error: " & err_msg
+      return "Error: " & err_msg
     end try
+  end tell
 end tell
 APPLESCRIPT
+    )
 
-    local result
-    result=$(cat /tmp/test2.txt)
     if [[ "$result" == "Success"* ]]; then
         log_success "$result"
     else
@@ -119,32 +135,47 @@ test_safari_menu_search() {
         sleep 2
     fi
 
-    osascript > /tmp/test3.txt << 'APPLESCRIPT'
-tell application "Safari"
-    activate
+    local result
+    result=$(osascript << 'APPLESCRIPT'
+tell application "System Events"
+  tell process "Safari"
     try
-        set file_menu to menu "File" of menu bar 1
-        set item_count to (count of menu items of file_menu)
+      set menubar to menu bar 1
+      set allMenus to (every menu of menubar)
+      set fileMenu to {}
 
-        repeat with i from 1 to item_count
-            try
-                set menu_item to menu item i of file_menu
-                set item_title to title of menu_item
-                if item_title contains "New" then
-                    return "Success: Found menu item in Safari: " & item_title
-                end if
-            end try
-        end repeat
+      repeat with m in allMenus
+        if name of m is "ファイル" or name of m is "File" then
+          set fileMenu to m
+          exit repeat
+        end if
+      end repeat
 
-        return "Info: No New menu items found in Safari"
+      if fileMenu is {} then
+        return "Error: File menu not found in Safari"
+      end if
+
+      set menuItems to (every menu item of fileMenu)
+      set itemNames to {}
+
+      repeat with mi in menuItems
+        try
+          set itemName to name of mi
+          if itemName contains "New" then
+            return "Success: Found menu item in Safari: " & itemName
+          end if
+        end try
+      end repeat
+
+      return "Info: No New menu items found in Safari"
     on error err_msg
-        return "Error: " & err_msg
+      return "Error: " & err_msg
     end try
+  end tell
 end tell
 APPLESCRIPT
+    )
 
-    local result
-    result=$(cat /tmp/test3.txt)
     if [[ "$result" == "Success"* ]]; then
         log_success "$result"
     else
@@ -158,36 +189,50 @@ test_generic_new_window_implementation() {
 
     cat << 'IMPL'
 
-=== AppleScript 実装例 ===
+=== AppleScript 実装例（修正版）===
 
 on openNewWindow(appName)
     try
-        tell application appName
-            activate
+        tell application "System Events"
+            tell process appName
+                activate
 
-            -- File メニュー（または日本語：ファイル）を取得
-            try
-                set file_menu to menu "File" of menu bar 1
-            on error
-                set file_menu to menu "ファイル" of menu bar 1
-            end try
+                -- メニューバーを取得
+                set menubar to menu bar 1
+                set allMenus to (every menu of menubar)
+                set fileMenu to {}
 
-            set item_count to (count of menu items of file_menu)
-
-            -- 「New Window」「新規ウィンドウ」のいずれかを検索
-            repeat with i from 1 to item_count
-                try
-                    set menu_item to menu item i of file_menu
-                    set item_title to title of menu_item
-
-                    if (item_title contains "New Window") or (item_title contains "新規ウィンドウ") then
-                        click menu_item
-                        return "Success: New window menu clicked"
+                -- File または ファイル メニューを検索
+                repeat with m in allMenus
+                    if name of m is "File" or name of m is "ファイル" then
+                        set fileMenu to m
+                        exit repeat
                     end if
-                end try
-            end repeat
+                end repeat
 
-            return "Error: New window menu not found"
+                if fileMenu is {} then
+                    return "Error: File menu not found"
+                end if
+
+                -- メニューアイテムを取得
+                set menuItems to (every menu item of fileMenu)
+
+                -- 「New Window」「新規ウィンドウ」を検索
+                repeat with mi in menuItems
+                    try
+                        set itemName to name of mi
+                        if (itemName contains "New") and (itemName contains "Window") then
+                            click mi
+                            return "Success: New window menu clicked"
+                        else if (itemName contains "新規") and (itemName contains "ウインドウ") then
+                            click mi
+                            return "Success: New window menu clicked"
+                        end if
+                    end try
+                end repeat
+
+                return "Error: New window menu not found"
+            end tell
         end tell
     on error err_msg
         return "Error: " & err_msg
@@ -212,33 +257,46 @@ test_chrome_multilingual() {
         return 0
     fi
 
-    osascript > /tmp/test5.txt << 'APPLESCRIPT'
-tell application "Google Chrome"
-    activate
+    local result
+    result=$(osascript << 'APPLESCRIPT'
+tell application "System Events"
+  tell process "Google Chrome"
     try
-        set file_menu to menu "File" of menu bar 1
-        set item_count to (count of menu items of file_menu)
+      set menubar to menu bar 1
+      set allMenus to (every menu of menubar)
+      set fileMenu to {}
 
-        repeat with i from 1 to item_count
-            try
-                set menu_item to menu item i of file_menu
-                set item_title to title of menu_item
+      repeat with m in allMenus
+        if name of m is "File" or name of m is "ファイル" then
+          set fileMenu to m
+          exit repeat
+        end if
+      end repeat
 
-                if (item_title contains "New Window") or (item_title contains "新規ウィンドウ") or (item_title contains "New Tab") or (item_title contains "新規タブ") then
-                    return "Success: Found menu item in Chrome: " & item_title
-                end if
-            end try
-        end repeat
+      if fileMenu is {} then
+        return "Error: File menu not found in Chrome"
+      end if
 
-        return "Info: No New menu items found in Chrome"
+      set menuItems to (every menu item of fileMenu)
+
+      repeat with mi in menuItems
+        try
+          set itemName to name of mi
+          if (itemName contains "New") or (itemName contains "新規") then
+            return "Success: Found menu item in Chrome: " & itemName
+          end if
+        end try
+      end repeat
+
+      return "Info: No New menu items found in Chrome"
     on error err_msg
-        return "Error: " & err_msg
+      return "Error: " & err_msg
     end try
+  end tell
 end tell
 APPLESCRIPT
+    )
 
-    local result
-    result=$(cat /tmp/test5.txt)
     if [[ "$result" == "Success"* ]]; then
         log_success "$result"
     else
