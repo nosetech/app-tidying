@@ -1,4 +1,4 @@
-use app_tidying::cli::Cli;
+use apptidying::cli::Cli;
 use clap::Parser;
 
 #[test]
