@@ -7,4 +7,5 @@ GitHub issueを分析して実行してください: issue番号 $ARGUMENTS
 3. 関連ファイルの検索
 4. コードの実装
 5. コミット(developブランチに直接コミットしないこと。feature/\*ブランチにコミットすること。)
-6. developブランチへのプルリクエスト作成。プルリクエストには対応したissueについて「Closes #issue no」を書くようにしてください。
+6. developブランチへのプルリクエスト作成。プルリクエストには対応したissueについて「Closes #issue no」を書く。
+7. サブエージェントcode-reviewer-jpによるレビューを実施し、結果はプルリクエストのレビューコメントとして書く。
