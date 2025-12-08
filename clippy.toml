@@ -1,0 +1,12 @@
+# Clippy configuration file for app-tidying project
+# This file defines linting thresholds for code quality checks
+
+# Cognitive complexity threshold
+# Measures the complexity of function logic
+# Default: 25, We set to 15 for stricter code quality standards
+cognitive-complexity-threshold = 15
+
+# Too many arguments threshold
+# Maximum number of function arguments before triggering a warning
+# Default: 7, We set to 5 to encourage better function design
+too-many-arguments-threshold = 5
