@@ -2,8 +2,9 @@ mod cli;
 mod config;
 mod logger;
 
-use cli::Cli;
 use clap::Parser;
+
+use cli::Cli;
 
 fn main() {
     let args = Cli::parse();
