@@ -1,7 +1,4 @@
-use apptidying::logger::{
-    escape_applescript_string_for_test, get_notification_config, init, init_simple, LoggerConfig,
-    NotificationConfig, NotificationLevel,
-};
+use apptidying::logger::{get_notification_config, init, init_simple, LoggerConfig, NotificationConfig, NotificationLevel};
 use std::fs;
 
 #[test]
