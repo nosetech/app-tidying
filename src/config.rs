@@ -62,18 +62,26 @@ pub struct LayoutConfig {
     pub displays: Vec<DisplayConfig>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct NotificationConfig {
-    #[serde(default = "default_notification_level")]
-    pub info: String,
-    #[serde(default = "default_notification_level")]
-    pub warn: String,
-    #[serde(default = "default_notification_level")]
-    pub error: String,
+fn default_notification_info() -> String {
+    "notification".to_string()
 }
 
-fn default_notification_level() -> String {
+fn default_notification_warn() -> String {
     "notification".to_string()
+}
+
+fn default_notification_error() -> String {
+    "dialog".to_string()
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NotificationConfig {
+    #[serde(default = "default_notification_info")]
+    pub info: String,
+    #[serde(default = "default_notification_warn")]
+    pub warn: String,
+    #[serde(default = "default_notification_error")]
+    pub error: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -99,9 +107,11 @@ impl std::fmt::Display for AppConfigError {
 
 impl std::error::Error for AppConfigError {}
 
-pub fn get_config_dir() -> PathBuf {
-    let home = dirs::home_dir().expect("Failed to get home directory");
-    home.join(".config/apptidying")
+pub fn get_config_dir() -> Result<PathBuf, AppConfigError> {
+    let home = dirs::home_dir().ok_or_else(|| AppConfigError {
+        message: "ホームディレクトリの取得に失敗しました".to_string(),
+    })?;
+    Ok(home.join(".config/apptidying"))
 }
 
 pub fn parse_config_from_json(json_str: &str) -> Result<AppConfig, AppConfigError> {
@@ -123,7 +133,7 @@ pub fn load_config_file(path: &PathBuf) -> Result<AppConfig, AppConfigError> {
 }
 
 pub fn load_default_config() -> Result<AppConfig, AppConfigError> {
-    let config_dir = get_config_dir();
+    let config_dir = get_config_dir()?;
     let config_path = config_dir.join("settings.json");
 
     load_config_file(&config_path)
@@ -171,7 +181,7 @@ fn validate_config(config: &AppConfig) -> Result<(), AppConfigError> {
 
             // ウィンドウの座標・サイズをチェック
             for window in &display.windows {
-                validate_window_config(window)?;
+                validate_window_config(window, &display.name)?;
             }
         }
     }
@@ -184,15 +194,25 @@ fn validate_config(config: &AppConfig) -> Result<(), AppConfigError> {
     Ok(())
 }
 
-fn validate_window_config(window: &AppWindowConfig) -> Result<(), AppConfigError> {
+fn validate_window_config(window: &AppWindowConfig, display_name: &str) -> Result<(), AppConfigError> {
     // 座標が指定されている場合のバリデーション
     if let Some(ref position) = window.position {
-        validate_position(position)?;
+        validate_position(position).map_err(|e| AppConfigError {
+            message: format!(
+                "ディスプレイ '{}' のアプリ '{}' のウィンドウ設定でエラー: {}",
+                display_name, window.app, e.message
+            ),
+        })?;
     }
 
     // サイズが指定されている場合のバリデーション
     if let Some(ref size) = window.size {
-        validate_size(size)?;
+        validate_size(size).map_err(|e| AppConfigError {
+            message: format!(
+                "ディスプレイ '{}' のアプリ '{}' のウィンドウ設定でエラー: {}",
+                display_name, window.app, e.message
+            ),
+        })?;
     }
 
     Ok(())
