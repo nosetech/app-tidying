@@ -2,20 +2,24 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+#[allow(dead_code)]
 const SUPPORTED_VERSION: &str = "1.0";
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PositionValue {
     Left,
     Right,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerticalPositionValue {
     Top,
     Bottom,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SizeValue {
     Half,
@@ -107,6 +111,7 @@ impl std::fmt::Display for AppConfigError {
 
 impl std::error::Error for AppConfigError {}
 
+#[allow(dead_code)]
 pub fn get_config_dir() -> Result<PathBuf, AppConfigError> {
     let home = dirs::home_dir().ok_or_else(|| AppConfigError {
         message: "ホームディレクトリの取得に失敗しました".to_string(),
@@ -114,6 +119,7 @@ pub fn get_config_dir() -> Result<PathBuf, AppConfigError> {
     Ok(home.join(".config/apptidying"))
 }
 
+#[allow(dead_code)]
 pub fn parse_config_from_json(json_str: &str) -> Result<AppConfig, AppConfigError> {
     let config: AppConfig = serde_json::from_str(json_str).map_err(|e| AppConfigError {
         message: format!("JSON パースエラー: {}", e),
@@ -123,6 +129,7 @@ pub fn parse_config_from_json(json_str: &str) -> Result<AppConfig, AppConfigErro
     Ok(config)
 }
 
+#[allow(dead_code)]
 pub fn load_config_file(path: &PathBuf) -> Result<AppConfig, AppConfigError> {
     let content = fs::read_to_string(path).map_err(|e| AppConfigError {
         message: format!("ファイル読み込みエラー ({}): {}", path.display(), e),
@@ -131,6 +138,7 @@ pub fn load_config_file(path: &PathBuf) -> Result<AppConfig, AppConfigError> {
     parse_config_from_json(&content)
 }
 
+#[allow(dead_code)]
 pub fn load_default_config() -> Result<AppConfig, AppConfigError> {
     let config_dir = get_config_dir()?;
     let config_path = config_dir.join("settings.json");
@@ -138,6 +146,7 @@ pub fn load_default_config() -> Result<AppConfig, AppConfigError> {
     load_config_file(&config_path)
 }
 
+#[allow(dead_code)]
 fn validate_config(config: &AppConfig) -> Result<(), AppConfigError> {
     // バージョンチェック
     if config.version != SUPPORTED_VERSION {
@@ -187,6 +196,7 @@ fn validate_config(config: &AppConfig) -> Result<(), AppConfigError> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_window_config(
     window: &AppWindowConfig,
     display_name: &str,
@@ -214,6 +224,7 @@ fn validate_window_config(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_value(
     value: &serde_json::Value,
     field_name: &str,
@@ -258,18 +269,21 @@ fn validate_value(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_position(position: &Position) -> Result<(), AppConfigError> {
     validate_value(&position.x, "x", &["left", "right"], 0)?;
     validate_value(&position.y, "y", &["top", "bottom"], 0)?;
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_size(size: &Size) -> Result<(), AppConfigError> {
     validate_value(&size.width, "width", &["half", "third", "max"], 1)?;
     validate_value(&size.height, "height", &["half", "third", "max"], 1)?;
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_notification_config(notification: &NotificationConfig) -> Result<(), AppConfigError> {
     let valid_values = ["notification", "dialog", "none"];
 
