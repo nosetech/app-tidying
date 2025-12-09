@@ -191,9 +191,13 @@ apptidying list
 
 ### ログファイル
 
-- **出力先**: `~/.config/apptidying/apptidying.log`
+- **出力先**: `~/Library/Application Support/biz.nosetech.apptidying/apptidying.log`
 - **ログレベル**: `DEBUG`, `INFO`, `WARN`, `ERROR`
 - **DEBUG出力**: 開発モード時のみ（`--verbose` フラグ使用時）
+- **ログ記録方針**: 標準出力や通知センター/ダイアログに表示するすべてのメッセージはログファイルに自動的に記録される
+  - ターミナル実行時：標準出力に出力される全メッセージ
+  - 非ターミナル実行時：通知センター/ダイアログに表示される全メッセージ
+  - タイムスタンプ付き（`YYYY-MM-DD HH:MM:SS`）でログファイルに記録
 
 ### 通知のカスタマイズ
 
