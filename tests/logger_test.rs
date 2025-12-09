@@ -1,4 +1,7 @@
-use apptidying::logger::{init_simple, LoggerConfig, NotificationConfig, NotificationLevel};
+use apptidying::logger::{
+    escape_applescript_string_for_test, get_notification_config, init, init_simple, LoggerConfig,
+    NotificationConfig, NotificationLevel,
+};
 use std::fs;
 
 #[test]
@@ -115,4 +118,133 @@ fn test_logger_debug_mode_variations() {
 
     assert!(debug_enabled.debug_mode);
     assert!(!debug_disabled.debug_mode);
+}
+
+#[test]
+fn test_logger_init_stores_config() {
+    let config = LoggerConfig {
+        debug_mode: false,
+        notification_config: Some(NotificationConfig {
+            info: "notification".to_string(),
+            warn: "dialog".to_string(),
+            error: "none".to_string(),
+        }),
+    };
+
+    init(config);
+
+    let stored_config = get_notification_config();
+    assert!(stored_config.is_some());
+
+    let nc = stored_config.unwrap();
+    assert_eq!(nc.info, "notification");
+    assert_eq!(nc.warn, "dialog");
+    assert_eq!(nc.error, "none");
+}
+
+#[test]
+fn test_logger_init_with_default_notification_config() {
+    let config = LoggerConfig {
+        debug_mode: true,
+        notification_config: Some(NotificationConfig::default()),
+    };
+
+    init(config);
+
+    let stored_config = get_notification_config();
+    assert!(stored_config.is_some());
+
+    let nc = stored_config.unwrap();
+    assert_eq!(nc.info, "notification");
+    assert_eq!(nc.warn, "notification");
+    assert_eq!(nc.error, "dialog");
+}
+
+#[test]
+fn test_logger_init_with_no_notification_config() {
+    let config = LoggerConfig {
+        debug_mode: false,
+        notification_config: None,
+    };
+
+    init(config);
+
+    let stored_config = get_notification_config();
+    assert!(stored_config.is_none());
+}
+
+#[test]
+fn test_escape_applescript_string() {
+    // バックスラッシュのエスケープをテスト
+    assert_eq!(
+        apptidying::logger::escape_applescript_string_for_test("test\\path"),
+        "test\\\\path"
+    );
+
+    // ダブルクォートのエスケープをテスト
+    assert_eq!(
+        apptidying::logger::escape_applescript_string_for_test("test\"quote"),
+        "test\\\"quote"
+    );
+
+    // 改行のエスケープをテスト
+    assert_eq!(
+        apptidying::logger::escape_applescript_string_for_test("test\nline"),
+        "test\\nline"
+    );
+
+    // キャリッジリターンのエスケープをテスト
+    assert_eq!(
+        apptidying::logger::escape_applescript_string_for_test("test\rline"),
+        "test\\rline"
+    );
+
+    // 複合エスケープをテスト
+    assert_eq!(
+        apptidying::logger::escape_applescript_string_for_test("path\\file\"name\ntest"),
+        "path\\\\file\\\"name\\ntest"
+    );
+}
+
+#[test]
+fn test_show_notification_terminal_execution() {
+    // ターミナル実行時（TERM環境変数が設定されている場合）のテスト
+    // この関数は println! を呼び出すため、テスト環境ではターミナル出力が確認できる
+    std::env::set_var("TERM", "xterm");
+
+    let config = LoggerConfig {
+        debug_mode: false,
+        notification_config: Some(NotificationConfig::default()),
+    };
+
+    init(config);
+
+    // show_notification を実行（ターミナル実行時は println! が実行される）
+    apptidying::logger::show_notification(NotificationLevel::Info, "Test notification");
+
+    // ターミナル出力が実行されたことを確認（テスト実行時に標準出力に表示される）
+    // 実際の検証は、test コマンド実行時の出力で確認可能
+}
+
+#[test]
+fn test_init_stores_custom_notification_config() {
+    // カスタム通知設定を保存・検証するテスト
+    let custom_config = LoggerConfig {
+        debug_mode: true,
+        notification_config: Some(NotificationConfig {
+            info: "none".to_string(),
+            warn: "dialog".to_string(),
+            error: "notification".to_string(),
+        }),
+    };
+
+    init(custom_config);
+
+    let stored = get_notification_config();
+    assert!(stored.is_some());
+
+    let nc = stored.unwrap();
+    assert_eq!(nc.info, "none", "info should be 'none'");
+    assert_eq!(nc.warn, "dialog", "warn should be 'dialog'");
+    assert_eq!(nc.error, "notification", "error should be 'notification'");
 }

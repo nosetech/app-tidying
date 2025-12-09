@@ -217,3 +217,17 @@ fn show_dialog(message: &str) {
         _ => {}
     }
 }
+
+#[allow(dead_code)]
+pub fn get_notification_config() -> Option<NotificationConfig> {
+    LOGGER_CONFIG.with(|cfg| {
+        cfg.borrow()
+            .as_ref()
+            .and_then(|c| c.notification_config.clone())
+    })
+}
+
+#[allow(dead_code)]
+pub fn escape_applescript_string_for_test(s: &str) -> String {
+    escape_applescript_string(s)
+}

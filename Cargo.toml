@@ -15,3 +15,5 @@ dirs = "5.0"
 chrono = "0.4"
 
 [dev-dependencies]
+tempfile = "3.8"
+predicates = "3.0"
