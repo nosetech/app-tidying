@@ -1,6 +1,5 @@
 use apptidying::logger::{init_simple, LoggerConfig, NotificationConfig, NotificationLevel};
 use std::fs;
-use std::path::PathBuf;
 
 #[test]
 fn test_logger_config_creation() {
@@ -68,7 +67,7 @@ fn test_log_file_path_generation() {
         }
     };
 
-    let expected_path =
+    let _expected_path =
         home.join("Library/Application Support/biz.nosetech.apptidying/apptidying.log");
 
     // ログファイルディレクトリの存在確認
