@@ -1,4 +1,6 @@
-use apptidying::logger::{get_notification_config, init, init_simple, LoggerConfig, NotificationConfig, NotificationLevel};
+use apptidying::logger::{
+    get_notification_config, init, init_simple, LoggerConfig, NotificationConfig, NotificationLevel,
+};
 use std::fs;
 
 #[test]
