@@ -115,10 +115,9 @@ pub fn get_config_dir() -> Result<PathBuf, AppConfigError> {
 }
 
 pub fn parse_config_from_json(json_str: &str) -> Result<AppConfig, AppConfigError> {
-    let config: AppConfig = serde_json::from_str(json_str)
-        .map_err(|e| AppConfigError {
-            message: format!("JSON パースエラー: {}", e),
-        })?;
+    let config: AppConfig = serde_json::from_str(json_str).map_err(|e| AppConfigError {
+        message: format!("JSON パースエラー: {}", e),
+    })?;
 
     validate_config(&config)?;
     Ok(config)
@@ -161,10 +160,7 @@ fn validate_config(config: &AppConfig) -> Result<(), AppConfigError> {
     for layout in &config.layouts {
         if layout.displays.is_empty() {
             return Err(AppConfigError {
-                message: format!(
-                    "レイアウト '{}' のディスプレイが空です",
-                    layout.name
-                ),
+                message: format!("レイアウト '{}' のディスプレイが空です", layout.name),
             });
         }
 
@@ -172,10 +168,7 @@ fn validate_config(config: &AppConfig) -> Result<(), AppConfigError> {
         for display in &layout.displays {
             if display.windows.is_empty() {
                 return Err(AppConfigError {
-                    message: format!(
-                        "ディスプレイ '{}' のウィンドウが空です",
-                        display.name
-                    ),
+                    message: format!("ディスプレイ '{}' のウィンドウが空です", display.name),
                 });
             }
 
@@ -194,7 +187,10 @@ fn validate_config(config: &AppConfig) -> Result<(), AppConfigError> {
     Ok(())
 }
 
-fn validate_window_config(window: &AppWindowConfig, display_name: &str) -> Result<(), AppConfigError> {
+fn validate_window_config(
+    window: &AppWindowConfig,
+    display_name: &str,
+) -> Result<(), AppConfigError> {
     // 座標が指定されている場合のバリデーション
     if let Some(ref position) = window.position {
         validate_position(position).map_err(|e| AppConfigError {

@@ -128,10 +128,7 @@ fn test_parse_config_empty_displays() {
 
     let config = config::parse_config_from_json(json);
     assert!(config.is_err());
-    assert!(config
-        .unwrap_err()
-        .message
-        .contains("ディスプレイが空"));
+    assert!(config.unwrap_err().message.contains("ディスプレイが空"));
 }
 
 #[test]
@@ -153,10 +150,7 @@ fn test_parse_config_empty_windows() {
 
     let config = config::parse_config_from_json(json);
     assert!(config.is_err());
-    assert!(config
-        .unwrap_err()
-        .message
-        .contains("ウィンドウが空"));
+    assert!(config.unwrap_err().message.contains("ウィンドウが空"));
 }
 
 #[test]
@@ -183,10 +177,7 @@ fn test_parse_config_invalid_position_x() {
 
     let config = config::parse_config_from_json(json);
     assert!(config.is_err());
-    assert!(config
-        .unwrap_err()
-        .message
-        .contains("無効な x 値"));
+    assert!(config.unwrap_err().message.contains("無効な x 値"));
 }
 
 #[test]
@@ -213,10 +204,7 @@ fn test_parse_config_invalid_position_y() {
 
     let config = config::parse_config_from_json(json);
     assert!(config.is_err());
-    assert!(config
-        .unwrap_err()
-        .message
-        .contains("無効な y 値"));
+    assert!(config.unwrap_err().message.contains("無効な y 値"));
 }
 
 #[test]
@@ -243,10 +231,7 @@ fn test_parse_config_invalid_size_width() {
 
     let config = config::parse_config_from_json(json);
     assert!(config.is_err());
-    assert!(config
-        .unwrap_err()
-        .message
-        .contains("無効な width 値"));
+    assert!(config.unwrap_err().message.contains("無効な width 値"));
 }
 
 #[test]
@@ -273,10 +258,7 @@ fn test_parse_config_invalid_size_height() {
 
     let config = config::parse_config_from_json(json);
     assert!(config.is_err());
-    assert!(config
-        .unwrap_err()
-        .message
-        .contains("無効な height 値"));
+    assert!(config.unwrap_err().message.contains("無効な height 値"));
 }
 
 #[test]
@@ -303,10 +285,7 @@ fn test_parse_config_negative_coordinates() {
 
     let config = config::parse_config_from_json(json);
     assert!(config.is_err());
-    assert!(config
-        .unwrap_err()
-        .message
-        .contains("が負です"));
+    assert!(config.unwrap_err().message.contains("が負です"));
 }
 
 #[test]
@@ -333,10 +312,7 @@ fn test_parse_config_zero_or_negative_size() {
 
     let config = config::parse_config_from_json(json);
     assert!(config.is_err());
-    assert!(config
-        .unwrap_err()
-        .message
-        .contains("正の数値"));
+    assert!(config.unwrap_err().message.contains("正の数値"));
 }
 
 #[test]
