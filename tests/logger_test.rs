@@ -60,9 +60,16 @@ fn test_logger_init_simple() {
 #[test]
 fn test_log_file_path_generation() {
     // ログファイルパスが正しく生成されることを確認
-    let home = dirs::home_dir().expect("Failed to get home directory");
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => {
+            // テスト環境でホームディレクトリが取得できない場合はテストをスキップ
+            return;
+        }
+    };
+
     let expected_path =
-        home.join("Library/Application Support/biz.nosetech.apptidying/AppTidying.log");
+        home.join("Library/Application Support/biz.nosetech.apptidying/apptidying.log");
 
     // ログファイルディレクトリの存在確認
     let log_dir = home.join("Library/Application Support/biz.nosetech.apptidying");
