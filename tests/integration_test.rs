@@ -306,7 +306,7 @@ fn test_parse_config_negative_coordinates() {
     assert!(config
         .unwrap_err()
         .message
-        .contains("座標が負"));
+        .contains("が負です"));
 }
 
 #[test]

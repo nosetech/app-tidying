@@ -218,129 +218,59 @@ fn validate_window_config(window: &AppWindowConfig, display_name: &str) -> Resul
     Ok(())
 }
 
+fn validate_value(
+    value: &serde_json::Value,
+    field_name: &str,
+    allowed_strings: &[&str],
+    min_numeric: i64,
+) -> Result<(), AppConfigError> {
+    match value {
+        serde_json::Value::String(s) => {
+            if !allowed_strings.contains(&s.as_str()) {
+                return Err(AppConfigError {
+                    message: format!(
+                        "無効な {} 値: '{}' ({} を指定)",
+                        field_name,
+                        s,
+                        allowed_strings.join(", ")
+                    ),
+                });
+            }
+        }
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if i < min_numeric {
+                    return Err(AppConfigError {
+                        message: if min_numeric == 0 {
+                            format!("{} が負です", field_name)
+                        } else {
+                            format!("{} は正の数値である必要があります", field_name)
+                        },
+                    });
+                }
+            }
+        }
+        serde_json::Value::Null => {
+            // null は許可
+        }
+        _ => {
+            return Err(AppConfigError {
+                message: format!("{} は文字列または数値である必要があります", field_name),
+            });
+        }
+    }
+    Ok(())
+}
+
 fn validate_position(position: &Position) -> Result<(), AppConfigError> {
-    // x 値のチェック
-    match &position.x {
-        serde_json::Value::String(s) => {
-            if !["left", "right"].contains(&s.as_str()) {
-                return Err(AppConfigError {
-                    message: format!("無効な x 値: '{}' (left または right を指定)", s),
-                });
-            }
-        }
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                if i < 0 {
-                    return Err(AppConfigError {
-                        message: "x 座標が負です".to_string(),
-                    });
-                }
-            }
-        }
-        serde_json::Value::Null => {
-            // null は許可
-        }
-        _ => {
-            return Err(AppConfigError {
-                message: "x は文字列または数値である必要があります".to_string(),
-            });
-        }
-    }
-
-    // y 値のチェック
-    match &position.y {
-        serde_json::Value::String(s) => {
-            if !["top", "bottom"].contains(&s.as_str()) {
-                return Err(AppConfigError {
-                    message: format!("無効な y 値: '{}' (top または bottom を指定)", s),
-                });
-            }
-        }
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                if i < 0 {
-                    return Err(AppConfigError {
-                        message: "y 座標が負です".to_string(),
-                    });
-                }
-            }
-        }
-        serde_json::Value::Null => {
-            // null は許可
-        }
-        _ => {
-            return Err(AppConfigError {
-                message: "y は文字列または数値である必要があります".to_string(),
-            });
-        }
-    }
-
+    validate_value(&position.x, "x", &["left", "right"], 0)?;
+    validate_value(&position.y, "y", &["top", "bottom"], 0)?;
     Ok(())
 }
 
 fn validate_size(size: &Size) -> Result<(), AppConfigError> {
-    // width のチェック
-    match &size.width {
-        serde_json::Value::String(s) => {
-            if !["half", "third", "max"].contains(&s.as_str()) {
-                return Err(AppConfigError {
-                    message: format!(
-                        "無効な width 値: '{}' (half, third または max を指定)",
-                        s
-                    ),
-                });
-            }
-        }
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                if i <= 0 {
-                    return Err(AppConfigError {
-                        message: "width は正の数値である必要があります".to_string(),
-                    });
-                }
-            }
-        }
-        serde_json::Value::Null => {
-            // null は許可
-        }
-        _ => {
-            return Err(AppConfigError {
-                message: "width は文字列または数値である必要があります".to_string(),
-            });
-        }
-    }
-
-    // height のチェック
-    match &size.height {
-        serde_json::Value::String(s) => {
-            if !["half", "third", "max"].contains(&s.as_str()) {
-                return Err(AppConfigError {
-                    message: format!(
-                        "無効な height 値: '{}' (half, third または max を指定)",
-                        s
-                    ),
-                });
-            }
-        }
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                if i <= 0 {
-                    return Err(AppConfigError {
-                        message: "height は正の数値である必要があります".to_string(),
-                    });
-                }
-            }
-        }
-        serde_json::Value::Null => {
-            // null は許可
-        }
-        _ => {
-            return Err(AppConfigError {
-                message: "height は文字列または数値である必要があります".to_string(),
-            });
-        }
-    }
-
+    validate_value(&size.width, "width", &["half", "third", "max"], 1)?;
+    validate_value(&size.height, "height", &["half", "third", "max"], 1)?;
     Ok(())
 }
 
