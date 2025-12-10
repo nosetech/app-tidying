@@ -5,8 +5,9 @@ GitHub issueを分析して実行してください: issue番号 $ARGUMENTS
 1. `gh issue view` で issue 詳細を取得
 2. 問題の理解
 3. 関連ファイルの検索
-4. コードの実装
-5. src/のファイルを修正した場合、修正した内容についてのテストコードを実装する。また、.github/workflows/ci.ymlで実行しているcargo fmt,cargo clippy,cargo testを実行して、エラーがあれば修正する。
-6. コミット(developブランチに直接コミットしないこと。feature/\*ブランチにコミットすること。)
-7. developブランチへのプルリクエスト作成。プルリクエストには対応したissueについて「Closes #issue no」を書く。
-8. サブエージェントcode-reviewer-jpにより修正したコードについてレビューを実施し、結果はプルリクエストのレビューコメントとして書く。
+4. コードの実装(テストコードは実装しない)
+5. .github/workflows/ci.ymlで実行しているcargo fmt,cargo clippyを実行して、エラーがあれば修正する。
+6. サブエージェントtest-code-implementerにより、実装したコードについてのテストコードを実装する。cargo testを実行し、問題があればコードを修正する。
+7. コミット(developブランチに直接コミットしないこと。feature/\*ブランチにコミットすること。)
+8. developブランチへのプルリクエスト作成。プルリクエストには対応したissueについて「Closes #issue no」を書く。
+9. サブエージェントcode-reviewer-jpにより、修正したコードについてレビューを実施してレビュー結果はプルリクエストのレビューコメントとして書く。
