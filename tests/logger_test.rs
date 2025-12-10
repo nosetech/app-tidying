@@ -721,8 +721,11 @@ fn test_show_notification_unicode_message_terminal() {
 // 実際の通知は表示されません（macOS環境でのみ動作）。
 
 #[test]
+#[ignore]
 fn test_show_notification_info_non_terminal() {
     // 非ターミナル実行時のInfo通知（TERM環境変数なし）
+    // 注: このテストは osascript 実行に依存するため、CI環境ではスキップ
+    // cargo test -- --ignored を実行する場合のみ実行
     let _lock = ENV_LOCK.lock().unwrap();
     std::env::remove_var("TERM");
 
@@ -737,8 +740,10 @@ fn test_show_notification_info_non_terminal() {
 }
 
 #[test]
+#[ignore]
 fn test_show_notification_warn_non_terminal() {
     // 非ターミナル実行時のWarn通知
+    // 注: このテストは osascript 実行に依存するため、CI環境ではスキップ
     let _lock = ENV_LOCK.lock().unwrap();
     std::env::remove_var("TERM");
 
@@ -752,8 +757,10 @@ fn test_show_notification_warn_non_terminal() {
 }
 
 #[test]
+#[ignore]
 fn test_show_notification_error_non_terminal() {
     // 非ターミナル実行時のError通知
+    // 注: このテストは osascript 実行に依存するため、CI環境ではスキップ
     let _lock = ENV_LOCK.lock().unwrap();
     std::env::remove_var("TERM");
 
@@ -767,8 +774,10 @@ fn test_show_notification_error_non_terminal() {
 }
 
 #[test]
+#[ignore]
 fn test_show_notification_with_custom_notification_config_info_none() {
     // カスタム通知設定（info="none"）の動作確認
+    // 注: このテストは osascript 実行に依存するため、CI環境ではスキップ
     let _lock = ENV_LOCK.lock().unwrap();
     std::env::remove_var("TERM");
 
@@ -787,8 +796,10 @@ fn test_show_notification_with_custom_notification_config_info_none() {
 }
 
 #[test]
+#[ignore]
 fn test_show_notification_with_custom_notification_config_warn_dialog() {
     // カスタム通知設定（warn="dialog"）の動作確認
+    // 注: このテストは osascript 実行に依存するため、CI環境ではスキップ
     let _lock = ENV_LOCK.lock().unwrap();
     std::env::remove_var("TERM");
 
@@ -807,8 +818,10 @@ fn test_show_notification_with_custom_notification_config_warn_dialog() {
 }
 
 #[test]
+#[ignore]
 fn test_show_notification_with_custom_notification_config_error_notification() {
     // カスタム通知設定（error="notification"）の動作確認
+    // 注: このテストは osascript 実行に依存するため、CI環境ではスキップ
     let _lock = ENV_LOCK.lock().unwrap();
     std::env::remove_var("TERM");
 
@@ -827,8 +840,10 @@ fn test_show_notification_with_custom_notification_config_error_notification() {
 }
 
 #[test]
+#[ignore]
 fn test_show_notification_without_notification_config() {
     // 通知設定なしで初期化した場合のデフォルト動作確認
+    // 注: このテストは osascript 実行に依存するため、CI環境ではスキップ
     let _lock = ENV_LOCK.lock().unwrap();
     std::env::remove_var("TERM");
 
@@ -996,8 +1011,10 @@ fn test_integration_full_workflow_terminal() {
 }
 
 #[test]
+#[ignore]
 fn test_integration_full_workflow_non_terminal() {
     // 完全なワークフローのインテグレーションテスト（非ターミナル実行）
+    // 注: このテストは osascript 実行に依存するため、CI環境ではスキップ
     let _lock = ENV_LOCK.lock().unwrap();
     std::env::remove_var("TERM");
 
