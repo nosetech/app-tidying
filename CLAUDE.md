@@ -368,6 +368,53 @@ Rust での実装では、以下を原則とする：
 - ログ出力の確認
 - AppleScript 実行結果の検証
 
+### テスト実行方法
+
+#### 標準テスト実行（CI環境推奨）
+
+```bash
+cargo test
+```
+
+通常のテスト実行。以下のテストが実行されます：
+- 構造体やロジックのユニットテスト
+- エラーハンドリングテスト
+- ターミナル実行環境のテスト
+
+CI環境（GitHub Actions等）ではこのコマンドで実行します。実行時間は数秒です。
+
+#### #[ignore] テストの実行
+
+```bash
+cargo test -- --ignored
+```
+
+以下のテストが実行されます：
+- `osascript` 実行に依存する非ターミナル実行テスト
+
+これらのテストはローカルmacOS環境でのみ実行可能です。CI環境では osascript が利用できないため、スキップされます。
+
+#### 標準出力を確認するテストの実行
+
+```bash
+cargo test -- --nocapture
+```
+
+テストの標準出力（`println!` など）がターミナルに表示されます。通常、テスト実行時は標準出力がキャプチャされて非表示になりますが、このオプションで確認できます。
+
+#### 複数オプションの組み合わせ
+
+```bash
+# #[ignore]テストを実行して、標準出力を確認
+cargo test -- --ignored --nocapture
+
+# 特定のテストのみ実行（例：logger関連）
+cargo test logger -- --nocapture
+
+# 特定の#[ignore]テストのみ実行
+cargo test test_show_notification_info_non_terminal -- --ignored --nocapture
+```
+
 ### 本番環境での確認項目
 
 - 複数アプリの同時操作
