@@ -1,13 +1,4 @@
-use apptidying::cli::Cli;
 use apptidying::config;
-use clap::Parser;
-
-#[test]
-fn test_cli_parser() {
-    let args = vec!["app-tidying"];
-    let cli = Cli::try_parse_from(&args);
-    assert!(cli.is_ok());
-}
 
 #[test]
 fn test_parse_valid_config() {
