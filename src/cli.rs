@@ -9,7 +9,8 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
 
-    #[arg(short, long)]
+    /// Enable verbose/debug output
+    #[arg(short, long, global = true)]
     pub verbose: bool,
 }
 

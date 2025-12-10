@@ -182,15 +182,21 @@ fn test_verbose_flag_with_save() {
 
 #[test]
 fn test_verbose_flag_after_subcommand() {
-    // 境界値: --verbose フラグがサブコマンドの後に指定されているケース（無効）
-    // clapのグローバルオプションはサブコマンドの前に配置する必要がある
+    // 境界値: --verbose フラグがサブコマンドの後に指定されているケース
+    // global = true により、サブコマンドの前後どちらにも配置可能
     let args = vec!["apptidying", "load", "--verbose"];
     let result = Cli::try_parse_from(args);
 
-    assert!(
-        result.is_err(),
-        "should fail when global option is placed after subcommand"
-    );
+    assert!(result.is_ok(), "should succeed when global option is placed after subcommand");
+
+    let cli = result.unwrap();
+    assert!(cli.verbose);
+    match cli.command {
+        Commands::Load { path } => {
+            assert!(path.is_none());
+        }
+        _ => panic!("expected Load command"),
+    }
 }
 
 // ========================================
