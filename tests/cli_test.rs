@@ -150,7 +150,10 @@ fn test_verbose_flag_long_form_with_load() {
     let args = vec!["apptidying", "--verbose", "load"];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert!(cli.verbose, "verbose flag should be true when --verbose is specified");
+    assert!(
+        cli.verbose,
+        "verbose flag should be true when --verbose is specified"
+    );
 }
 
 #[test]
@@ -159,7 +162,10 @@ fn test_verbose_flag_short_form_with_load() {
     let args = vec!["apptidying", "-v", "load"];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert!(cli.verbose, "verbose flag should be true when -v is specified");
+    assert!(
+        cli.verbose,
+        "verbose flag should be true when -v is specified"
+    );
 }
 
 #[test]
@@ -246,7 +252,10 @@ fn test_no_subcommand() {
     let args = vec!["apptidying"];
     let result = Cli::try_parse_from(args);
 
-    assert!(result.is_err(), "should fail when no subcommand is provided");
+    assert!(
+        result.is_err(),
+        "should fail when no subcommand is provided"
+    );
 }
 
 #[test]
@@ -454,5 +463,8 @@ fn test_debug_format() {
     let cli = Cli::try_parse_from(args).unwrap();
 
     let debug_string = format!("{:?}", cli);
-    assert!(debug_string.contains("Load"), "Debug output should contain 'Load'");
+    assert!(
+        debug_string.contains("Load"),
+        "Debug output should contain 'Load'"
+    );
 }
