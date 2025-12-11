@@ -187,7 +187,10 @@ fn test_verbose_flag_after_subcommand() {
     let args = vec!["apptidying", "load", "--verbose"];
     let result = Cli::try_parse_from(args);
 
-    assert!(result.is_ok(), "should succeed when global option is placed after subcommand");
+    assert!(
+        result.is_ok(),
+        "should succeed when global option is placed after subcommand"
+    );
 
     let cli = result.unwrap();
     assert!(cli.verbose);
