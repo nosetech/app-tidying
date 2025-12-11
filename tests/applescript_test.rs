@@ -25,19 +25,13 @@ fn test_escape_applescript_string_single_char() {
 #[test]
 fn test_escape_applescript_string_no_special_chars() {
     // 特殊文字を含まない文字列はそのまま返される
-    assert_eq!(
-        escape_applescript_string("Hello World"),
-        "Hello World"
-    );
+    assert_eq!(escape_applescript_string("Hello World"), "Hello World");
 }
 
 #[test]
 fn test_escape_applescript_string_alphanumeric() {
     // 英数字のみの文字列
-    assert_eq!(
-        escape_applescript_string("abc123XYZ"),
-        "abc123XYZ"
-    );
+    assert_eq!(escape_applescript_string("abc123XYZ"), "abc123XYZ");
 }
 
 #[test]
@@ -54,37 +48,25 @@ fn test_escape_applescript_string_spaces() {
 #[test]
 fn test_escape_applescript_string_backslash() {
     // バックスラッシュが正しくエスケープされることを確認
-    assert_eq!(
-        escape_applescript_string("test\\path"),
-        "test\\\\path"
-    );
+    assert_eq!(escape_applescript_string("test\\path"), "test\\\\path");
 }
 
 #[test]
 fn test_escape_applescript_string_double_quote() {
     // ダブルクォートが正しくエスケープされることを確認
-    assert_eq!(
-        escape_applescript_string("test\"quote"),
-        "test\\\"quote"
-    );
+    assert_eq!(escape_applescript_string("test\"quote"), "test\\\"quote");
 }
 
 #[test]
 fn test_escape_applescript_string_newline() {
     // 改行が正しくエスケープされることを確認
-    assert_eq!(
-        escape_applescript_string("test\nline"),
-        "test\\nline"
-    );
+    assert_eq!(escape_applescript_string("test\nline"), "test\\nline");
 }
 
 #[test]
 fn test_escape_applescript_string_carriage_return() {
     // キャリッジリターンが正しくエスケープされることを確認
-    assert_eq!(
-        escape_applescript_string("test\rline"),
-        "test\\rline"
-    );
+    assert_eq!(escape_applescript_string("test\rline"), "test\\rline");
 }
 
 // --- 境界値テスト: 単一特殊文字 ---
@@ -174,10 +156,7 @@ fn test_escape_applescript_string_all_special_chars() {
 #[test]
 fn test_escape_applescript_string_consecutive_special_chars() {
     // 連続した特殊文字が正しくエスケープされることを確認
-    assert_eq!(
-        escape_applescript_string("\\\"\n\r"),
-        "\\\\\\\"\\n\\r"
-    );
+    assert_eq!(escape_applescript_string("\\\"\n\r"), "\\\\\\\"\\n\\r");
 }
 
 // --- 境界値テスト: 文字列の先頭・末尾に特殊文字 ---
@@ -185,48 +164,24 @@ fn test_escape_applescript_string_consecutive_special_chars() {
 #[test]
 fn test_escape_applescript_string_special_chars_at_start() {
     // 文字列の先頭に特殊文字がある場合
-    assert_eq!(
-        escape_applescript_string("\\test"),
-        "\\\\test"
-    );
-    assert_eq!(
-        escape_applescript_string("\"test"),
-        "\\\"test"
-    );
-    assert_eq!(
-        escape_applescript_string("\ntest"),
-        "\\ntest"
-    );
+    assert_eq!(escape_applescript_string("\\test"), "\\\\test");
+    assert_eq!(escape_applescript_string("\"test"), "\\\"test");
+    assert_eq!(escape_applescript_string("\ntest"), "\\ntest");
 }
 
 #[test]
 fn test_escape_applescript_string_special_chars_at_end() {
     // 文字列の末尾に特殊文字がある場合
-    assert_eq!(
-        escape_applescript_string("test\\"),
-        "test\\\\"
-    );
-    assert_eq!(
-        escape_applescript_string("test\""),
-        "test\\\""
-    );
-    assert_eq!(
-        escape_applescript_string("test\n"),
-        "test\\n"
-    );
+    assert_eq!(escape_applescript_string("test\\"), "test\\\\");
+    assert_eq!(escape_applescript_string("test\""), "test\\\"");
+    assert_eq!(escape_applescript_string("test\n"), "test\\n");
 }
 
 #[test]
 fn test_escape_applescript_string_special_chars_at_boundaries() {
     // 特殊文字が文字列の先頭と末尾にある場合のエスケープ確認
-    assert_eq!(
-        escape_applescript_string("\\test\""),
-        "\\\\test\\\""
-    );
-    assert_eq!(
-        escape_applescript_string("\ntest\r"),
-        "\\ntest\\r"
-    );
+    assert_eq!(escape_applescript_string("\\test\""), "\\\\test\\\"");
+    assert_eq!(escape_applescript_string("\ntest\r"), "\\ntest\\r");
 }
 
 // --- 境界値テスト: 非常に長い文字列 ---
@@ -256,10 +211,7 @@ fn test_escape_applescript_string_very_long_string_with_special_chars() {
 #[test]
 fn test_escape_applescript_string_unicode() {
     // Unicode文字が正しく処理されることを確認
-    assert_eq!(
-        escape_applescript_string("日本語テスト"),
-        "日本語テスト"
-    );
+    assert_eq!(escape_applescript_string("日本語テスト"), "日本語テスト");
 }
 
 #[test]
@@ -274,10 +226,7 @@ fn test_escape_applescript_string_unicode_with_special_chars() {
 #[test]
 fn test_escape_applescript_string_emoji() {
     // 絵文字が正しく処理されることを確認
-    assert_eq!(
-        escape_applescript_string("Test 🚀 emoji"),
-        "Test 🚀 emoji"
-    );
+    assert_eq!(escape_applescript_string("Test 🚀 emoji"), "Test 🚀 emoji");
 }
 
 #[test]
@@ -346,7 +295,10 @@ fn test_escape_applescript_string_with_null_bytes() {
     // null バイトを含む文字列のテスト
     let message_with_null = "Test\0message";
     // null バイトはエスケープ対象ではないので、そのまま保持される
-    assert_eq!(escape_applescript_string(message_with_null), "Test\0message");
+    assert_eq!(
+        escape_applescript_string(message_with_null),
+        "Test\0message"
+    );
 }
 
 // --- エッジケース: タブ文字 ---
@@ -354,10 +306,7 @@ fn test_escape_applescript_string_with_null_bytes() {
 #[test]
 fn test_escape_applescript_string_with_tabs() {
     // タブ文字はエスケープ対象ではない
-    assert_eq!(
-        escape_applescript_string("test\ttab"),
-        "test\ttab"
-    );
+    assert_eq!(escape_applescript_string("test\ttab"), "test\ttab");
 }
 
 // --- エッジケース: 混合した空白文字 ---
@@ -563,7 +512,10 @@ fn test_app_launch_result_to_json_already_running() {
 
     let json = result.to_json();
     assert_eq!(json["status"], "success");
-    assert_eq!(json["message"], "アプリケーション 'Finder' は既に起動しています");
+    assert_eq!(
+        json["message"],
+        "アプリケーション 'Finder' は既に起動しています"
+    );
     assert_eq!(json["process_id"], 100);
     assert_eq!(json["was_already_running"], true);
 }
@@ -639,7 +591,10 @@ fn test_app_launch_result_to_json_special_chars_in_message() {
     };
 
     let json = result.to_json();
-    assert_eq!(json["message"], "Error: \"file.txt\" not found\nPath: C:\\test");
+    assert_eq!(
+        json["message"],
+        "Error: \"file.txt\" not found\nPath: C:\\test"
+    );
 }
 
 #[test]
@@ -653,7 +608,10 @@ fn test_app_launch_result_to_json_unicode_message() {
     };
 
     let json = result.to_json();
-    assert_eq!(json["message"], "アプリケーション '日本語テスト' を起動しました 🚀");
+    assert_eq!(
+        json["message"],
+        "アプリケーション '日本語テスト' を起動しました 🚀"
+    );
 }
 
 #[test]
@@ -730,7 +688,14 @@ fn test_app_launch_result_debug() {
 #[test]
 fn test_app_launch_result_different_status_values() {
     // 様々な status 値をテスト
-    let statuses = vec!["success", "error", "warning", "unknown", "", "very_long_status"];
+    let statuses = vec![
+        "success",
+        "error",
+        "warning",
+        "unknown",
+        "",
+        "very_long_status",
+    ];
 
     for status in statuses {
         let result = AppLaunchResult {
@@ -804,7 +769,9 @@ fn test_launch_or_activate_app_invalid_app_name() {
     // エラーが返されることを期待
     assert!(result.is_err());
     let error = result.unwrap_err();
-    assert!(error.message.contains("Failed to launch app") || error.message.contains("NonExistentApp"));
+    assert!(
+        error.message.contains("Failed to launch app") || error.message.contains("NonExistentApp")
+    );
 }
 
 #[test]
