@@ -1,28 +1,35 @@
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(name = "App Tidying")]
-#[command(about = "macOS application window layout management tool", long_about = None)]
+#[command(name = "apptidying")]
+#[command(about = "macOS application window layout management tool")]
+#[command(version)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Option<Commands>,
+    pub command: Commands,
 
-    #[arg(short, long)]
+    /// Enable verbose/debug output
+    #[arg(short, long, global = true)]
     pub verbose: bool,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Save current window layout
+    /// Restore window layout from a configuration file
+    #[command(about = "Restore window layout")]
+    Load {
+        /// Path to the layout configuration file (defaults to ~/Library/Application Support/biz.nosetech.apptidying/settings.json)
+        path: Option<PathBuf>,
+    },
+    /// Save current window layout to a configuration file
+    #[command(about = "Save current window layout")]
     Save {
-        /// Layout name
-        name: String,
+        /// Path to save the layout configuration file (defaults to ~/Library/Application Support/biz.nosetech.apptidying/settings.json)
+        path: Option<PathBuf>,
+
+        /// Include the terminal window where apptidying is running
+        #[arg(long)]
+        own: bool,
     },
-    /// Restore window layout
-    Restore {
-        /// Layout name
-        name: String,
-    },
-    /// List saved layouts
-    List,
 }
