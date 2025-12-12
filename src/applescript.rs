@@ -2,6 +2,7 @@ use serde_json::{json, Value};
 use std::process::Command;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct AppLaunchError {
     pub message: String,
 }
@@ -15,6 +16,7 @@ impl std::fmt::Display for AppLaunchError {
 impl std::error::Error for AppLaunchError {}
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct AppLaunchResult {
     pub status: String,
     pub message: String,
@@ -23,6 +25,7 @@ pub struct AppLaunchResult {
 }
 
 impl AppLaunchResult {
+    #[allow(dead_code)]
     pub fn to_json(&self) -> Value {
         let mut obj = json!({
             "status": self.status,
@@ -177,6 +180,7 @@ pub fn escape_applescript_string(s: &str) -> String {
 }
 
 /// Launch or activate an application
+#[allow(dead_code)]
 pub fn launch_or_activate_app(
     app_name: &str,
     timeout_ms: u64,
