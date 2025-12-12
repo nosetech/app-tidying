@@ -118,6 +118,7 @@ fn launch_app(app_name: &str) -> Result<(), AppLaunchError> {
 tell application "{}"
     launch
     activate
+    reopen
 end tell
 "#,
         escape_applescript_string(app_name)
@@ -143,6 +144,38 @@ end tell
     Ok(())
 }
 
+/// Activate an already running application (bring it to foreground with windows visible)
+fn activate_app(app_name: &str) -> Result<(), AppLaunchError> {
+    let script = format!(
+        r#"
+tell application "{}"
+    activate
+    reopen
+end tell
+"#,
+        escape_applescript_string(app_name)
+    );
+
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .map_err(|e| AppLaunchError {
+            message: format!("Failed to activate app: {}", e),
+        })?;
+
+    if !output.status.success() {
+        return Err(AppLaunchError {
+            message: format!(
+                "Failed to activate app: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        });
+    }
+
+    Ok(())
+}
+
 /// Escape special characters in AppleScript strings
 pub fn escape_applescript_string(s: &str) -> String {
     s.replace("\\", "\\\\")
@@ -160,6 +193,9 @@ pub fn launch_or_activate_app(
     let was_already_running = is_app_running(app_name)?;
 
     if was_already_running {
+        // Activate the already running application (bring it to foreground with windows visible)
+        activate_app(app_name)?;
+
         // Get the process ID
         let process_id = get_app_process_id(app_name)?;
 
