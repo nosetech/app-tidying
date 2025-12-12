@@ -59,13 +59,6 @@ fn append_to_log_file(message: &str) -> std::io::Result<()> {
 }
 
 #[allow(dead_code)]
-fn escape_applescript_string(s: &str) -> String {
-    s.replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-}
-
 pub fn init(config: LoggerConfig) {
     let filter_level = if config.debug_mode {
         LevelFilter::Debug
@@ -183,7 +176,7 @@ fn show_os_notification(level: NotificationLevel, message: &str) {
 fn show_notification_center(message: &str) {
     let script = format!(
         r#"display notification "{}" with title "App Tidying""#,
-        escape_applescript_string(message)
+        super::applescript::escape_applescript_string(message)
     );
     match Command::new("osascript").arg("-e").arg(&script).output() {
         Ok(output) if !output.status.success() => {
@@ -202,7 +195,7 @@ fn show_notification_center(message: &str) {
 fn show_dialog(message: &str) {
     let script = format!(
         r#"display dialog "{}" buttons {{"OK"}} default button "OK""#,
-        escape_applescript_string(message)
+        super::applescript::escape_applescript_string(message)
     );
     match Command::new("osascript").arg("-e").arg(&script).output() {
         Ok(output) if !output.status.success() => {
@@ -229,5 +222,6 @@ pub fn get_notification_config() -> Option<NotificationConfig> {
 
 #[allow(dead_code)]
 pub fn escape_applescript_string_for_test(s: &str) -> String {
-    escape_applescript_string(s)
+    // This function is for test compatibility, delegates to applescript module
+    super::applescript::escape_applescript_string(s)
 }

@@ -1,3 +1,4 @@
+mod applescript;
 mod cli;
 mod config;
 mod logger;
