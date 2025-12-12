@@ -38,6 +38,17 @@ impl AppLaunchResult {
     }
 }
 
+/// Common function to execute osascript
+fn run_osascript(script: &str) -> Result<std::process::Output, AppLaunchError> {
+    Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()
+        .map_err(|e| AppLaunchError {
+            message: format!("osascriptの実行に失敗しました: {}", e),
+        })
+}
+
 /// Check if an application is already running
 fn is_app_running(app_name: &str) -> Result<bool, AppLaunchError> {
     let script = format!(
@@ -53,18 +64,12 @@ end tell
         escape_applescript_string(app_name)
     );
 
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .output()
-        .map_err(|e| AppLaunchError {
-            message: format!("Failed to execute osascript: {}", e),
-        })?;
+    let output = run_osascript(&script)?;
 
     if !output.status.success() {
         return Err(AppLaunchError {
             message: format!(
-                "Failed to check if app is running: {}",
+                "アプリの起動状態確認に失敗しました: {}",
                 String::from_utf8_lossy(&output.stderr)
             ),
         });
@@ -89,15 +94,14 @@ end tell
         escape_applescript_string(app_name)
     );
 
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .output()
-        .map_err(|e| AppLaunchError {
-            message: format!("Failed to execute osascript: {}", e),
-        })?;
+    let output = run_osascript(&script)?;
 
     if !output.status.success() {
+        log::warn!(
+            "プロセスID取得に失敗しました (アプリ: {}): {}",
+            app_name,
+            String::from_utf8_lossy(&output.stderr)
+        );
         return Ok(None);
     }
 
@@ -107,7 +111,7 @@ end tell
     }
 
     result.parse::<i32>().map(Some).map_err(|_| AppLaunchError {
-        message: format!("Failed to parse process ID: {}", result),
+        message: format!("プロセスIDのパースに失敗しました: {}", result),
     })
 }
 
@@ -124,18 +128,12 @@ end tell
         escape_applescript_string(app_name)
     );
 
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .output()
-        .map_err(|e| AppLaunchError {
-            message: format!("Failed to execute osascript: {}", e),
-        })?;
+    let output = run_osascript(&script)?;
 
     if !output.status.success() {
         return Err(AppLaunchError {
             message: format!(
-                "Failed to launch app: {}",
+                "アプリの起動に失敗しました: {}",
                 String::from_utf8_lossy(&output.stderr)
             ),
         });
@@ -156,18 +154,12 @@ end tell
         escape_applescript_string(app_name)
     );
 
-    let output = Command::new("osascript")
-        .arg("-e")
-        .arg(&script)
-        .output()
-        .map_err(|e| AppLaunchError {
-            message: format!("Failed to activate app: {}", e),
-        })?;
+    let output = run_osascript(&script)?;
 
     if !output.status.success() {
         return Err(AppLaunchError {
             message: format!(
-                "Failed to activate app: {}",
+                "アプリの活性化に失敗しました: {}",
                 String::from_utf8_lossy(&output.stderr)
             ),
         });
@@ -210,9 +202,8 @@ pub fn launch_or_activate_app(
     // Launch the app
     launch_app(app_name)?;
 
-    // Wait for the app to fully launch
-    let timeout_secs = timeout_ms / 1000;
-    std::thread::sleep(std::time::Duration::from_secs(timeout_secs));
+    // Wait for the app to fully launch (using milliseconds for accurate timing)
+    std::thread::sleep(std::time::Duration::from_millis(timeout_ms));
 
     // Get the process ID
     let process_id = get_app_process_id(app_name)?;
