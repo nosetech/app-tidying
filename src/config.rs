@@ -316,3 +316,212 @@ fn validate_notification_config(notification: &NotificationConfig) -> Result<(),
 
     Ok(())
 }
+
+// =============================================================================
+// Pattern Calculation Functions
+// =============================================================================
+
+/// Parse position value to absolute coordinates
+/// Returns (x, y) coordinates
+#[allow(dead_code, clippy::too_many_arguments)]
+pub fn parse_position_value(
+    value: &serde_json::Value,
+    display_width: i32,
+    display_height: i32,
+    window_width: i32,
+    window_height: i32,
+    field_name: &str,
+) -> Result<(i32, i32), AppConfigError> {
+    match value {
+        serde_json::Value::Object(obj) => {
+            let x = obj.get("x").ok_or_else(|| AppConfigError {
+                message: format!("{} に x フィールドが見つかりません", field_name),
+            })?;
+
+            let y = obj.get("y").ok_or_else(|| AppConfigError {
+                message: format!("{} に y フィールドが見つかりません", field_name),
+            })?;
+
+            let x_val = parse_x_value(x, display_width, window_width)?;
+            let y_val = parse_y_value(y, display_height, window_height)?;
+
+            Ok((x_val, y_val))
+        }
+        _ => Err(AppConfigError {
+            message: format!("{} はオブジェクトである必要があります", field_name),
+        }),
+    }
+}
+
+/// Parse x coordinate value
+fn parse_x_value(
+    value: &serde_json::Value,
+    display_width: i32,
+    window_width: i32,
+) -> Result<i32, AppConfigError> {
+    match value {
+        serde_json::Value::String(s) => match s.as_str() {
+            "left" => Ok(0),
+            "right" => Ok(display_width - window_width),
+            _ => Err(AppConfigError {
+                message: format!("無効な x 値: '{}' (left, right を指定)", s),
+            }),
+        },
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if i < 0 {
+                    Err(AppConfigError {
+                        message: "x が負です".to_string(),
+                    })
+                } else {
+                    Ok(i as i32)
+                }
+            } else {
+                Err(AppConfigError {
+                    message: "x は整数である必要があります".to_string(),
+                })
+            }
+        }
+        _ => Err(AppConfigError {
+            message: "x は文字列または数値である必要があります".to_string(),
+        }),
+    }
+}
+
+/// Parse y coordinate value
+fn parse_y_value(
+    value: &serde_json::Value,
+    display_height: i32,
+    window_height: i32,
+) -> Result<i32, AppConfigError> {
+    match value {
+        serde_json::Value::String(s) => match s.as_str() {
+            "top" => Ok(25), // Menu bar height is assumed to be 25px
+            "bottom" => Ok(display_height - window_height),
+            _ => Err(AppConfigError {
+                message: format!("無効な y 値: '{}' (top, bottom を指定)", s),
+            }),
+        },
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if i < 0 {
+                    Err(AppConfigError {
+                        message: "y が負です".to_string(),
+                    })
+                } else {
+                    Ok(i as i32)
+                }
+            } else {
+                Err(AppConfigError {
+                    message: "y は整数である必要があります".to_string(),
+                })
+            }
+        }
+        _ => Err(AppConfigError {
+            message: "y は文字列または数値である必要があります".to_string(),
+        }),
+    }
+}
+
+/// Parse size value to absolute dimensions
+/// Returns (width, height) dimensions
+#[allow(dead_code)]
+pub fn parse_size_value(
+    value: &serde_json::Value,
+    display_width: i32,
+    display_height: i32,
+    field_name: &str,
+) -> Result<(i32, i32), AppConfigError> {
+    match value {
+        serde_json::Value::Object(obj) => {
+            let width = obj.get("width").ok_or_else(|| AppConfigError {
+                message: format!("{} に width フィールドが見つかりません", field_name),
+            })?;
+
+            let height = obj.get("height").ok_or_else(|| AppConfigError {
+                message: format!("{} に height フィールドが見つかりません", field_name),
+            })?;
+
+            let width_val = parse_width_value(width, display_width)?;
+            let height_val = parse_height_value(height, display_height)?;
+
+            if width_val <= 0 || height_val <= 0 {
+                return Err(AppConfigError {
+                    message: "ウィンドウサイズは正の値である必要があります".to_string(),
+                });
+            }
+
+            Ok((width_val, height_val))
+        }
+        _ => Err(AppConfigError {
+            message: format!("{} はオブジェクトである必要があります", field_name),
+        }),
+    }
+}
+
+/// Parse width value
+fn parse_width_value(value: &serde_json::Value, display_width: i32) -> Result<i32, AppConfigError> {
+    match value {
+        serde_json::Value::String(s) => match s.as_str() {
+            "half" => Ok(display_width / 2),
+            "third" => Ok(display_width / 3),
+            "max" => Ok(display_width),
+            _ => Err(AppConfigError {
+                message: format!("無効な width 値: '{}' (half, third, max を指定)", s),
+            }),
+        },
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if i <= 0 {
+                    Err(AppConfigError {
+                        message: "width は正の値である必要があります".to_string(),
+                    })
+                } else {
+                    Ok(i as i32)
+                }
+            } else {
+                Err(AppConfigError {
+                    message: "width は整数である必要があります".to_string(),
+                })
+            }
+        }
+        _ => Err(AppConfigError {
+            message: "width は文字列または数値である必要があります".to_string(),
+        }),
+    }
+}
+
+/// Parse height value
+fn parse_height_value(
+    value: &serde_json::Value,
+    display_height: i32,
+) -> Result<i32, AppConfigError> {
+    match value {
+        serde_json::Value::String(s) => match s.as_str() {
+            "half" => Ok(display_height / 2),
+            "third" => Ok(display_height / 3),
+            "max" => Ok(display_height),
+            _ => Err(AppConfigError {
+                message: format!("無効な height 値: '{}' (half, third, max を指定)", s),
+            }),
+        },
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if i <= 0 {
+                    Err(AppConfigError {
+                        message: "height は正の値である必要があります".to_string(),
+                    })
+                } else {
+                    Ok(i as i32)
+                }
+            } else {
+                Err(AppConfigError {
+                    message: "height は整数である必要があります".to_string(),
+                })
+            }
+        }
+        _ => Err(AppConfigError {
+            message: "height は文字列または数値である必要があります".to_string(),
+        }),
+    }
+}

@@ -1,5 +1,6 @@
 use apptidying::applescript::{
-    escape_applescript_string, launch_or_activate_app, AppLaunchError, AppLaunchResult,
+    escape_applescript_string, get_display_info, launch_or_activate_app, resize_window,
+    AppLaunchError, AppLaunchResult, DisplayInfo,
 };
 
 // =============================================================================
@@ -1011,4 +1012,599 @@ fn test_edge_case_app_launch_result_json_null_handling() {
 
     // process_id フィールドは含まれない
     assert!(json.get("process_id").is_none());
+}
+
+// =============================================================================
+// DisplayInfo Tests
+// =============================================================================
+
+#[test]
+fn test_display_info_creation() {
+    // DisplayInfo が正しく作成できることを確認
+    let display_info = DisplayInfo {
+        name: "Built-in Display".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 0,
+        origin_y: 0,
+    };
+
+    assert_eq!(display_info.name, "Built-in Display");
+    assert_eq!(display_info.width, 1920);
+    assert_eq!(display_info.height, 1080);
+    assert_eq!(display_info.origin_x, 0);
+    assert_eq!(display_info.origin_y, 0);
+}
+
+#[test]
+fn test_display_info_to_json() {
+    // DisplayInfo の JSON 変換
+    let display_info = DisplayInfo {
+        name: "External Display".to_string(),
+        width: 2560,
+        height: 1440,
+        origin_x: 1920,
+        origin_y: 0,
+    };
+
+    let json = display_info.to_json();
+    assert_eq!(json["name"], "External Display");
+    assert_eq!(json["width"], 2560);
+    assert_eq!(json["height"], 1440);
+    assert_eq!(json["origin_x"], 1920);
+    assert_eq!(json["origin_y"], 0);
+}
+
+#[test]
+fn test_display_info_to_json_negative_origin() {
+    // 負の原点座標を持つディスプレイ（境界値テスト）
+    let display_info = DisplayInfo {
+        name: "Display Left".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: -1920,
+        origin_y: 0,
+    };
+
+    let json = display_info.to_json();
+    assert_eq!(json["origin_x"], -1920);
+    assert_eq!(json["origin_y"], 0);
+}
+
+#[test]
+fn test_display_info_to_json_4k_display() {
+    // 4K ディスプレイの JSON 変換
+    let display_info = DisplayInfo {
+        name: "4K Display".to_string(),
+        width: 3840,
+        height: 2160,
+        origin_x: 0,
+        origin_y: 0,
+    };
+
+    let json = display_info.to_json();
+    assert_eq!(json["width"], 3840);
+    assert_eq!(json["height"], 2160);
+}
+
+#[test]
+fn test_display_info_to_json_small_display() {
+    // 小さいディスプレイの JSON 変換（境界値テスト）
+    let display_info = DisplayInfo {
+        name: "Small Display".to_string(),
+        width: 800,
+        height: 600,
+        origin_x: 0,
+        origin_y: 0,
+    };
+
+    let json = display_info.to_json();
+    assert_eq!(json["width"], 800);
+    assert_eq!(json["height"], 600);
+}
+
+#[test]
+fn test_display_info_to_json_empty_name() {
+    // 空の名前を持つディスプレイ（境界値テスト）
+    let display_info = DisplayInfo {
+        name: "".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 0,
+        origin_y: 0,
+    };
+
+    let json = display_info.to_json();
+    assert_eq!(json["name"], "");
+}
+
+#[test]
+fn test_display_info_to_json_unicode_name() {
+    // Unicode を含む名前のディスプレイ
+    let display_info = DisplayInfo {
+        name: "日本語ディスプレイ 🖥️".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 0,
+        origin_y: 0,
+    };
+
+    let json = display_info.to_json();
+    assert_eq!(json["name"], "日本語ディスプレイ 🖥️");
+}
+
+#[test]
+fn test_display_info_to_json_very_large_dimensions() {
+    // 非常に大きいディスプレイサイズ（境界値テスト）
+    let display_info = DisplayInfo {
+        name: "Huge Display".to_string(),
+        width: 10000,
+        height: 10000,
+        origin_x: 0,
+        origin_y: 0,
+    };
+
+    let json = display_info.to_json();
+    assert_eq!(json["width"], 10000);
+    assert_eq!(json["height"], 10000);
+}
+
+#[test]
+fn test_display_info_to_json_all_fields_present() {
+    // JSON に全フィールドが存在することを確認
+    let display_info = DisplayInfo {
+        name: "Test Display".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 100,
+        origin_y: 200,
+    };
+
+    let json = display_info.to_json();
+    assert!(json.get("name").is_some());
+    assert!(json.get("width").is_some());
+    assert!(json.get("height").is_some());
+    assert!(json.get("origin_x").is_some());
+    assert!(json.get("origin_y").is_some());
+}
+
+#[test]
+fn test_display_info_clone() {
+    // Clone トレイトが正しく動作することを確認
+    let display1 = DisplayInfo {
+        name: "Test Display".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 0,
+        origin_y: 0,
+    };
+
+    let display2 = display1.clone();
+
+    assert_eq!(display1.name, display2.name);
+    assert_eq!(display1.width, display2.width);
+    assert_eq!(display1.height, display2.height);
+    assert_eq!(display1.origin_x, display2.origin_x);
+    assert_eq!(display1.origin_y, display2.origin_y);
+}
+
+#[test]
+fn test_display_info_debug() {
+    // Debug トレイトが実装されていることを確認
+    let display_info = DisplayInfo {
+        name: "Test Display".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 0,
+        origin_y: 0,
+    };
+
+    let debug_str = format!("{:?}", display_info);
+    assert!(debug_str.contains("DisplayInfo"));
+    assert!(debug_str.contains("Test Display"));
+    assert!(debug_str.contains("1920"));
+}
+
+// =============================================================================
+// get_display_info() Integration Tests (osascript required)
+// =============================================================================
+
+#[test]
+#[ignore]
+fn test_get_display_info_main_display() {
+    // メインディスプレイの情報を取得（display_name = None）
+    let result = get_display_info(None);
+
+    if result.is_err() {
+        eprintln!("Error: {:?}", result.as_ref().unwrap_err());
+    }
+    assert!(result.is_ok());
+    let display_info = result.unwrap();
+
+    // 名前が空でないことを確認
+    assert!(!display_info.name.is_empty());
+
+    // サイズが正の値であることを確認
+    assert!(display_info.width > 0);
+    assert!(display_info.height > 0);
+
+    // JSON 変換が正しく動作することを確認
+    let json = display_info.to_json();
+    assert!(json.get("name").is_some());
+    assert!(json.get("width").is_some());
+    assert!(json.get("height").is_some());
+}
+
+#[test]
+#[ignore]
+fn test_get_display_info_built_in_display() {
+    // "Built-in" ディスプレイを検索
+    // 注: ディスプレイ名は macOS のバージョンや言語設定によって異なる可能性があります
+    let result = get_display_info(Some("Built-in"));
+
+    // ディスプレイが見つからない場合はメインディスプレイにフォールバック
+    assert!(result.is_ok());
+    let display_info = result.unwrap();
+    assert!(display_info.width > 0);
+    assert!(display_info.height > 0);
+}
+
+#[test]
+#[ignore]
+fn test_get_display_info_nonexistent_display() {
+    // 存在しないディスプレイ名を指定
+    // メインディスプレイにフォールバックすることを確認
+    let result = get_display_info(Some("NonExistentDisplay123456"));
+
+    assert!(result.is_ok());
+    let display_info = result.unwrap();
+
+    // メインディスプレイにフォールバックするため、成功する
+    assert!(display_info.width > 0);
+    assert!(display_info.height > 0);
+}
+
+#[test]
+#[ignore]
+fn test_get_display_info_empty_name() {
+    // 空文字列のディスプレイ名（境界値テスト）
+    let result = get_display_info(Some(""));
+
+    assert!(result.is_ok());
+    let display_info = result.unwrap();
+
+    // メインディスプレイにフォールバックするため、成功する
+    assert!(display_info.width > 0);
+    assert!(display_info.height > 0);
+}
+
+#[test]
+#[ignore]
+fn test_get_display_info_unicode_name() {
+    // Unicode を含むディスプレイ名
+    let result = get_display_info(Some("日本語ディスプレイ"));
+
+    // 存在しないディスプレイなので、メインディスプレイにフォールバック
+    assert!(result.is_ok());
+}
+
+#[test]
+#[ignore]
+fn test_get_display_info_very_long_name() {
+    // 非常に長いディスプレイ名（境界値テスト）
+    let long_name = "VeryLongDisplayName".to_string() + &"a".repeat(1000);
+    let result = get_display_info(Some(&long_name));
+
+    // 存在しないディスプレイなので、メインディスプレイにフォールバック
+    assert!(result.is_ok());
+}
+
+#[test]
+#[ignore]
+fn test_get_display_info_json_output() {
+    // JSON 出力の詳細テスト
+    let result = get_display_info(None);
+    assert!(result.is_ok());
+
+    let display_info = result.unwrap();
+    let json = display_info.to_json();
+
+    // JSON のすべてのフィールドが存在し、適切な型であることを確認
+    assert!(json["name"].is_string());
+    assert!(json["width"].is_i64() || json["width"].is_u64());
+    assert!(json["height"].is_i64() || json["height"].is_u64());
+    assert!(json["origin_x"].is_i64());
+    assert!(json["origin_y"].is_i64());
+}
+
+// =============================================================================
+// WindowResizeResult Tests
+// =============================================================================
+
+// WindowResizeResult は applescript.rs で公開されていないため、
+// resize_window() を通じて間接的にテスト
+
+// =============================================================================
+// resize_window() Integration Tests (osascript required)
+// =============================================================================
+
+#[test]
+#[ignore]
+fn test_resize_window_finder() {
+    // Finder ウィンドウのリサイズテスト
+    // 注: このテストは実際に Finder ウィンドウを操作します
+
+    // まず Finder を起動
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    // ウィンドウをリサイズ
+    let result = resize_window("Finder", None, Some((100, 100)), Some((800, 600)));
+
+    assert!(result.is_ok());
+    let resize_result = result.unwrap();
+    assert_eq!(resize_result.status, "success");
+    assert_eq!(resize_result.new_position, Some((100, 100)));
+    assert_eq!(resize_result.new_size, Some((800, 600)));
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_position_only() {
+    // 位置のみ変更
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = resize_window("Finder", None, Some((200, 200)), None);
+
+    assert!(result.is_ok());
+    let resize_result = result.unwrap();
+    assert_eq!(resize_result.new_position, Some((200, 200)));
+    assert_eq!(resize_result.new_size, None);
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_size_only() {
+    // サイズのみ変更
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = resize_window("Finder", None, None, Some((900, 700)));
+
+    assert!(result.is_ok());
+    let resize_result = result.unwrap();
+    assert_eq!(resize_result.new_position, None);
+    assert_eq!(resize_result.new_size, Some((900, 700)));
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_with_title() {
+    // ウィンドウタイトルを指定してリサイズ
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    // Finder のウィンドウタイトルは通常フォルダ名
+    // "Desktop" や "Documents" などを含む可能性がある
+    let result = resize_window("Finder", Some(""), Some((300, 300)), Some((700, 500)));
+
+    // タイトルが見つからない場合は最初のウィンドウを使用
+    // エラーが返される可能性もある
+    if result.is_ok() {
+        let resize_result = result.unwrap();
+        assert_eq!(resize_result.status, "success");
+    }
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_nonexistent_app() {
+    // 存在しないアプリケーションでテスト
+    let result = resize_window(
+        "NonExistentApp123456",
+        None,
+        Some((100, 100)),
+        Some((800, 600)),
+    );
+
+    // エラーが返されることを期待
+    assert!(result.is_err());
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_boundary_zero_position() {
+    // 位置が (0, 0) の場合（境界値テスト）
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = resize_window("Finder", None, Some((0, 0)), Some((800, 600)));
+
+    assert!(result.is_ok());
+    let resize_result = result.unwrap();
+    assert_eq!(resize_result.new_position, Some((0, 0)));
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_boundary_small_size() {
+    // 小さいサイズの場合（境界値テスト）
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = resize_window("Finder", None, Some((100, 100)), Some((200, 150)));
+
+    assert!(result.is_ok());
+    let resize_result = result.unwrap();
+    assert_eq!(resize_result.new_size, Some((200, 150)));
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_boundary_large_size() {
+    // 非常に大きいサイズの場合（境界値テスト）
+    // 注: ディスプレイより大きいサイズを指定
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = resize_window("Finder", None, Some((0, 0)), Some((5000, 3000)));
+
+    // macOS がサイズを制限する可能性があるが、コマンド自体は成功する可能性がある
+    if result.is_ok() {
+        let resize_result = result.unwrap();
+        assert_eq!(resize_result.new_size, Some((5000, 3000)));
+    }
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_negative_position() {
+    // 負の座標（画面外）
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = resize_window("Finder", None, Some((-100, -100)), Some((800, 600)));
+
+    // macOS は負の座標を許可する可能性がある（マルチディスプレイ環境）
+    // エラーになるかもしれないし、成功するかもしれない
+    // ここでは結果のみを確認
+    if result.is_ok() {
+        let resize_result = result.unwrap();
+        assert_eq!(resize_result.new_position, Some((-100, -100)));
+    }
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_special_chars_in_app_name() {
+    // 特殊文字を含むアプリケーション名
+    let result = resize_window(
+        "App\"With\\Special\nChars",
+        None,
+        Some((100, 100)),
+        Some((800, 600)),
+    );
+
+    // 存在しないアプリケーションなのでエラーが返される
+    assert!(result.is_err());
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_special_chars_in_title() {
+    // 特殊文字を含むウィンドウタイトル
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = resize_window(
+        "Finder",
+        Some("Title\"With\\Special\nChars"),
+        Some((100, 100)),
+        Some((800, 600)),
+    );
+
+    // タイトルが見つからない場合はエラー
+    // または最初のウィンドウを使用する可能性もある
+    // ここでは結果のみを確認
+    let _ = result;
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_to_json() {
+    // JSON 変換のテスト
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = resize_window("Finder", None, Some((150, 150)), Some((850, 650)));
+
+    if result.is_ok() {
+        let resize_result = result.unwrap();
+        let json = resize_result.to_json();
+
+        assert_eq!(json["status"], "success");
+        assert!(json.get("message").is_some());
+        assert_eq!(json["new_position"]["x"], 150);
+        assert_eq!(json["new_position"]["y"], 150);
+        assert_eq!(json["new_size"]["width"], 850);
+        assert_eq!(json["new_size"]["height"], 650);
+    }
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_unicode_app_name() {
+    // Unicode を含むアプリケーション名
+    let result = resize_window(
+        "日本語アプリ",
+        None,
+        Some((100, 100)),
+        Some((800, 600)),
+    );
+
+    // 存在しないアプリケーションなのでエラーが返される
+    assert!(result.is_err());
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_unicode_title() {
+    // Unicode を含むウィンドウタイトル
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = resize_window(
+        "Finder",
+        Some("日本語タイトル"),
+        Some((100, 100)),
+        Some((800, 600)),
+    );
+
+    // タイトルが見つからない場合は最初のウィンドウまたはエラー
+    let _ = result;
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_empty_app_name() {
+    // 空文字列のアプリケーション名（境界値テスト）
+    let result = resize_window("", None, Some((100, 100)), Some((800, 600)));
+
+    // エラーが返されることを期待
+    assert!(result.is_err());
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_calculator() {
+    // Calculator アプリケーションでテスト
+    let launch_result = launch_or_activate_app("Calculator", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = resize_window("Calculator", None, Some((400, 400)), Some((300, 400)));
+
+    assert!(result.is_ok());
+    let resize_result = result.unwrap();
+    assert_eq!(resize_result.status, "success");
+}
+
+#[test]
+#[ignore]
+fn test_resize_window_multiple_operations() {
+    // 複数回のリサイズ操作
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    // 1回目のリサイズ
+    let result1 = resize_window("Finder", None, Some((100, 100)), Some((800, 600)));
+    assert!(result1.is_ok());
+
+    // 2回目のリサイズ
+    let result2 = resize_window("Finder", None, Some((200, 200)), Some((900, 700)));
+    assert!(result2.is_ok());
+
+    // 3回目のリサイズ
+    let result3 = resize_window("Finder", None, Some((300, 300)), Some((1000, 800)));
+    assert!(result3.is_ok());
 }
