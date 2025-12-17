@@ -1536,12 +1536,7 @@ fn test_resize_window_to_json() {
 #[ignore]
 fn test_resize_window_unicode_app_name() {
     // Unicode を含むアプリケーション名
-    let result = resize_window(
-        "日本語アプリ",
-        None,
-        Some((100, 100)),
-        Some((800, 600)),
-    );
+    let result = resize_window("日本語アプリ", None, Some((100, 100)), Some((800, 600)));
 
     // 存在しないアプリケーションなのでエラーが返される
     assert!(result.is_err());
