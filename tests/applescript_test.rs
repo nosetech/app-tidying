@@ -1215,8 +1215,8 @@ fn test_get_display_info_main_display() {
     // メインディスプレイの情報を取得（display_name = None）
     let result = get_display_info(None);
 
-    if result.is_err() {
-        eprintln!("Error: {:?}", result.as_ref().unwrap_err());
+    if let Err(e) = &result {
+        eprintln!("Error: {:?}", e);
     }
     assert!(result.is_ok());
     let display_info = result.unwrap();
@@ -1391,8 +1391,7 @@ fn test_resize_window_with_title() {
 
     // タイトルが見つからない場合は最初のウィンドウを使用
     // エラーが返される可能性もある
-    if result.is_ok() {
-        let resize_result = result.unwrap();
+    if let Ok(resize_result) = result {
         assert_eq!(resize_result.status, "success");
     }
 }
@@ -1451,8 +1450,7 @@ fn test_resize_window_boundary_large_size() {
     let result = resize_window("Finder", None, Some((0, 0)), Some((5000, 3000)));
 
     // macOS がサイズを制限する可能性があるが、コマンド自体は成功する可能性がある
-    if result.is_ok() {
-        let resize_result = result.unwrap();
+    if let Ok(resize_result) = result {
         assert_eq!(resize_result.new_size, Some((5000, 3000)));
     }
 }
@@ -1469,8 +1467,7 @@ fn test_resize_window_negative_position() {
     // macOS は負の座標を許可する可能性がある（マルチディスプレイ環境）
     // エラーになるかもしれないし、成功するかもしれない
     // ここでは結果のみを確認
-    if result.is_ok() {
-        let resize_result = result.unwrap();
+    if let Ok(resize_result) = result {
         assert_eq!(resize_result.new_position, Some((-100, -100)));
     }
 }
@@ -1519,8 +1516,7 @@ fn test_resize_window_to_json() {
 
     let result = resize_window("Finder", None, Some((150, 150)), Some((850, 650)));
 
-    if result.is_ok() {
-        let resize_result = result.unwrap();
+    if let Ok(resize_result) = result {
         let json = resize_result.to_json();
 
         assert_eq!(json["status"], "success");
