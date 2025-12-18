@@ -219,3 +219,306 @@ pub fn launch_or_activate_app(
         was_already_running: false,
     })
 }
+
+// =============================================================================
+// Display Information
+// =============================================================================
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct DisplayInfo {
+    pub name: String,
+    pub width: i32,
+    pub height: i32,
+    pub origin_x: i32,
+    pub origin_y: i32,
+}
+
+impl DisplayInfo {
+    #[allow(dead_code)]
+    pub fn to_json(&self) -> Value {
+        json!({
+            "name": self.name,
+            "width": self.width,
+            "height": self.height,
+            "origin_x": self.origin_x,
+            "origin_y": self.origin_y,
+        })
+    }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct DisplayError {
+    pub message: String,
+}
+
+impl std::fmt::Display for DisplayError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for DisplayError {}
+
+/// Get display information using JXA and AppleScript
+#[allow(dead_code)]
+pub fn get_display_info(display_name: Option<&str>) -> Result<DisplayInfo, DisplayError> {
+    // Get all displays using JXA
+    let jxa_script = r#"
+ObjC.import('AppKit')
+
+const screens = $.NSScreen.screens
+let targetDisplay = null
+
+if (screens.count === 0) {
+    "error: no displays found"
+} else {
+    let searchName = null
+    if (ObjC.unwrap(arguments[0]) !== null) {
+        searchName = ObjC.unwrap(arguments[0])
+    }
+
+    for (let i = 0; i < screens.count; i++) {
+        const screen = screens.objectAtIndex(i)
+        const displayName = ObjC.unwrap(screen.localizedName) || "Unknown"
+
+        if (searchName === null || displayName === searchName) {
+            const frame = screen.frame
+            const result = {
+                name: displayName,
+                width: Math.round(frame.size.width),
+                height: Math.round(frame.size.height),
+                origin_x: Math.round(frame.origin.x),
+                origin_y: Math.round(frame.origin.y)
+            }
+            targetDisplay = result
+            break
+        }
+    }
+
+    if (targetDisplay === null && searchName !== null) {
+        // Display with specified name not found, use main display
+        const mainScreen = $.NSScreen.mainScreen
+        const displayName = ObjC.unwrap(mainScreen.localizedName) || "Main"
+        const frame = mainScreen.frame
+        const result = {
+            name: displayName,
+            width: Math.round(frame.size.width),
+            height: Math.round(frame.size.height),
+            origin_x: Math.round(frame.origin.x),
+            origin_y: Math.round(frame.origin.y)
+        }
+        targetDisplay = result
+    } else if (targetDisplay === null) {
+        // Use main display if no specific name requested
+        const mainScreen = $.NSScreen.mainScreen
+        const displayName = ObjC.unwrap(mainScreen.localizedName) || "Main"
+        const frame = mainScreen.frame
+        const result = {
+            name: displayName,
+            width: Math.round(frame.size.width),
+            height: Math.round(frame.size.height),
+            origin_x: Math.round(frame.origin.x),
+            origin_y: Math.round(frame.origin.y)
+        }
+        targetDisplay = result
+    }
+
+    JSON.stringify(targetDisplay)
+}
+"#;
+
+    let output = Command::new("osascript")
+        .arg("-l")
+        .arg("JavaScript")
+        .arg("-e")
+        .arg(jxa_script)
+        .arg(display_name.unwrap_or(""))
+        .output()
+        .map_err(|e| DisplayError {
+            message: format!("osascriptの実行に失敗しました: {}", e),
+        })?;
+
+    if !output.status.success() {
+        return Err(DisplayError {
+            message: format!(
+                "ディスプレイ情報取得に失敗しました: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        });
+    }
+
+    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    let json_value: serde_json::Value =
+        serde_json::from_str(&result_str).map_err(|e| DisplayError {
+            message: format!("ディスプレイ情報のパースに失敗しました: {}", e),
+        })?;
+
+    let display_info = DisplayInfo {
+        name: json_value["name"]
+            .as_str()
+            .ok_or_else(|| DisplayError {
+                message: "ディスプレイ名の取得に失敗しました".to_string(),
+            })?
+            .to_string(),
+        width: json_value["width"].as_i64().ok_or_else(|| DisplayError {
+            message: "ディスプレイ幅の取得に失敗しました".to_string(),
+        })? as i32,
+        height: json_value["height"].as_i64().ok_or_else(|| DisplayError {
+            message: "ディスプレイ高さの取得に失敗しました".to_string(),
+        })? as i32,
+        origin_x: json_value["origin_x"]
+            .as_i64()
+            .ok_or_else(|| DisplayError {
+                message: "ディスプレイ原点X座標の取得に失敗しました".to_string(),
+            })? as i32,
+        origin_y: json_value["origin_y"]
+            .as_i64()
+            .ok_or_else(|| DisplayError {
+                message: "ディスプレイ原点Y座標の取得に失敗しました".to_string(),
+            })? as i32,
+    };
+
+    Ok(display_info)
+}
+
+// =============================================================================
+// Window Resize
+// =============================================================================
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct WindowResizeResult {
+    pub status: String,
+    pub message: String,
+    pub new_position: Option<(i32, i32)>,
+    pub new_size: Option<(i32, i32)>,
+}
+
+impl WindowResizeResult {
+    #[allow(dead_code)]
+    pub fn to_json(&self) -> Value {
+        let mut obj = json!({
+            "status": self.status,
+            "message": self.message,
+        });
+
+        if let Some((x, y)) = self.new_position {
+            obj["new_position"] = json!({"x": x, "y": y});
+        }
+
+        if let Some((width, height)) = self.new_size {
+            obj["new_size"] = json!({"width": width, "height": height});
+        }
+
+        obj
+    }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct WindowResizeError {
+    pub message: String,
+}
+
+impl std::fmt::Display for WindowResizeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for WindowResizeError {}
+
+/// Resize and move a window
+#[allow(dead_code)]
+pub fn resize_window(
+    app_name: &str,
+    window_title: Option<&str>,
+    position: Option<(i32, i32)>,
+    size: Option<(i32, i32)>,
+) -> Result<WindowResizeResult, WindowResizeError> {
+    // Build AppleScript to resize window
+    let mut script = format!(
+        r#"
+tell application "System Events"
+    try
+        tell process "{}"
+"#,
+        escape_applescript_string(app_name)
+    );
+
+    // Select window by title or use first window
+    if let Some(title) = window_title {
+        script.push_str(&format!(
+            r#"
+            set targetWindow to first window whose name contains "{}"
+"#,
+            escape_applescript_string(title)
+        ));
+    } else {
+        script.push_str(
+            r#"
+            set targetWindow to window 1
+"#,
+        );
+    }
+
+    // Set position if provided
+    if let Some((x, y)) = position {
+        script.push_str(&format!(
+            r#"
+            set position of targetWindow to {{{}, {}}}
+"#,
+            x, y
+        ));
+    }
+
+    // Set size if provided
+    if let Some((width, height)) = size {
+        script.push_str(&format!(
+            r#"
+            set size of targetWindow to {{{}, {}}}
+"#,
+            width, height
+        ));
+    }
+
+    script.push_str(
+        r#"
+            return "success"
+        on error errMsg
+            return "error: " & errMsg
+        end try
+    end tell
+end tell
+"#,
+    );
+
+    let output = run_osascript(&script).map_err(|e| WindowResizeError { message: e.message })?;
+
+    if !output.status.success() {
+        return Err(WindowResizeError {
+            message: format!(
+                "ウィンドウのリサイズに失敗しました: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        });
+    }
+
+    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if result_str.contains("error") {
+        return Err(WindowResizeError {
+            message: result_str,
+        });
+    }
+
+    Ok(WindowResizeResult {
+        status: "success".to_string(),
+        message: "ウィンドウをリサイズしました".to_string(),
+        new_position: position,
+        new_size: size,
+    })
+}
