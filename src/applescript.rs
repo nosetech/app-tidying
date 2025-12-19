@@ -265,10 +265,9 @@ impl std::error::Error for DisplayError {}
 #[allow(dead_code)]
 pub fn get_display_info(display_name: Option<&str>) -> Result<DisplayInfo, DisplayError> {
     // Get all displays using JXA
-    let search_name_value = if display_name.is_none() || display_name == Some("") {
-        "null".to_string()
-    } else {
-        format!("\"{}\"", display_name.unwrap().replace("\"", "\\\""))
+    let search_name_value = match display_name {
+        Some(name) if !name.is_empty() => format!("\"{}\"", name.replace("\"", "\\\"")),
+        _ => "null".to_string(),
     };
 
     let jxa_script = format!(
