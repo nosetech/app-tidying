@@ -2205,7 +2205,14 @@ fn test_get_window_info_after_resize() {
 
     // ウィンドウをリサイズ
     let resize_result = resize_window("Finder", None, Some((100, 200)), Some((800, 600)));
-    assert!(resize_result.is_ok());
+    if let Err(e) = &resize_result {
+        eprintln!("resize_window error: {}", e);
+    }
+    assert!(
+        resize_result.is_ok(),
+        "resize_window failed: {:?}",
+        resize_result
+    );
 
     // ウィンドウ情報を取得
     let info_result = get_window_info("Finder", None);

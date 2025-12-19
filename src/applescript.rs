@@ -487,11 +487,11 @@ tell application "System Events"
 
     script.push_str(
         r#"
-            return "success"
-        on error errMsg
-            return "error: " & errMsg
-        end try
-    end tell
+        end tell
+        return "success"
+    on error errMsg
+        return "error: " & errMsg
+    end try
 end tell
 "#,
     );
