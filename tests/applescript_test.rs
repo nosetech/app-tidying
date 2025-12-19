@@ -1847,7 +1847,10 @@ fn test_window_info_to_json_special_chars_title() {
     };
 
     let json = window_info.to_json();
-    assert_eq!(json["title"], "Window \"With\" Special\\Chars\nAnd\rNewlines");
+    assert_eq!(
+        json["title"],
+        "Window \"With\" Special\\Chars\nAnd\rNewlines"
+    );
 }
 
 #[test]
