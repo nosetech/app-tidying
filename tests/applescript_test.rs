@@ -2074,8 +2074,7 @@ fn test_get_window_info_with_title() {
     // 空文字列でテスト（部分一致のため、すべてのウィンドウにマッチ）
     let result = get_window_info("Finder", Some(""));
 
-    if result.is_ok() {
-        let window_info = result.unwrap();
+    if let Ok(window_info) = result {
         assert!(!window_info.title.is_empty());
     }
 }
