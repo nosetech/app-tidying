@@ -1,6 +1,6 @@
 use apptidying::applescript::{
-    escape_applescript_string, get_display_info, launch_or_activate_app, resize_window,
-    AppLaunchError, AppLaunchResult, DisplayInfo,
+    escape_applescript_string, get_display_info, get_window_info, launch_or_activate_app,
+    resize_window, AppLaunchError, AppLaunchResult, DisplayInfo, WindowInfo, WindowInfoError,
 };
 
 // =============================================================================
@@ -1598,4 +1598,675 @@ fn test_resize_window_multiple_operations() {
     // 3回目のリサイズ
     let result3 = resize_window("Finder", None, Some((300, 300)), Some((1000, 800)));
     assert!(result3.is_ok());
+}
+
+// =============================================================================
+// WindowInfo Tests
+// =============================================================================
+
+#[test]
+fn test_window_info_creation() {
+    // WindowInfo が正しく作成できることを確認
+    let window_info = WindowInfo {
+        title: "Test Window".to_string(),
+        position: (100, 200),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    assert_eq!(window_info.title, "Test Window");
+    assert_eq!(window_info.position, (100, 200));
+    assert_eq!(window_info.size, (800, 600));
+    assert!(!window_info.minimized);
+    assert!(window_info.visible);
+}
+
+#[test]
+fn test_window_info_to_json() {
+    // WindowInfo の JSON 変換
+    let window_info = WindowInfo {
+        title: "Chrome Window".to_string(),
+        position: (50, 100),
+        size: (1200, 800),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["title"], "Chrome Window");
+    assert_eq!(json["position"]["x"], 50);
+    assert_eq!(json["position"]["y"], 100);
+    assert_eq!(json["size"]["width"], 1200);
+    assert_eq!(json["size"]["height"], 800);
+    assert_eq!(json["minimized"], false);
+    assert_eq!(json["visible"], true);
+}
+
+#[test]
+fn test_window_info_to_json_minimized() {
+    // 最小化されたウィンドウの JSON 変換
+    let window_info = WindowInfo {
+        title: "Minimized Window".to_string(),
+        position: (0, 0),
+        size: (800, 600),
+        minimized: true,
+        visible: false,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["title"], "Minimized Window");
+    assert_eq!(json["minimized"], true);
+    assert_eq!(json["visible"], false);
+}
+
+#[test]
+fn test_window_info_to_json_boundary_zero_position() {
+    // 位置が (0, 0) の場合（境界値テスト）
+    let window_info = WindowInfo {
+        title: "Origin Window".to_string(),
+        position: (0, 0),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["position"]["x"], 0);
+    assert_eq!(json["position"]["y"], 0);
+}
+
+#[test]
+fn test_window_info_to_json_boundary_negative_position() {
+    // 負の座標の場合（境界値テスト）
+    let window_info = WindowInfo {
+        title: "Negative Position".to_string(),
+        position: (-100, -200),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["position"]["x"], -100);
+    assert_eq!(json["position"]["y"], -200);
+}
+
+#[test]
+fn test_window_info_to_json_boundary_max_position() {
+    // 最大座標の場合（境界値テスト）
+    let window_info = WindowInfo {
+        title: "Max Position".to_string(),
+        position: (i32::MAX, i32::MAX),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["position"]["x"], i32::MAX);
+    assert_eq!(json["position"]["y"], i32::MAX);
+}
+
+#[test]
+fn test_window_info_to_json_boundary_min_position() {
+    // 最小座標の場合（境界値テスト）
+    let window_info = WindowInfo {
+        title: "Min Position".to_string(),
+        position: (i32::MIN, i32::MIN),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["position"]["x"], i32::MIN);
+    assert_eq!(json["position"]["y"], i32::MIN);
+}
+
+#[test]
+fn test_window_info_to_json_boundary_zero_size() {
+    // サイズが (0, 0) の場合（境界値テスト）
+    let window_info = WindowInfo {
+        title: "Zero Size".to_string(),
+        position: (100, 100),
+        size: (0, 0),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["size"]["width"], 0);
+    assert_eq!(json["size"]["height"], 0);
+}
+
+#[test]
+fn test_window_info_to_json_boundary_small_size() {
+    // 小さいサイズの場合（境界値テスト）
+    let window_info = WindowInfo {
+        title: "Small Window".to_string(),
+        position: (100, 100),
+        size: (1, 1),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["size"]["width"], 1);
+    assert_eq!(json["size"]["height"], 1);
+}
+
+#[test]
+fn test_window_info_to_json_boundary_large_size() {
+    // 非常に大きいサイズの場合（境界値テスト）
+    let window_info = WindowInfo {
+        title: "Large Window".to_string(),
+        position: (0, 0),
+        size: (10000, 10000),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["size"]["width"], 10000);
+    assert_eq!(json["size"]["height"], 10000);
+}
+
+#[test]
+fn test_window_info_to_json_boundary_max_size() {
+    // 最大サイズの場合（境界値テスト）
+    let window_info = WindowInfo {
+        title: "Max Size Window".to_string(),
+        position: (0, 0),
+        size: (i32::MAX, i32::MAX),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["size"]["width"], i32::MAX);
+    assert_eq!(json["size"]["height"], i32::MAX);
+}
+
+#[test]
+fn test_window_info_to_json_boundary_negative_size() {
+    // 負のサイズの場合（境界値テスト）
+    // 注: 実際には発生しないはずだが、データ型としては可能
+    let window_info = WindowInfo {
+        title: "Negative Size".to_string(),
+        position: (100, 100),
+        size: (-100, -200),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["size"]["width"], -100);
+    assert_eq!(json["size"]["height"], -200);
+}
+
+#[test]
+fn test_window_info_to_json_empty_title() {
+    // 空のタイトルの場合（境界値テスト）
+    let window_info = WindowInfo {
+        title: "".to_string(),
+        position: (100, 100),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["title"], "");
+}
+
+#[test]
+fn test_window_info_to_json_unicode_title() {
+    // Unicode を含むタイトルの場合
+    let window_info = WindowInfo {
+        title: "日本語ウィンドウ 🚀".to_string(),
+        position: (100, 100),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["title"], "日本語ウィンドウ 🚀");
+}
+
+#[test]
+fn test_window_info_to_json_special_chars_title() {
+    // 特殊文字を含むタイトルの場合
+    let window_info = WindowInfo {
+        title: "Window \"With\" Special\\Chars\nAnd\rNewlines".to_string(),
+        position: (100, 100),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(
+        json["title"],
+        "Window \"With\" Special\\Chars\nAnd\rNewlines"
+    );
+}
+
+#[test]
+fn test_window_info_to_json_very_long_title() {
+    // 非常に長いタイトルの場合（境界値テスト）
+    let long_title = "Window ".to_string() + &"a".repeat(10000);
+    let window_info = WindowInfo {
+        title: long_title.clone(),
+        position: (100, 100),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert_eq!(json["title"], long_title);
+}
+
+#[test]
+fn test_window_info_to_json_all_fields_present() {
+    // JSON に全フィールドが存在することを確認
+    let window_info = WindowInfo {
+        title: "Test Window".to_string(),
+        position: (100, 200),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let json = window_info.to_json();
+    assert!(json.get("title").is_some());
+    assert!(json.get("position").is_some());
+    assert!(json["position"]["x"].is_i64());
+    assert!(json["position"]["y"].is_i64());
+    assert!(json.get("size").is_some());
+    assert!(json["size"]["width"].is_i64());
+    assert!(json["size"]["height"].is_i64());
+    assert!(json.get("minimized").is_some());
+    assert!(json.get("visible").is_some());
+}
+
+#[test]
+fn test_window_info_clone() {
+    // Clone トレイトが正しく動作することを確認
+    let window1 = WindowInfo {
+        title: "Test Window".to_string(),
+        position: (100, 200),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let window2 = window1.clone();
+
+    assert_eq!(window1.title, window2.title);
+    assert_eq!(window1.position, window2.position);
+    assert_eq!(window1.size, window2.size);
+    assert_eq!(window1.minimized, window2.minimized);
+    assert_eq!(window1.visible, window2.visible);
+}
+
+#[test]
+fn test_window_info_debug() {
+    // Debug トレイトが実装されていることを確認
+    let window_info = WindowInfo {
+        title: "Test Window".to_string(),
+        position: (100, 200),
+        size: (800, 600),
+        minimized: false,
+        visible: true,
+    };
+
+    let debug_str = format!("{:?}", window_info);
+    assert!(debug_str.contains("WindowInfo"));
+    assert!(debug_str.contains("Test Window"));
+    assert!(debug_str.contains("100"));
+    assert!(debug_str.contains("200"));
+}
+
+// =============================================================================
+// WindowInfoError Tests
+// =============================================================================
+
+#[test]
+fn test_window_info_error_creation() {
+    // WindowInfoError が正しく作成できることを確認
+    let error = WindowInfoError {
+        message: "Test error message".to_string(),
+    };
+    assert_eq!(error.message, "Test error message");
+}
+
+#[test]
+fn test_window_info_error_display() {
+    // Display トレイトが正しく実装されていることを確認
+    let error = WindowInfoError {
+        message: "Test error".to_string(),
+    };
+    assert_eq!(format!("{}", error), "Test error");
+}
+
+#[test]
+fn test_window_info_error_display_with_special_chars() {
+    // 特殊文字を含むエラーメッセージ
+    let error = WindowInfoError {
+        message: "Error: \"window\" not found\nApp: Test\\App".to_string(),
+    };
+    assert_eq!(
+        format!("{}", error),
+        "Error: \"window\" not found\nApp: Test\\App"
+    );
+}
+
+#[test]
+fn test_window_info_error_empty_message() {
+    // 空のエラーメッセージ（境界値テスト）
+    let error = WindowInfoError {
+        message: "".to_string(),
+    };
+    assert_eq!(error.message, "");
+    assert_eq!(format!("{}", error), "");
+}
+
+#[test]
+fn test_window_info_error_long_message() {
+    // 非常に長いエラーメッセージ（境界値テスト）
+    let long_message = "Error: ".to_string() + &"a".repeat(10000);
+    let error = WindowInfoError {
+        message: long_message.clone(),
+    };
+    assert_eq!(error.message.len(), 10007);
+    assert_eq!(format!("{}", error), long_message);
+}
+
+#[test]
+fn test_window_info_error_is_error_trait() {
+    // std::error::Error トレイトが実装されていることを確認
+    let error = WindowInfoError {
+        message: "Test error".to_string(),
+    };
+    let _: &dyn std::error::Error = &error;
+}
+
+#[test]
+fn test_window_info_error_debug() {
+    // Debug トレイトが実装されていることを確認
+    let error = WindowInfoError {
+        message: "Test error".to_string(),
+    };
+    let debug_str = format!("{:?}", error);
+    assert!(debug_str.contains("WindowInfoError"));
+    assert!(debug_str.contains("Test error"));
+}
+
+#[test]
+fn test_window_info_error_unicode_message() {
+    // Unicode を含むエラーメッセージ
+    let error = WindowInfoError {
+        message: "エラー: ウィンドウが見つかりません 🚀".to_string(),
+    };
+    assert_eq!(
+        format!("{}", error),
+        "エラー: ウィンドウが見つかりません 🚀"
+    );
+}
+
+// =============================================================================
+// get_window_info() Integration Tests (osascript required)
+// =============================================================================
+
+#[test]
+#[ignore]
+fn test_get_window_info_finder() {
+    // Finder ウィンドウの情報を取得
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = get_window_info("Finder", None);
+
+    if let Err(e) = &result {
+        eprintln!("Error: {:?}", e);
+    }
+    assert!(result.is_ok());
+    let window_info = result.unwrap();
+
+    // タイトルが空でないことを確認
+    assert!(!window_info.title.is_empty());
+
+    // 位置とサイズが適切な範囲内であることを確認
+    // 注: 実際の値はディスプレイサイズに依存
+    assert!(window_info.size.0 > 0);
+    assert!(window_info.size.1 > 0);
+
+    // visible は true のはず
+    assert!(window_info.visible);
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_calculator() {
+    // Calculator ウィンドウの情報を取得
+    let launch_result = launch_or_activate_app("Calculator", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = get_window_info("Calculator", None);
+
+    assert!(result.is_ok());
+    let window_info = result.unwrap();
+    assert!(window_info.size.0 > 0);
+    assert!(window_info.size.1 > 0);
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_with_title() {
+    // ウィンドウタイトルを指定して取得
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    // Finder のウィンドウタイトルは通常フォルダ名
+    // 空文字列でテスト（部分一致のため、すべてのウィンドウにマッチ）
+    let result = get_window_info("Finder", Some(""));
+
+    if let Ok(window_info) = result {
+        assert!(!window_info.title.is_empty());
+    }
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_nonexistent_app() {
+    // 存在しないアプリケーション名でテスト
+    let result = get_window_info("NonExistentApp123456", None);
+
+    // エラーが返されることを期待
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(!error.message.is_empty());
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_empty_app_name() {
+    // 空文字列のアプリケーション名（境界値テスト）
+    let result = get_window_info("", None);
+
+    // エラーが返されることを期待
+    assert!(result.is_err());
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_special_chars_in_app_name() {
+    // 特殊文字を含むアプリケーション名
+    let result = get_window_info("App\"With\\Special\nChars", None);
+
+    // 存在しないアプリケーションなのでエラーが返される
+    assert!(result.is_err());
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_unicode_app_name() {
+    // Unicode を含むアプリケーション名
+    let result = get_window_info("日本語アプリ", None);
+
+    // 存在しないアプリケーションなのでエラーが返される
+    assert!(result.is_err());
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_special_chars_in_title() {
+    // 特殊文字を含むウィンドウタイトル
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = get_window_info("Finder", Some("Title\"With\\Special\nChars"));
+
+    // タイトルが見つからない場合はエラー
+    // または部分一致で何かしらのウィンドウが見つかる可能性もある
+    let _ = result;
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_unicode_title() {
+    // Unicode を含むウィンドウタイトル
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = get_window_info("Finder", Some("日本語タイトル"));
+
+    // タイトルが見つからない場合はエラー
+    let _ = result;
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_very_long_app_name() {
+    // 非常に長いアプリケーション名（境界値テスト）
+    let long_name = "VeryLongAppName".to_string() + &"a".repeat(1000);
+    let result = get_window_info(&long_name, None);
+
+    // 存在しないアプリケーションなのでエラーが返される
+    assert!(result.is_err());
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_very_long_title() {
+    // 非常に長いウィンドウタイトル（境界値テスト）
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let long_title = "VeryLongTitle".to_string() + &"a".repeat(1000);
+    let result = get_window_info("Finder", Some(&long_title));
+
+    // タイトルが見つからない場合はエラー
+    let _ = result;
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_to_json() {
+    // JSON 変換のテスト
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result = get_window_info("Finder", None);
+
+    if let Ok(window_info) = result {
+        let json = window_info.to_json();
+
+        // JSON のすべてのフィールドが存在し、適切な型であることを確認
+        assert!(json["title"].is_string());
+        assert!(json["position"]["x"].is_i64());
+        assert!(json["position"]["y"].is_i64());
+        assert!(json["size"]["width"].is_i64());
+        assert!(json["size"]["height"].is_i64());
+        assert!(json["minimized"].is_boolean());
+        assert!(json["visible"].is_boolean());
+    }
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_after_resize() {
+    // ウィンドウをリサイズした後に情報を取得
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    // ウィンドウをリサイズ
+    let resize_result = resize_window("Finder", None, Some((100, 200)), Some((800, 600)));
+    if let Err(e) = &resize_result {
+        eprintln!("resize_window error: {}", e);
+    }
+    assert!(
+        resize_result.is_ok(),
+        "resize_window failed: {:?}",
+        resize_result
+    );
+
+    // ウィンドウ情報を取得
+    let info_result = get_window_info("Finder", None);
+    assert!(info_result.is_ok());
+
+    let window_info = info_result.unwrap();
+
+    // リサイズした値と一致することを確認
+    // 注: macOS のウィンドウ制約により、完全に一致しない可能性がある
+    assert_eq!(window_info.position.0, 100);
+    assert_eq!(window_info.position.1, 200);
+    // サイズは完全一致しない可能性があるため、近似値で確認
+    assert!((window_info.size.0 - 800).abs() <= 50);
+    assert!((window_info.size.1 - 600).abs() <= 50);
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_multiple_calls() {
+    // 複数回の呼び出しテスト
+    let launch_result = launch_or_activate_app("Finder", 3000);
+    assert!(launch_result.is_ok());
+
+    let result1 = get_window_info("Finder", None);
+    assert!(result1.is_ok());
+
+    let result2 = get_window_info("Finder", None);
+    assert!(result2.is_ok());
+
+    // 同じウィンドウから取得した情報は同じはず
+    let info1 = result1.unwrap();
+    let info2 = result2.unwrap();
+
+    assert_eq!(info1.title, info2.title);
+    assert_eq!(info1.position, info2.position);
+    assert_eq!(info1.size, info2.size);
+}
+
+#[test]
+#[ignore]
+fn test_get_window_info_multiple_apps() {
+    // 複数のアプリケーションから情報を取得
+    let apps = vec!["Finder", "Calculator"];
+
+    for app in apps {
+        let launch_result = launch_or_activate_app(app, 3000);
+        assert!(launch_result.is_ok());
+
+        let result = get_window_info(app, None);
+        assert!(result.is_ok());
+
+        let window_info = result.unwrap();
+        assert!(!window_info.title.is_empty());
+        assert!(window_info.size.0 > 0);
+        assert!(window_info.size.1 > 0);
+    }
 }
