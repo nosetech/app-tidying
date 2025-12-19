@@ -265,76 +265,81 @@ impl std::error::Error for DisplayError {}
 #[allow(dead_code)]
 pub fn get_display_info(display_name: Option<&str>) -> Result<DisplayInfo, DisplayError> {
     // Get all displays using JXA
-    let jxa_script = r#"
+    let search_name_value = if display_name.is_none() || display_name == Some("") {
+        "null".to_string()
+    } else {
+        format!("\"{}\"", display_name.unwrap().replace("\"", "\\\""))
+    };
+
+    let jxa_script = format!(
+        r#"
 ObjC.import('AppKit')
 
 const screens = $.NSScreen.screens
 let targetDisplay = null
 
-if (screens.count === 0) {
+if (screens.count === 0) {{
     "error: no displays found"
-} else {
-    let searchName = null
-    if (ObjC.unwrap(arguments[0]) !== null) {
-        searchName = ObjC.unwrap(arguments[0])
-    }
+}} else {{
+    let searchName = {}
 
-    for (let i = 0; i < screens.count; i++) {
+    for (let i = 0; i < screens.count; i++) {{
         const screen = screens.objectAtIndex(i)
         const displayName = ObjC.unwrap(screen.localizedName) || "Unknown"
 
-        if (searchName === null || displayName === searchName) {
+        if (searchName === null || displayName === searchName) {{
             const frame = screen.frame
-            const result = {
+            const result = {{
                 name: displayName,
                 width: Math.round(frame.size.width),
                 height: Math.round(frame.size.height),
                 origin_x: Math.round(frame.origin.x),
                 origin_y: Math.round(frame.origin.y)
-            }
+            }}
             targetDisplay = result
             break
-        }
-    }
+        }}
+    }}
 
-    if (targetDisplay === null && searchName !== null) {
+    if (targetDisplay === null && searchName !== null) {{
         // Display with specified name not found, use main display
         const mainScreen = $.NSScreen.mainScreen
         const displayName = ObjC.unwrap(mainScreen.localizedName) || "Main"
         const frame = mainScreen.frame
-        const result = {
+        const result = {{
             name: displayName,
             width: Math.round(frame.size.width),
             height: Math.round(frame.size.height),
             origin_x: Math.round(frame.origin.x),
             origin_y: Math.round(frame.origin.y)
-        }
+        }}
         targetDisplay = result
-    } else if (targetDisplay === null) {
+    }} else if (targetDisplay === null) {{
         // Use main display if no specific name requested
         const mainScreen = $.NSScreen.mainScreen
         const displayName = ObjC.unwrap(mainScreen.localizedName) || "Main"
         const frame = mainScreen.frame
-        const result = {
+        const result = {{
             name: displayName,
             width: Math.round(frame.size.width),
             height: Math.round(frame.size.height),
             origin_x: Math.round(frame.origin.x),
             origin_y: Math.round(frame.origin.y)
-        }
+        }}
         targetDisplay = result
-    }
+    }}
 
     JSON.stringify(targetDisplay)
-}
-"#;
+}}
+"#,
+        search_name_value
+    );
 
     let output = Command::new("osascript")
         .arg("-l")
         .arg("JavaScript")
         .arg("-e")
         .arg(jxa_script)
-        .arg(display_name.unwrap_or(""))
         .output()
         .map_err(|e| DisplayError {
             message: format!("osascriptの実行に失敗しました: {}", e),
