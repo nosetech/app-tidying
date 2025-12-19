@@ -522,3 +522,173 @@ end tell
         new_size: size,
     })
 }
+
+// =============================================================================
+// Window Information
+// =============================================================================
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct WindowInfo {
+    pub title: String,
+    pub position: (i32, i32),
+    pub size: (i32, i32),
+    pub minimized: bool,
+    pub visible: bool,
+}
+
+impl WindowInfo {
+    #[allow(dead_code)]
+    pub fn to_json(&self) -> Value {
+        json!({
+            "title": self.title,
+            "position": {
+                "x": self.position.0,
+                "y": self.position.1
+            },
+            "size": {
+                "width": self.size.0,
+                "height": self.size.1
+            },
+            "minimized": self.minimized,
+            "visible": self.visible
+        })
+    }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct WindowInfoError {
+    pub message: String,
+}
+
+impl std::fmt::Display for WindowInfoError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for WindowInfoError {}
+
+/// Get window information for a specific window
+#[allow(dead_code)]
+pub fn get_window_info(
+    app_name: &str,
+    window_title: Option<&str>,
+) -> Result<WindowInfo, WindowInfoError> {
+    let mut script = format!(
+        r#"
+tell application "System Events"
+    tell process "{}"
+        try
+"#,
+        escape_applescript_string(app_name)
+    );
+
+    // Select window by title or use first window
+    if let Some(title) = window_title {
+        script.push_str(&format!(
+            r#"
+            set targetWindow to first window whose name contains "{}"
+"#,
+            escape_applescript_string(title)
+        ));
+    } else {
+        script.push_str(
+            r#"
+            set targetWindow to window 1
+"#,
+        );
+    }
+
+    script.push_str(
+        r#"
+            set winPos to position of targetWindow
+            set winSize to size of targetWindow
+            set winTitle to title of targetWindow
+
+            try
+                set winMinimized to miniaturized of targetWindow
+            on error
+                set winMinimized to false
+            end try
+
+            set winVisible to true
+
+            return winTitle & "|" & (item 1 of winPos) & "," & (item 2 of winPos) & "|" & (item 1 of winSize) & "," & (item 2 of winSize) & "|" & winMinimized
+        on error errMsg
+            return "error: " & errMsg
+        end try
+    end tell
+end tell
+"#,
+    );
+
+    let output = run_osascript(&script).map_err(|e| WindowInfoError { message: e.message })?;
+
+    if !output.status.success() {
+        return Err(WindowInfoError {
+            message: format!(
+                "ウィンドウ情報の取得に失敗しました: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        });
+    }
+
+    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if result_str.starts_with("error:") {
+        return Err(WindowInfoError {
+            message: result_str,
+        });
+    }
+
+    // Parse the result
+    let parts: Vec<&str> = result_str.split('|').collect();
+    if parts.len() < 4 {
+        return Err(WindowInfoError {
+            message: "ウィンドウ情報の解析に失敗しました".to_string(),
+        });
+    }
+
+    let title = parts[0].to_string();
+
+    // Parse position
+    let pos_parts: Vec<&str> = parts[1].split(',').collect();
+    if pos_parts.len() != 2 {
+        return Err(WindowInfoError {
+            message: "ウィンドウ位置の解析に失敗しました".to_string(),
+        });
+    }
+    let position_x = pos_parts[0].parse::<i32>().map_err(|_| WindowInfoError {
+        message: "ウィンドウのx座標が無効です".to_string(),
+    })?;
+    let position_y = pos_parts[1].parse::<i32>().map_err(|_| WindowInfoError {
+        message: "ウィンドウのy座標が無効です".to_string(),
+    })?;
+
+    // Parse size
+    let size_parts: Vec<&str> = parts[2].split(',').collect();
+    if size_parts.len() != 2 {
+        return Err(WindowInfoError {
+            message: "ウィンドウサイズの解析に失敗しました".to_string(),
+        });
+    }
+    let width = size_parts[0].parse::<i32>().map_err(|_| WindowInfoError {
+        message: "ウィンドウの幅が無効です".to_string(),
+    })?;
+    let height = size_parts[1].parse::<i32>().map_err(|_| WindowInfoError {
+        message: "ウィンドウの高さが無効です".to_string(),
+    })?;
+
+    // Parse minimized state
+    let minimized = parts[3].parse::<bool>().unwrap_or(false);
+
+    Ok(WindowInfo {
+        title,
+        position: (position_x, position_y),
+        size: (width, height),
+        minimized,
+        visible: true,
+    })
+}
