@@ -613,9 +613,13 @@ tell application "System Events"
                 set winMinimized to false
             end try
 
-            set winVisible to true
+            try
+                set winVisible to visible of targetWindow
+            on error
+                set winVisible to true
+            end try
 
-            return winTitle & "|" & (item 1 of winPos) & "," & (item 2 of winPos) & "|" & (item 1 of winSize) & "," & (item 2 of winSize) & "|" & winMinimized
+            return winTitle & "|" & (item 1 of winPos) & "," & (item 2 of winPos) & "|" & (item 1 of winSize) & "," & (item 2 of winSize) & "|" & winMinimized & "|" & winVisible
         on error errMsg
             return "error: " & errMsg
         end try
@@ -645,7 +649,7 @@ end tell
 
     // Parse the result
     let parts: Vec<&str> = result_str.split('|').collect();
-    if parts.len() < 4 {
+    if parts.len() < 5 {
         return Err(WindowInfoError {
             message: "ウィンドウ情報の解析に失敗しました".to_string(),
         });
@@ -684,11 +688,14 @@ end tell
     // Parse minimized state
     let minimized = parts[3].parse::<bool>().unwrap_or(false);
 
+    // Parse visible state
+    let visible = parts[4].parse::<bool>().unwrap_or(true);
+
     Ok(WindowInfo {
         title,
         position: (position_x, position_y),
         size: (width, height),
         minimized,
-        visible: true,
+        visible,
     })
 }
