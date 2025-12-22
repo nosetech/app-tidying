@@ -902,10 +902,7 @@ pub fn parse_window_list(result_str: &str) -> Result<Vec<WindowInfo>, WindowInfo
                     match parse_single_window(entry) {
                         Ok(window_info) => windows.push(window_info),
                         Err(e) => {
-                            log::warn!(
-                                "ウィンドウ情報のパースに失敗: {} - エントリ: {}",
-                                e, entry
-                            );
+                            log::warn!("ウィンドウ情報のパースに失敗: {} - エントリ: {}", e, entry);
                         }
                     }
                 }
@@ -925,10 +922,7 @@ pub fn parse_window_list(result_str: &str) -> Result<Vec<WindowInfo>, WindowInfo
         match parse_single_window(entry) {
             Ok(window_info) => windows.push(window_info),
             Err(e) => {
-                log::warn!(
-                    "ウィンドウ情報のパースに失敗: {} - エントリ: {}",
-                    e, entry
-                );
+                log::warn!("ウィンドウ情報のパースに失敗: {} - エントリ: {}", e, entry);
             }
         }
     }

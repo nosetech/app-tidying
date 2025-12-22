@@ -1,8 +1,8 @@
 use apptidying::applescript::{
     escape_applescript_string, get_all_windows, get_display_info, get_running_applications,
-    get_window_info, launch_or_activate_app, parse_single_window, parse_window_list,
-    resize_window, AppInfo, AppLaunchError, AppLaunchResult, DisplayInfo, RunningAppsError,
-    WindowInfo, WindowInfoError,
+    get_window_info, launch_or_activate_app, parse_single_window, parse_window_list, resize_window,
+    AppInfo, AppLaunchError, AppLaunchResult, DisplayInfo, RunningAppsError, WindowInfo,
+    WindowInfoError,
 };
 
 // =============================================================================
