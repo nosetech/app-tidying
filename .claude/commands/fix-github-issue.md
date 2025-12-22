@@ -50,10 +50,6 @@ GitHub issueを分析して実行してください: issue番号 $ARGUMENTS
     ```bash
     gh pr comment <PR-number> --body "レビュー結果のテキスト"
     ```
+
     - **コメント投稿完了まで、このステップは完了とはみなさない**
     - コメント投稿後、PR の URL をコンソールに表示する
-
-12. **Issue クローズと PR マージ（オプション）**
-    - PR をレビューして問題がなければマージする
-    - `gh pr merge <PR-number>` でマージする
-    - Issue が自動クローズされることを確認する
