@@ -813,3 +813,195 @@ end tell
 
     Ok(apps)
 }
+
+// =============================================================================
+// Get All Windows for an Application
+// =============================================================================
+
+/// Parse a single window entry from AppleScript output
+/// Format: title|x,y|w,h|minimized|visible
+#[allow(dead_code)]
+pub fn parse_single_window(entry: &str) -> Result<WindowInfo, WindowInfoError> {
+    let parts: Vec<&str> = entry.split('|').collect();
+    if parts.len() < 5 {
+        return Err(WindowInfoError {
+            message: format!("ウィンドウ情報の形式が不正です: {}", entry),
+        });
+    }
+
+    let title = parts[0].to_string();
+
+    // Parse position
+    let pos_parts: Vec<&str> = parts[1].split(',').collect();
+    if pos_parts.len() != 2 {
+        return Err(WindowInfoError {
+            message: "ウィンドウ位置の解析に失敗しました".to_string(),
+        });
+    }
+    let position_x = pos_parts[0].parse::<i32>().map_err(|_| WindowInfoError {
+        message: "ウィンドウのx座標が無効です".to_string(),
+    })?;
+    let position_y = pos_parts[1].parse::<i32>().map_err(|_| WindowInfoError {
+        message: "ウィンドウのy座標が無効です".to_string(),
+    })?;
+
+    // Parse size
+    let size_parts: Vec<&str> = parts[2].split(',').collect();
+    if size_parts.len() != 2 {
+        return Err(WindowInfoError {
+            message: "ウィンドウサイズの解析に失敗しました".to_string(),
+        });
+    }
+    let width = size_parts[0].parse::<i32>().map_err(|_| WindowInfoError {
+        message: "ウィンドウの幅が無効です".to_string(),
+    })?;
+    let height = size_parts[1].parse::<i32>().map_err(|_| WindowInfoError {
+        message: "ウィンドウの高さが無効です".to_string(),
+    })?;
+
+    // Parse minimized state
+    let minimized = parts[3].parse::<bool>().unwrap_or(false);
+
+    // Parse visible state
+    let visible = parts[4].parse::<bool>().unwrap_or(true);
+
+    Ok(WindowInfo {
+        title,
+        position: (position_x, position_y),
+        size: (width, height),
+        minimized,
+        visible,
+    })
+}
+
+/// Parse window list from AppleScript output
+/// AppleScript returns comma-separated window entries, each with format:
+/// title|x,y|w,h|minimized|visible
+/// Note: Size format has a comma (e.g., 800,600), so we need to parse carefully
+/// by looking for the pattern of pipes and parsing from the end
+#[allow(dead_code)]
+pub fn parse_window_list(result_str: &str) -> Result<Vec<WindowInfo>, WindowInfoError> {
+    // Empty result means no windows
+    if result_str.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let mut windows = Vec::new();
+    let mut current_entry = String::new();
+
+    for char in result_str.chars() {
+        if char == ',' {
+            // Check if this comma is part of a pipe-delimited entry
+            // Count how many pipes are before this comma
+            let pipe_count = current_entry.matches('|').count();
+
+            // If we have 4 pipes, then the next comma ends an entry (format has 5 fields separated by 4 pipes)
+            if pipe_count == 4 {
+                let entry = current_entry.trim();
+                if !entry.is_empty() {
+                    match parse_single_window(entry) {
+                        Ok(window_info) => windows.push(window_info),
+                        Err(e) => {
+                            log::warn!(
+                                "ウィンドウ情報のパースに失敗: {} - エントリ: {}",
+                                e, entry
+                            );
+                        }
+                    }
+                }
+                current_entry.clear();
+            } else {
+                // This comma is part of the size or coordinates, keep it
+                current_entry.push(char);
+            }
+        } else {
+            current_entry.push(char);
+        }
+    }
+
+    // Don't forget the last entry
+    let entry = current_entry.trim();
+    if !entry.is_empty() {
+        match parse_single_window(entry) {
+            Ok(window_info) => windows.push(window_info),
+            Err(e) => {
+                log::warn!(
+                    "ウィンドウ情報のパースに失敗: {} - エントリ: {}",
+                    e, entry
+                );
+            }
+        }
+    }
+
+    Ok(windows)
+}
+
+/// Get all windows for a specific application
+#[allow(dead_code)]
+pub fn get_all_windows(app_name: &str) -> Result<Vec<WindowInfo>, WindowInfoError> {
+    let script = format!(
+        r#"
+tell application "System Events"
+    tell process "{}"
+        try
+            set windowList to every window
+            set windowDataList to {{}}
+
+            repeat with win in windowList
+                try
+                    set winTitle to title of win
+                    set winPos to position of win
+                    set winSize to size of win
+
+                    try
+                        set winMinimized to miniaturized of win
+                    on error
+                        set winMinimized to false
+                    end try
+
+                    try
+                        set winVisible to visible of win
+                    on error
+                        set winVisible to true
+                    end try
+
+                    set windowData to winTitle & "|" & (item 1 of winPos) & "," & (item 2 of winPos) & "|" & (item 1 of winSize) & "," & (item 2 of winSize) & "|" & winMinimized & "|" & winVisible
+                    set end of windowDataList to windowData
+                on error
+                    -- Skip this window
+                end try
+            end repeat
+
+            return windowDataList
+        on error errMsg
+            return "error: " & errMsg
+        end try
+    end tell
+end tell
+"#,
+        escape_applescript_string(app_name)
+    );
+
+    let output = run_osascript(&script).map_err(|e| WindowInfoError { message: e.message })?;
+
+    if !output.status.success() {
+        return Err(WindowInfoError {
+            message: format!(
+                "ウィンドウ一覧の取得に失敗しました: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        });
+    }
+
+    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    // Check for errors
+    if result_str.starts_with("error:") {
+        return Err(WindowInfoError {
+            message: result_str,
+        });
+    }
+
+    // Parse the results
+    parse_window_list(&result_str)
+}
