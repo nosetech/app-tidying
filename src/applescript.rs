@@ -651,57 +651,8 @@ end tell
         });
     }
 
-    // Parse the result
-    let parts: Vec<&str> = result_str.split('|').collect();
-    if parts.len() < 5 {
-        return Err(WindowInfoError {
-            message: "ウィンドウ情報の解析に失敗しました".to_string(),
-        });
-    }
-
-    let title = parts[0].to_string();
-
-    // Parse position
-    let pos_parts: Vec<&str> = parts[1].split(',').collect();
-    if pos_parts.len() != 2 {
-        return Err(WindowInfoError {
-            message: "ウィンドウ位置の解析に失敗しました".to_string(),
-        });
-    }
-    let position_x = pos_parts[0].parse::<i32>().map_err(|_| WindowInfoError {
-        message: "ウィンドウのx座標が無効です".to_string(),
-    })?;
-    let position_y = pos_parts[1].parse::<i32>().map_err(|_| WindowInfoError {
-        message: "ウィンドウのy座標が無効です".to_string(),
-    })?;
-
-    // Parse size
-    let size_parts: Vec<&str> = parts[2].split(',').collect();
-    if size_parts.len() != 2 {
-        return Err(WindowInfoError {
-            message: "ウィンドウサイズの解析に失敗しました".to_string(),
-        });
-    }
-    let width = size_parts[0].parse::<i32>().map_err(|_| WindowInfoError {
-        message: "ウィンドウの幅が無効です".to_string(),
-    })?;
-    let height = size_parts[1].parse::<i32>().map_err(|_| WindowInfoError {
-        message: "ウィンドウの高さが無効です".to_string(),
-    })?;
-
-    // Parse minimized state
-    let minimized = parts[3].parse::<bool>().unwrap_or(false);
-
-    // Parse visible state
-    let visible = parts[4].parse::<bool>().unwrap_or(true);
-
-    Ok(WindowInfo {
-        title,
-        position: (position_x, position_y),
-        size: (width, height),
-        minimized,
-        visible,
-    })
+    // Reuse parse_single_window for consistent parsing
+    parse_single_window(&result_str)
 }
 
 // =============================================================================
@@ -860,10 +811,14 @@ pub fn parse_single_window(entry: &str) -> Result<WindowInfo, WindowInfoError> {
     })?;
 
     // Parse minimized state
-    let minimized = parts[3].parse::<bool>().unwrap_or(false);
+    let minimized = parts[3].parse::<bool>().map_err(|_| WindowInfoError {
+        message: format!("ウィンドウの最小化状態が無効です: {}", parts[3]),
+    })?;
 
     // Parse visible state
-    let visible = parts[4].parse::<bool>().unwrap_or(true);
+    let visible = parts[4].parse::<bool>().map_err(|_| WindowInfoError {
+        message: format!("ウィンドウの表示状態が無効です: {}", parts[4]),
+    })?;
 
     Ok(WindowInfo {
         title,
@@ -877,8 +832,13 @@ pub fn parse_single_window(entry: &str) -> Result<WindowInfo, WindowInfoError> {
 /// Parse window list from AppleScript output
 /// AppleScript returns comma-separated window entries, each with format:
 /// title|x,y|w,h|minimized|visible
-/// Note: Size format has a comma (e.g., 800,600), so we need to parse carefully
-/// by looking for the pattern of pipes and parsing from the end
+///
+/// Example output from AppleScript:
+/// "Main Window|0,25|1440,900|false|true,Settings|200,100|800,600|false|true"
+///
+/// Note: Since both the size/position (e.g., "800,600") and the entry separator
+/// use commas, we parse by counting pipe characters (|) to determine when a comma
+/// is an entry separator (after 4 pipes) vs. part of the data.
 #[allow(dead_code)]
 pub fn parse_window_list(result_str: &str) -> Result<Vec<WindowInfo>, WindowInfoError> {
     // Empty result means no windows
@@ -888,29 +848,26 @@ pub fn parse_window_list(result_str: &str) -> Result<Vec<WindowInfo>, WindowInfo
 
     let mut windows = Vec::new();
     let mut current_entry = String::new();
+    let mut pipe_count = 0;
 
     for char in result_str.chars() {
-        if char == ',' {
-            // Check if this comma is part of a pipe-delimited entry
-            // Count how many pipes are before this comma
-            let pipe_count = current_entry.matches('|').count();
-
-            // If we have 4 pipes, then the next comma ends an entry (format has 5 fields separated by 4 pipes)
-            if pipe_count == 4 {
-                let entry = current_entry.trim();
-                if !entry.is_empty() {
-                    match parse_single_window(entry) {
-                        Ok(window_info) => windows.push(window_info),
-                        Err(e) => {
-                            log::warn!("ウィンドウ情報のパースに失敗: {} - エントリ: {}", e, entry);
-                        }
+        if char == '|' {
+            // Count pipes as we encounter them for efficiency
+            pipe_count += 1;
+            current_entry.push(char);
+        } else if char == ',' && pipe_count == 4 {
+            // This comma is the entry separator (we've seen 4 pipes)
+            let entry = current_entry.trim();
+            if !entry.is_empty() {
+                match parse_single_window(entry) {
+                    Ok(window_info) => windows.push(window_info),
+                    Err(e) => {
+                        log::warn!("ウィンドウ情報のパースに失敗: {} - エントリ: {}", e, entry);
                     }
                 }
-                current_entry.clear();
-            } else {
-                // This comma is part of the size or coordinates, keep it
-                current_entry.push(char);
             }
+            current_entry.clear();
+            pipe_count = 0;
         } else {
             current_entry.push(char);
         }
