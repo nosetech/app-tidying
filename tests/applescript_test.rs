@@ -1,6 +1,7 @@
 use apptidying::applescript::{
-    escape_applescript_string, get_display_info, get_window_info, launch_or_activate_app,
-    resize_window, AppLaunchError, AppLaunchResult, DisplayInfo, WindowInfo, WindowInfoError,
+    escape_applescript_string, get_display_info, get_running_applications, get_window_info,
+    launch_or_activate_app, resize_window, AppInfo, AppLaunchError, AppLaunchResult, DisplayInfo,
+    RunningAppsError, WindowInfo, WindowInfoError,
 };
 
 // =============================================================================
@@ -2269,4 +2270,423 @@ fn test_get_window_info_multiple_apps() {
         assert!(window_info.size.0 > 0);
         assert!(window_info.size.1 > 0);
     }
+}
+
+// =============================================================================
+// AppInfo Tests (Issue #58: Running Applications)
+// =============================================================================
+
+#[test]
+fn test_appinfo_to_json_with_process_id() {
+    let app = AppInfo {
+        name: "Safari".to_string(),
+        process_id: Some(12345),
+    };
+
+    let json = app.to_json();
+    assert_eq!(json["name"], "Safari");
+    assert_eq!(json["process_id"], 12345);
+}
+
+#[test]
+fn test_appinfo_to_json_without_process_id() {
+    let app = AppInfo {
+        name: "Finder".to_string(),
+        process_id: None,
+    };
+
+    let json = app.to_json();
+    assert_eq!(json["name"], "Finder");
+    // process_id が None の場合、フィールドは含まれない
+    assert!(json.get("process_id").is_none());
+}
+
+#[test]
+fn test_appinfo_clone() {
+    let app = AppInfo {
+        name: "Chrome".to_string(),
+        process_id: Some(9999),
+    };
+
+    let cloned = app.clone();
+    assert_eq!(cloned.name, "Chrome");
+    assert_eq!(cloned.process_id, Some(9999));
+}
+
+// =============================================================================
+// RunningAppsError Tests
+// =============================================================================
+
+#[test]
+fn test_running_apps_error_display() {
+    let error = RunningAppsError {
+        message: "Test error message".to_string(),
+    };
+
+    assert_eq!(format!("{}", error), "Test error message");
+}
+
+#[test]
+fn test_running_apps_error_debug() {
+    let error = RunningAppsError {
+        message: "Debug test".to_string(),
+    };
+
+    let debug_str = format!("{:?}", error);
+    assert!(debug_str.contains("RunningAppsError"));
+    assert!(debug_str.contains("Debug test"));
+}
+
+// =============================================================================
+// get_running_applications() Tests - Unit Tests (Mock-based)
+// =============================================================================
+
+#[test]
+fn test_parse_running_apps_output_with_process_ids() {
+    // Simulate parsing logic without actually running osascript
+    // AppleScript returns comma-separated values
+    let simulated_output = "Safari|12345, Finder|67890, Chrome|11111";
+
+    let mut apps = Vec::new();
+    let entries: Vec<&str> = simulated_output.split(',').collect();
+
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        if let Some(pipe_pos) = entry.rfind('|') {
+            let app_name = entry[..pipe_pos].to_string();
+            let pid_str = &entry[pipe_pos + 1..];
+
+            let process_id = if pid_str.is_empty() {
+                None
+            } else {
+                pid_str.parse::<i32>().ok()
+            };
+
+            apps.push(AppInfo {
+                name: app_name,
+                process_id,
+            });
+        }
+    }
+
+    assert_eq!(apps.len(), 3);
+    assert_eq!(apps[0].name, "Safari");
+    assert_eq!(apps[0].process_id, Some(12345));
+    assert_eq!(apps[1].name, "Finder");
+    assert_eq!(apps[1].process_id, Some(67890));
+    assert_eq!(apps[2].name, "Chrome");
+    assert_eq!(apps[2].process_id, Some(11111));
+}
+
+#[test]
+fn test_parse_running_apps_output_without_process_ids() {
+    // Test apps without process IDs
+    let simulated_output = "SystemUIServer|, ControlCenter|";
+
+    let mut apps = Vec::new();
+    let entries: Vec<&str> = simulated_output.split(',').collect();
+
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        if let Some(pipe_pos) = entry.rfind('|') {
+            let app_name = entry[..pipe_pos].to_string();
+            let pid_str = &entry[pipe_pos + 1..];
+
+            let process_id = if pid_str.is_empty() {
+                None
+            } else {
+                pid_str.parse::<i32>().ok()
+            };
+
+            apps.push(AppInfo {
+                name: app_name,
+                process_id,
+            });
+        }
+    }
+
+    assert_eq!(apps.len(), 2);
+    assert_eq!(apps[0].name, "SystemUIServer");
+    assert_eq!(apps[0].process_id, None);
+    assert_eq!(apps[1].name, "ControlCenter");
+    assert_eq!(apps[1].process_id, None);
+}
+
+#[test]
+fn test_parse_running_apps_output_mixed() {
+    // Test mixed apps (some with PID, some without)
+    let simulated_output = "Safari|12345, SystemUIServer|, Finder|67890, ControlCenter|";
+
+    let mut apps = Vec::new();
+    let entries: Vec<&str> = simulated_output.split(',').collect();
+
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        if let Some(pipe_pos) = entry.rfind('|') {
+            let app_name = entry[..pipe_pos].to_string();
+            let pid_str = &entry[pipe_pos + 1..];
+
+            let process_id = if pid_str.is_empty() {
+                None
+            } else {
+                pid_str.parse::<i32>().ok()
+            };
+
+            apps.push(AppInfo {
+                name: app_name,
+                process_id,
+            });
+        }
+    }
+
+    assert_eq!(apps.len(), 4);
+    assert_eq!(apps[0].name, "Safari");
+    assert_eq!(apps[0].process_id, Some(12345));
+    assert_eq!(apps[1].name, "SystemUIServer");
+    assert_eq!(apps[1].process_id, None);
+    assert_eq!(apps[2].name, "Finder");
+    assert_eq!(apps[2].process_id, Some(67890));
+    assert_eq!(apps[3].name, "ControlCenter");
+    assert_eq!(apps[3].process_id, None);
+}
+
+#[test]
+fn test_parse_running_apps_single_app() {
+    // Test single application
+    let simulated_output = "Safari|12345";
+
+    let mut apps = Vec::new();
+    let entries: Vec<&str> = simulated_output.split(',').collect();
+
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        if let Some(pipe_pos) = entry.rfind('|') {
+            let app_name = entry[..pipe_pos].to_string();
+            let pid_str = &entry[pipe_pos + 1..];
+
+            let process_id = if pid_str.is_empty() {
+                None
+            } else {
+                pid_str.parse::<i32>().ok()
+            };
+
+            apps.push(AppInfo {
+                name: app_name,
+                process_id,
+            });
+        }
+    }
+
+    assert_eq!(apps.len(), 1);
+    assert_eq!(apps[0].name, "Safari");
+    assert_eq!(apps[0].process_id, Some(12345));
+}
+
+#[test]
+fn test_parse_running_apps_with_invalid_process_id() {
+    // Test handling of invalid process IDs
+    let simulated_output = "Safari|abc, Finder|67890, Chrome|xyz";
+
+    let mut apps = Vec::new();
+    let entries: Vec<&str> = simulated_output.split(',').collect();
+
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        if let Some(pipe_pos) = entry.rfind('|') {
+            let app_name = entry[..pipe_pos].to_string();
+            let pid_str = &entry[pipe_pos + 1..];
+
+            let process_id = if pid_str.is_empty() {
+                None
+            } else {
+                pid_str.parse::<i32>().ok()
+            };
+
+            apps.push(AppInfo {
+                name: app_name,
+                process_id,
+            });
+        }
+    }
+
+    assert_eq!(apps.len(), 3);
+    assert_eq!(apps[0].name, "Safari");
+    assert_eq!(apps[0].process_id, None); // Invalid PID becomes None
+    assert_eq!(apps[1].name, "Finder");
+    assert_eq!(apps[1].process_id, Some(67890));
+    assert_eq!(apps[2].name, "Chrome");
+    assert_eq!(apps[2].process_id, None); // Invalid PID becomes None
+}
+
+#[test]
+fn test_parse_running_apps_app_name_with_special_chars() {
+    // Test app names with special characters
+    let simulated_output = "Google Chrome|12345, Microsoft Excel|67890, App-Name.v2|11111";
+
+    let mut apps = Vec::new();
+    let entries: Vec<&str> = simulated_output.split(',').collect();
+
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        if let Some(pipe_pos) = entry.rfind('|') {
+            let app_name = entry[..pipe_pos].to_string();
+            let pid_str = &entry[pipe_pos + 1..];
+
+            let process_id = if pid_str.is_empty() {
+                None
+            } else {
+                pid_str.parse::<i32>().ok()
+            };
+
+            apps.push(AppInfo {
+                name: app_name,
+                process_id,
+            });
+        }
+    }
+
+    assert_eq!(apps.len(), 3);
+    assert_eq!(apps[0].name, "Google Chrome");
+    assert_eq!(apps[0].process_id, Some(12345));
+    assert_eq!(apps[1].name, "Microsoft Excel");
+    assert_eq!(apps[1].process_id, Some(67890));
+    assert_eq!(apps[2].name, "App-Name.v2");
+    assert_eq!(apps[2].process_id, Some(11111));
+}
+
+#[test]
+fn test_parse_running_apps_large_number_of_apps() {
+    // Test handling of many applications
+    let mut simulated_output = String::new();
+    for i in 1..=100 {
+        if i > 1 {
+            simulated_output.push_str(", ");
+        }
+        simulated_output.push_str(&format!("App{}|{}", i, 1000 + i));
+    }
+
+    let mut apps = Vec::new();
+    let entries: Vec<&str> = simulated_output.split(',').collect();
+
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        if let Some(pipe_pos) = entry.rfind('|') {
+            let app_name = entry[..pipe_pos].to_string();
+            let pid_str = &entry[pipe_pos + 1..];
+
+            let process_id = if pid_str.is_empty() {
+                None
+            } else {
+                pid_str.parse::<i32>().ok()
+            };
+
+            apps.push(AppInfo {
+                name: app_name,
+                process_id,
+            });
+        }
+    }
+
+    assert_eq!(apps.len(), 100);
+    assert_eq!(apps[0].name, "App1");
+    assert_eq!(apps[0].process_id, Some(1001));
+    assert_eq!(apps[99].name, "App100");
+    assert_eq!(apps[99].process_id, Some(1100));
+}
+
+// =============================================================================
+// get_running_applications() Integration Tests (osascript execution)
+// =============================================================================
+
+/// Integration test: Verify get_running_applications returns non-empty list
+/// This test requires macOS environment and osascript to be available
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定
+fn test_get_running_applications_success() {
+    let result = get_running_applications();
+
+    assert!(result.is_ok(), "get_running_applications should succeed");
+
+    let apps = result.unwrap();
+    assert!(
+        !apps.is_empty(),
+        "Should have at least one running application"
+    );
+
+    // Verify each app has a name
+    for app in &apps {
+        assert!(!app.name.is_empty(), "App name should not be empty");
+    }
+
+    // Verify at least one app has a process ID (most apps should)
+    let has_pid = apps.iter().any(|app| app.process_id.is_some());
+    assert!(has_pid, "At least one app should have a process ID");
+}
+
+/// Integration test: Verify JSON serialization of results
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定
+fn test_get_running_applications_json_output() {
+    let result = get_running_applications();
+    assert!(result.is_ok());
+
+    let apps = result.unwrap();
+
+    for app in &apps {
+        let json = app.to_json();
+        assert!(json.is_object());
+        assert!(json.get("name").is_some());
+        assert!(json["name"].is_string());
+
+        // process_id フィールドは process_id が Some の場合のみ含まれる
+        // フィールドが含まれる場合は数値であることを確認
+        if let Some(pid_value) = json.get("process_id") {
+            assert!(pid_value.is_number());
+        }
+    }
+}
+
+/// Integration test: Verify common system apps are found
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定
+fn test_get_running_applications_finds_system_apps() {
+    let result = get_running_applications();
+    assert!(result.is_ok());
+
+    let apps = result.unwrap();
+    let app_names: Vec<&str> = apps.iter().map(|a| a.name.as_str()).collect();
+
+    // Finder should always be running on macOS
+    assert!(
+        app_names.contains(&"Finder"),
+        "Finder should be in running applications"
+    );
 }

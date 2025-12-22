@@ -703,3 +703,113 @@ end tell
         visible,
     })
 }
+
+// =============================================================================
+// Running Applications
+// =============================================================================
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct AppInfo {
+    pub name: String,
+    pub process_id: Option<i32>,
+}
+
+impl AppInfo {
+    #[allow(dead_code)]
+    pub fn to_json(&self) -> Value {
+        let mut obj = json!({
+            "name": self.name,
+        });
+
+        if let Some(pid) = self.process_id {
+            obj["process_id"] = Value::Number(pid.into());
+        }
+
+        obj
+    }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct RunningAppsError {
+    pub message: String,
+}
+
+impl std::fmt::Display for RunningAppsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for RunningAppsError {}
+
+/// Get list of running applications
+#[allow(dead_code)]
+pub fn get_running_applications() -> Result<Vec<AppInfo>, RunningAppsError> {
+    let script = r#"
+tell application "System Events"
+    set appList to {}
+    set procList to (name of every process whose background only is false)
+    repeat with procName in procList
+        try
+            set procId to unix id of application process procName
+            set end of appList to procName & "|" & procId
+        on error
+            set end of appList to procName & "|"
+        end try
+    end repeat
+    return appList
+end tell
+"#;
+
+    let output = run_osascript(script).map_err(|e| RunningAppsError { message: e.message })?;
+
+    if !output.status.success() {
+        return Err(RunningAppsError {
+            message: format!(
+                "実行中アプリケーション一覧の取得に失敗しました: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        });
+    }
+
+    let result_str = String::from_utf8_lossy(&output.stdout);
+    let mut apps = Vec::new();
+
+    // AppleScript returns a comma-separated list on a single line
+    // Split by comma and trim each entry
+    let entries: Vec<&str> = result_str.split(',').collect();
+
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        // Parse the entry with format "app_name|process_id" or "app_name|"
+        if let Some(pipe_pos) = entry.rfind('|') {
+            let app_name = entry[..pipe_pos].to_string();
+            let pid_str = &entry[pipe_pos + 1..];
+
+            let process_id = if pid_str.is_empty() {
+                None
+            } else {
+                pid_str.parse::<i32>().ok()
+            };
+
+            apps.push(AppInfo {
+                name: app_name,
+                process_id,
+            });
+        }
+    }
+
+    if apps.is_empty() {
+        return Err(RunningAppsError {
+            message: "実行中のアプリケーションが見つかりません".to_string(),
+        });
+    }
+
+    Ok(apps)
+}
