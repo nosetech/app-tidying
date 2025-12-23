@@ -325,11 +325,7 @@ mod test_is_excluded_window {
         ];
 
         for app in excluded_apps {
-            assert!(
-                is_excluded_window(app, ""),
-                "{} should be excluded",
-                app
-            );
+            assert!(is_excluded_window(app, ""), "{} should be excluded", app);
         }
     }
 
@@ -783,10 +779,7 @@ mod test_integration {
     #[test]
     fn test_system_app_can_have_regular_windows() {
         // System apps (like Finder) can have regular windows that should be managed
-        assert!(
-            is_system_app("Finder"),
-            "Finder is a system app"
-        );
+        assert!(is_system_app("Finder"), "Finder is a system app");
         assert!(
             !is_excluded_window("Finder", "Documents"),
             "Finder Documents window is not excluded"
