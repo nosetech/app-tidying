@@ -887,6 +887,196 @@ pub fn parse_window_list(result_str: &str) -> Result<Vec<WindowInfo>, WindowInfo
     Ok(windows)
 }
 
+// =============================================================================
+// System Window Detection
+// =============================================================================
+
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum WindowType {
+    /// Regular application window that can be managed
+    Regular,
+    /// System window that should be excluded (menu bar, dock, etc.)
+    System,
+}
+
+/// Check if an application is a system application (Finder, Mail, Safari, etc.)
+///
+/// # Arguments
+/// * `app_name` - The name of the application to check
+///
+/// # Returns
+/// * `true` if the application is a macOS system application
+/// * `false` otherwise
+///
+/// # System Apps List
+/// This function recognizes 37 macOS system applications including:
+/// - Core apps: Finder, Mail, Safari, Calendar, Notes, Maps, Messages, Contacts
+/// - Utilities: Disk Utility, Terminal, Console, Activity Monitor
+/// - Media: Music, TV, News, Podcasts, Weather, Stocks, Home
+/// - iWork: Keynote, Numbers, Pages
+/// - Development: Xcode
+///
+/// # Examples
+/// ```
+/// use apptidying::applescript::is_system_app;
+///
+/// assert!(is_system_app("Finder"));
+/// assert!(is_system_app("Mail"));
+/// assert!(is_system_app("Safari"));
+/// assert!(!is_system_app("Google Chrome"));
+/// assert!(!is_system_app("Visual Studio Code"));
+/// ```
+#[allow(dead_code)]
+pub fn is_system_app(app_name: &str) -> bool {
+    const SYSTEM_APPS: &[&str] = &[
+        "Finder",
+        "Mail",
+        "Safari",
+        "Calendar",
+        "Notes",
+        "Maps",
+        "Messages",
+        "Contacts",
+        "Reminders",
+        "Stocks",
+        "Weather",
+        "Podcasts",
+        "News",
+        "Home",
+        "Music",
+        "TV",
+        "Books",
+        "Dictionary",
+        "Thesaurus",
+        "Migration Assistant",
+        "Photo Booth",
+        "Preview",
+        "TextEdit",
+        "System Preferences",
+        "System Settings",
+        "Disk Utility",
+        "Terminal",
+        "Console",
+        "Activity Monitor",
+        "Bluetooth Screen Lock",
+        "App Store",
+        "iBooks",
+        "Keynote",
+        "Numbers",
+        "Pages",
+        "FileMerge",
+        "Xcode",
+    ];
+
+    SYSTEM_APPS.contains(&app_name)
+}
+
+/// Check if a window should be excluded from management
+///
+/// Returns `true` if the window is a system UI element that should not be managed.
+/// Checks both the application name and window title against known exclusion patterns.
+///
+/// # Arguments
+/// * `app_name` - The name of the application
+/// * `window_title` - The title of the window
+///
+/// # Returns
+/// * `true` if the window is a system UI element that should be excluded
+/// * `false` if the window can be managed
+///
+/// # Excluded Applications
+/// - Dock, Menubar, WindowManager, LoginWindow, SystemUIServer
+/// - ControlCenter, NotificationCenter, Spotlight
+/// - Finder Sync UI, Quick Look, Accessibility Inspector
+///
+/// # Excluded Window Title Patterns
+/// - Titles containing: "Menu", "Dock", "Notification", "Spotlight", "Control Center", "Accessibility Inspector"
+///
+/// # Examples
+/// ```
+/// use apptidying::applescript::is_excluded_window;
+///
+/// assert!(is_excluded_window("Dock", ""));
+/// assert!(is_excluded_window("Finder", "Menu"));
+/// assert!(!is_excluded_window("Finder", "Documents"));
+/// ```
+#[allow(dead_code)]
+pub fn is_excluded_window(app_name: &str, window_title: &str) -> bool {
+    // Exclude system UI processes
+    const EXCLUDED_APP_NAMES: &[&str] = &[
+        "Dock",
+        "Menubar",
+        "WindowManager",
+        "LoginWindow",
+        "SystemUIServer",
+        "ControlCenter",
+        "NotificationCenter",
+        "Spotlight",
+        "Finder Sync UI",
+        "Quick Look",
+        "Accessibility Inspector",
+    ];
+
+    if EXCLUDED_APP_NAMES.contains(&app_name) {
+        return true;
+    }
+
+    // Exclude specific window titles that are system UI elements
+    const EXCLUDED_WINDOW_TITLE_PATTERNS: &[&str] = &[
+        "Menu",
+        "Dock",
+        "Notification",
+        "Spotlight",
+        "Control Center",
+        "Accessibility Inspector",
+    ];
+
+    if EXCLUDED_WINDOW_TITLE_PATTERNS
+        .iter()
+        .any(|&pattern| window_title.contains(pattern))
+    {
+        return true;
+    }
+
+    false
+}
+
+/// Classify a window type based on application name and window properties
+///
+/// Determines whether a window should be managed or excluded based on its
+/// application and title. This is a convenience function that wraps
+/// `is_excluded_window()` and returns the appropriate `WindowType`.
+///
+/// # Arguments
+/// * `app_name` - The name of the application
+/// * `window_title` - The title of the window
+///
+/// # Returns
+/// * `WindowType::System` if the window should be excluded from management
+/// * `WindowType::Regular` if the window can be managed
+///
+/// # Examples
+/// ```
+/// use apptidying::applescript::{classify_window, WindowType};
+///
+/// // Regular manageable window
+/// let result = classify_window("Finder", "Documents");
+/// assert!(matches!(result, WindowType::Regular));
+///
+/// // System window that should be excluded
+/// let result = classify_window("Dock", "");
+/// assert!(matches!(result, WindowType::System));
+/// ```
+#[allow(dead_code)]
+pub fn classify_window(app_name: &str, window_title: &str) -> WindowType {
+    if is_excluded_window(app_name, window_title) {
+        WindowType::System
+    } else {
+        WindowType::Regular
+    }
+}
+
 /// Get all windows for a specific application
 #[allow(dead_code)]
 pub fn get_all_windows(app_name: &str) -> Result<Vec<WindowInfo>, WindowInfoError> {
