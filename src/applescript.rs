@@ -1086,7 +1086,7 @@ const screens = $.NSScreen.screens
 let displays = []
 
 if (screens.count === 0) {
-    JSON.stringify([])
+    "error: ディスプレイが接続されていません"
 } else {
     for (let i = 0; i < screens.count; i++) {
         const screen = screens.objectAtIndex(i)
@@ -1127,6 +1127,13 @@ if (screens.count === 0) {
     }
 
     let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    // エラー結果をチェック
+    if result_str.starts_with("error:") {
+        return Err(DisplayError {
+            message: result_str,
+        });
+    }
 
     let json_array: serde_json::Value =
         serde_json::from_str(&result_str).map_err(|e| DisplayError {
