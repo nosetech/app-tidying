@@ -1,8 +1,8 @@
 use apptidying::applescript::{
-    escape_applescript_string, get_all_windows, get_display_info, get_running_applications,
-    get_window_info, launch_or_activate_app, parse_single_window, parse_window_list, resize_window,
-    AppInfo, AppLaunchError, AppLaunchResult, DisplayInfo, RunningAppsError, WindowInfo,
-    WindowInfoError,
+    escape_applescript_string, get_all_connected_displays, get_all_windows, get_display_info,
+    get_running_applications, get_window_info, launch_or_activate_app, parse_single_window,
+    parse_window_list, resize_window, AppInfo, AppLaunchError, AppLaunchResult, DisplayInfo,
+    RunningAppsError, WindowInfo, WindowInfoError,
 };
 
 // =============================================================================
@@ -1317,6 +1317,244 @@ fn test_get_display_info_json_output() {
     assert!(json["height"].is_i64() || json["height"].is_u64());
     assert!(json["origin_x"].is_i64());
     assert!(json["origin_y"].is_i64());
+}
+
+// =============================================================================
+// get_all_connected_displays() Integration Tests (osascript required)
+// =============================================================================
+
+// --- 同値分割: 正常系（実際のディスプレイを取得） ---
+
+#[test]
+#[ignore]
+fn test_get_all_connected_displays_success() {
+    // 接続されているすべてのディスプレイを取得
+    let result = get_all_connected_displays();
+
+    if let Err(e) = &result {
+        eprintln!("Error: {:?}", e);
+    }
+    assert!(result.is_ok());
+    let displays = result.unwrap();
+
+    // 少なくとも1つのディスプレイが接続されているはず
+    assert!(!displays.is_empty(), "少なくとも1つのディスプレイが必要");
+
+    // 最初のディスプレイの情報を検証
+    let first_display = &displays[0];
+    assert!(!first_display.name.is_empty(), "ディスプレイ名は空ではない");
+    assert!(first_display.width > 0, "ディスプレイ幅は正の値");
+    assert!(first_display.height > 0, "ディスプレイ高さは正の値");
+}
+
+#[test]
+#[ignore]
+fn test_get_all_connected_displays_single_display() {
+    // 単一ディスプレイの場合を想定（同値分割: ディスプレイ数=1）
+    let result = get_all_connected_displays();
+    assert!(result.is_ok());
+    let displays = result.unwrap();
+
+    // ディスプレイが1つ以上あることを確認
+    assert!(!displays.is_empty(), "少なくとも1つのディスプレイが必要");
+
+    // すべてのディスプレイが有効な情報を持つことを確認
+    for display in &displays {
+        assert!(!display.name.is_empty());
+        assert!(display.width > 0);
+        assert!(display.height > 0);
+        // origin_x, origin_y は負の値もあり得る（マルチディスプレイ構成）
+    }
+}
+
+#[test]
+#[ignore]
+fn test_get_all_connected_displays_multiple_displays() {
+    // 複数ディスプレイの場合を想定（同値分割: ディスプレイ数>=2）
+    // 注: このテストは複数ディスプレイが接続されている環境でのみ意味がある
+    let result = get_all_connected_displays();
+    assert!(result.is_ok());
+    let displays = result.unwrap();
+
+    if displays.len() >= 2 {
+        // 複数ディスプレイが接続されている場合、各ディスプレイが有効な情報を持つことを確認
+        // すべてのディスプレイが有効な情報を持つ
+        for (i, display) in displays.iter().enumerate() {
+            eprintln!("Display {}: {:?}", i, display);
+            assert!(!display.name.is_empty());
+            assert!(display.width > 0);
+            assert!(display.height > 0);
+        }
+
+        // 少なくとも1つのディスプレイは origin が (0,0) であるべき（メインディスプレイ）
+        let has_origin_zero = displays.iter().any(|d| d.origin_x == 0 && d.origin_y == 0);
+        assert!(
+            has_origin_zero,
+            "メインディスプレイは origin (0,0) を持つべき"
+        );
+    }
+}
+
+// --- 境界値分析: ディスプレイ解像度の検証 ---
+
+#[test]
+#[ignore]
+fn test_get_all_connected_displays_resolution_boundaries() {
+    // 解像度の境界値を検証（境界値分析）
+    let result = get_all_connected_displays();
+    assert!(result.is_ok());
+    let displays = result.unwrap();
+
+    for display in &displays {
+        // 最小解像度チェック（幅・高さは最小でも1以上）
+        assert!(
+            display.width >= 1,
+            "ディスプレイ幅は最低1ピクセル: {}",
+            display.width
+        );
+        assert!(
+            display.height >= 1,
+            "ディスプレイ高さは最低1ピクセル: {}",
+            display.height
+        );
+
+        // 最大解像度チェック（現実的な範囲: 8K は 7680x4320）
+        assert!(
+            display.width <= 10000,
+            "ディスプレイ幅が異常に大きい: {}",
+            display.width
+        );
+        assert!(
+            display.height <= 10000,
+            "ディスプレイ高さが異常に大きい: {}",
+            display.height
+        );
+    }
+}
+
+#[test]
+#[ignore]
+fn test_get_all_connected_displays_origin_coordinates() {
+    // origin座標の境界値を検証（境界値分析）
+    let result = get_all_connected_displays();
+    assert!(result.is_ok());
+    let displays = result.unwrap();
+
+    // 少なくとも1つのディスプレイがorigin (0,0)を持つべき
+    let has_main_display = displays.iter().any(|d| d.origin_x == 0 && d.origin_y == 0);
+    assert!(
+        has_main_display,
+        "少なくとも1つのディスプレイが origin (0,0) を持つべき"
+    );
+
+    // すべてのディスプレイのorigin座標が現実的な範囲にあることを確認
+    for display in &displays {
+        // マルチディスプレイでは負の座標もあり得る
+        assert!(
+            display.origin_x >= -10000 && display.origin_x <= 10000,
+            "origin_x が範囲外: {}",
+            display.origin_x
+        );
+        assert!(
+            display.origin_y >= -10000 && display.origin_y <= 10000,
+            "origin_y が範囲外: {}",
+            display.origin_y
+        );
+    }
+}
+
+// --- エッジケース: JSON フィールドの検証 ---
+
+#[test]
+#[ignore]
+fn test_get_all_connected_displays_json_fields() {
+    // すべてのディスプレイが必須フィールドを持つことを確認
+    let result = get_all_connected_displays();
+    assert!(result.is_ok());
+    let displays = result.unwrap();
+
+    for display in &displays {
+        // JSON変換してすべてのフィールドが存在することを確認
+        let json = display.to_json();
+
+        assert!(json.get("name").is_some(), "name フィールドが存在する");
+        assert!(json.get("width").is_some(), "width フィールドが存在する");
+        assert!(json.get("height").is_some(), "height フィールドが存在する");
+        assert!(
+            json.get("origin_x").is_some(),
+            "origin_x フィールドが存在する"
+        );
+        assert!(
+            json.get("origin_y").is_some(),
+            "origin_y フィールドが存在する"
+        );
+
+        // 型の検証
+        assert!(json["name"].is_string());
+        assert!(json["width"].is_i64() || json["width"].is_u64());
+        assert!(json["height"].is_i64() || json["height"].is_u64());
+        assert!(json["origin_x"].is_i64());
+        assert!(json["origin_y"].is_i64());
+    }
+}
+
+#[test]
+#[ignore]
+fn test_get_all_connected_displays_display_names() {
+    // ディスプレイ名が有効であることを確認
+    let result = get_all_connected_displays();
+    assert!(result.is_ok());
+    let displays = result.unwrap();
+
+    for display in &displays {
+        // ディスプレイ名が空でないことを確認
+        assert!(
+            !display.name.is_empty(),
+            "ディスプレイ名は空であってはならない"
+        );
+
+        // ディスプレイ名が妥当な長さであることを確認（境界値分析）
+        assert!(
+            display.name.len() <= 255,
+            "ディスプレイ名が異常に長い: {}",
+            display.name.len()
+        );
+    }
+}
+
+// --- エラーケース: JSONパースエラーのシミュレーション ---
+// 注: get_all_connected_displays() は内部で osascript を実行するため、
+// エラーケースのテストは実際のosascript実行に依存する。
+// ここでは、関数が正しくエラーハンドリングすることを確認する統合テスト。
+
+#[test]
+#[ignore]
+fn test_get_all_connected_displays_consistency() {
+    // 複数回実行して一貫性を確認
+    let result1 = get_all_connected_displays();
+    let result2 = get_all_connected_displays();
+
+    assert!(result1.is_ok());
+    assert!(result2.is_ok());
+
+    let displays1 = result1.unwrap();
+    let displays2 = result2.unwrap();
+
+    // ディスプレイ数は一致するべき（接続状態が変わらない限り）
+    assert_eq!(
+        displays1.len(),
+        displays2.len(),
+        "ディスプレイ数は一貫しているべき"
+    );
+
+    // 各ディスプレイの情報も一致するべき
+    for (d1, d2) in displays1.iter().zip(displays2.iter()) {
+        assert_eq!(d1.name, d2.name);
+        assert_eq!(d1.width, d2.width);
+        assert_eq!(d1.height, d2.height);
+        assert_eq!(d1.origin_x, d2.origin_x);
+        assert_eq!(d1.origin_y, d2.origin_y);
+    }
 }
 
 // =============================================================================

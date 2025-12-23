@@ -1146,3 +1146,105 @@ end tell
     // Parse the results
     parse_window_list(&result_str)
 }
+
+// =============================================================================
+// Get all connected displays
+// =============================================================================
+
+/// Get information about all connected displays
+#[allow(dead_code)]
+pub fn get_all_connected_displays() -> Result<Vec<DisplayInfo>, DisplayError> {
+    let jxa_script = r#"
+ObjC.import('AppKit')
+
+const screens = $.NSScreen.screens
+let displays = []
+
+if (screens.count === 0) {
+    JSON.stringify([])
+} else {
+    for (let i = 0; i < screens.count; i++) {
+        const screen = screens.objectAtIndex(i)
+        const displayName = ObjC.unwrap(screen.localizedName) || "Unknown"
+        const frame = screen.frame
+
+        const display = {
+            name: displayName,
+            width: Math.round(frame.size.width),
+            height: Math.round(frame.size.height),
+            origin_x: Math.round(frame.origin.x),
+            origin_y: Math.round(frame.origin.y)
+        }
+        displays.push(display)
+    }
+
+    JSON.stringify(displays)
+}
+"#;
+
+    let output = Command::new("osascript")
+        .arg("-l")
+        .arg("JavaScript")
+        .arg("-e")
+        .arg(jxa_script)
+        .output()
+        .map_err(|e| DisplayError {
+            message: format!("osascriptの実行に失敗しました: {}", e),
+        })?;
+
+    if !output.status.success() {
+        return Err(DisplayError {
+            message: format!(
+                "ディスプレイ情報取得に失敗しました: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        });
+    }
+
+    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    let json_array: serde_json::Value =
+        serde_json::from_str(&result_str).map_err(|e| DisplayError {
+            message: format!("ディスプレイ情報のパースに失敗しました: {}", e),
+        })?;
+
+    let displays_array = json_array.as_array().ok_or_else(|| DisplayError {
+        message: "ディスプレイ情報が配列形式ではありません".to_string(),
+    })?;
+
+    let mut displays = Vec::new();
+
+    for display_value in displays_array {
+        let display_info = DisplayInfo {
+            name: display_value["name"]
+                .as_str()
+                .ok_or_else(|| DisplayError {
+                    message: "ディスプレイ名の取得に失敗しました".to_string(),
+                })?
+                .to_string(),
+            width: display_value["width"]
+                .as_i64()
+                .ok_or_else(|| DisplayError {
+                    message: "ディスプレイ幅の取得に失敗しました".to_string(),
+                })? as i32,
+            height: display_value["height"]
+                .as_i64()
+                .ok_or_else(|| DisplayError {
+                    message: "ディスプレイ高さの取得に失敗しました".to_string(),
+                })? as i32,
+            origin_x: display_value["origin_x"]
+                .as_i64()
+                .ok_or_else(|| DisplayError {
+                    message: "ディスプレイ原点X座標の取得に失敗しました".to_string(),
+                })? as i32,
+            origin_y: display_value["origin_y"]
+                .as_i64()
+                .ok_or_else(|| DisplayError {
+                    message: "ディスプレイ原点Y座標の取得に失敗しました".to_string(),
+                })? as i32,
+        };
+        displays.push(display_info);
+    }
+
+    Ok(displays)
+}
