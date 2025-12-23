@@ -901,10 +901,33 @@ pub enum WindowType {
 }
 
 /// Check if an application is a system application (Finder, Mail, Safari, etc.)
+///
+/// # Arguments
+/// * `app_name` - The name of the application to check
+///
+/// # Returns
+/// * `true` if the application is a macOS system application
+/// * `false` otherwise
+///
+/// # System Apps List
+/// This function recognizes 37 macOS system applications including:
+/// - Core apps: Finder, Mail, Safari, Calendar, Notes, Maps, Messages, Contacts
+/// - Utilities: Disk Utility, Terminal, Console, Activity Monitor
+/// - Media: Music, TV, News, Podcasts, Weather, Stocks, Home
+/// - iWork: Keynote, Numbers, Pages
+/// - Development: Xcode
+///
+/// # Examples
+/// ```
+/// assert!(is_system_app("Finder"));
+/// assert!(is_system_app("Mail"));
+/// assert!(is_system_app("Safari"));
+/// assert!(!is_system_app("Google Chrome"));
+/// assert!(!is_system_app("Visual Studio Code"));
+/// ```
 #[allow(dead_code)]
 pub fn is_system_app(app_name: &str) -> bool {
-    // System applications that are part of macOS and should be manageable
-    let system_apps = vec![
+    const SYSTEM_APPS: &[&str] = &[
         "Finder",
         "Mail",
         "Safari",
@@ -944,15 +967,40 @@ pub fn is_system_app(app_name: &str) -> bool {
         "Xcode",
     ];
 
-    system_apps.contains(&app_name)
+    SYSTEM_APPS.contains(&app_name)
 }
 
 /// Check if a window should be excluded from management
-/// (returns true if the window is a system UI element that should be excluded)
+///
+/// Returns `true` if the window is a system UI element that should not be managed.
+/// Checks both the application name and window title against known exclusion patterns.
+///
+/// # Arguments
+/// * `app_name` - The name of the application
+/// * `window_title` - The title of the window
+///
+/// # Returns
+/// * `true` if the window is a system UI element that should be excluded
+/// * `false` if the window can be managed
+///
+/// # Excluded Applications
+/// - Dock, Menubar, WindowManager, LoginWindow, SystemUIServer
+/// - ControlCenter, NotificationCenter, Spotlight
+/// - Finder Sync UI, Quick Look, Accessibility Inspector
+///
+/// # Excluded Window Title Patterns
+/// - Titles containing: "Menu", "Dock", "Notification", "Spotlight", "Control Center", "Accessibility Inspector"
+///
+/// # Examples
+/// ```
+/// assert!(is_excluded_window("Dock", ""));
+/// assert!(is_excluded_window("Finder", "Menu"));
+/// assert!(!is_excluded_window("Finder", "Documents"));
+/// ```
 #[allow(dead_code)]
 pub fn is_excluded_window(app_name: &str, window_title: &str) -> bool {
     // Exclude system UI processes
-    const EXCLUDED_APPS: &[&str] = &[
+    const EXCLUDED_APP_NAMES: &[&str] = &[
         "Dock",
         "Menubar",
         "WindowManager",
@@ -966,12 +1014,12 @@ pub fn is_excluded_window(app_name: &str, window_title: &str) -> bool {
         "Accessibility Inspector",
     ];
 
-    if EXCLUDED_APPS.contains(&app_name) {
+    if EXCLUDED_APP_NAMES.contains(&app_name) {
         return true;
     }
 
     // Exclude specific window titles that are system UI elements
-    const EXCLUDED_TITLES: &[&str] = &[
+    const EXCLUDED_WINDOW_TITLE_PATTERNS: &[&str] = &[
         "Menu",
         "Dock",
         "Notification",
@@ -980,9 +1028,9 @@ pub fn is_excluded_window(app_name: &str, window_title: &str) -> bool {
         "Accessibility Inspector",
     ];
 
-    if EXCLUDED_TITLES
+    if EXCLUDED_WINDOW_TITLE_PATTERNS
         .iter()
-        .any(|&title| window_title.contains(title))
+        .any(|&pattern| window_title.contains(pattern))
     {
         return true;
     }
@@ -991,6 +1039,31 @@ pub fn is_excluded_window(app_name: &str, window_title: &str) -> bool {
 }
 
 /// Classify a window type based on application name and window properties
+///
+/// Determines whether a window should be managed or excluded based on its
+/// application and title. This is a convenience function that wraps
+/// `is_excluded_window()` and returns the appropriate `WindowType`.
+///
+/// # Arguments
+/// * `app_name` - The name of the application
+/// * `window_title` - The title of the window
+///
+/// # Returns
+/// * `WindowType::System` if the window should be excluded from management
+/// * `WindowType::Regular` if the window can be managed
+///
+/// # Examples
+/// ```
+/// use apptidying::applescript::{classify_window, WindowType};
+///
+/// // Regular manageable window
+/// let result = classify_window("Finder", "Documents");
+/// assert!(matches!(result, WindowType::Regular));
+///
+/// // System window that should be excluded
+/// let result = classify_window("Dock", "");
+/// assert!(matches!(result, WindowType::System));
+/// ```
 #[allow(dead_code)]
 pub fn classify_window(app_name: &str, window_title: &str) -> WindowType {
     if is_excluded_window(app_name, window_title) {
