@@ -887,6 +887,119 @@ pub fn parse_window_list(result_str: &str) -> Result<Vec<WindowInfo>, WindowInfo
     Ok(windows)
 }
 
+// =============================================================================
+// System Window Detection
+// =============================================================================
+
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum WindowType {
+    /// Regular application window that can be managed
+    Regular,
+    /// System window that should be excluded (menu bar, dock, etc.)
+    System,
+}
+
+/// Check if an application is a system application (Finder, Mail, Safari, etc.)
+#[allow(dead_code)]
+pub fn is_system_app(app_name: &str) -> bool {
+    // System applications that are part of macOS and should be manageable
+    let system_apps = vec![
+        "Finder",
+        "Mail",
+        "Safari",
+        "Calendar",
+        "Notes",
+        "Maps",
+        "Messages",
+        "Contacts",
+        "Reminders",
+        "Stocks",
+        "Weather",
+        "Podcasts",
+        "News",
+        "Home",
+        "Music",
+        "TV",
+        "Books",
+        "Dictionary",
+        "Thesaurus",
+        "Migration Assistant",
+        "Photo Booth",
+        "Preview",
+        "TextEdit",
+        "System Preferences",
+        "System Settings",
+        "Disk Utility",
+        "Terminal",
+        "Console",
+        "Activity Monitor",
+        "Bluetooth Screen Lock",
+        "App Store",
+        "iBooks",
+        "Keynote",
+        "Numbers",
+        "Pages",
+        "FileMerge",
+        "Xcode",
+    ];
+
+    system_apps.contains(&app_name)
+}
+
+/// Check if a window should be excluded from management
+/// (returns true if the window is a system UI element that should be excluded)
+#[allow(dead_code)]
+pub fn is_excluded_window(app_name: &str, window_title: &str) -> bool {
+    // Exclude system UI processes
+    const EXCLUDED_APPS: &[&str] = &[
+        "Dock",
+        "Menubar",
+        "WindowManager",
+        "LoginWindow",
+        "SystemUIServer",
+        "ControlCenter",
+        "NotificationCenter",
+        "Spotlight",
+        "Finder Sync UI",
+        "Quick Look",
+        "Accessibility Inspector",
+    ];
+
+    if EXCLUDED_APPS.contains(&app_name) {
+        return true;
+    }
+
+    // Exclude specific window titles that are system UI elements
+    const EXCLUDED_TITLES: &[&str] = &[
+        "Menu",
+        "Dock",
+        "Notification",
+        "Spotlight",
+        "Control Center",
+        "Accessibility Inspector",
+    ];
+
+    if EXCLUDED_TITLES
+        .iter()
+        .any(|&title| window_title.contains(title))
+    {
+        return true;
+    }
+
+    false
+}
+
+/// Classify a window type based on application name and window properties
+#[allow(dead_code)]
+pub fn classify_window(app_name: &str, window_title: &str) -> WindowType {
+    if is_excluded_window(app_name, window_title) {
+        WindowType::System
+    } else {
+        WindowType::Regular
+    }
+}
+
 /// Get all windows for a specific application
 #[allow(dead_code)]
 pub fn get_all_windows(app_name: &str) -> Result<Vec<WindowInfo>, WindowInfoError> {
