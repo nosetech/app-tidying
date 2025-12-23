@@ -919,6 +919,8 @@ pub enum WindowType {
 ///
 /// # Examples
 /// ```
+/// use apptidying::applescript::is_system_app;
+///
 /// assert!(is_system_app("Finder"));
 /// assert!(is_system_app("Mail"));
 /// assert!(is_system_app("Safari"));
@@ -993,6 +995,8 @@ pub fn is_system_app(app_name: &str) -> bool {
 ///
 /// # Examples
 /// ```
+/// use apptidying::applescript::is_excluded_window;
+///
 /// assert!(is_excluded_window("Dock", ""));
 /// assert!(is_excluded_window("Finder", "Menu"));
 /// assert!(!is_excluded_window("Finder", "Documents"));
