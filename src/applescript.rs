@@ -245,6 +245,30 @@ impl DisplayInfo {
             "origin_y": self.origin_y,
         })
     }
+
+    /// JSONオブジェクトからDisplayInfoを生成する
+    pub(crate) fn from_json_value(value: &serde_json::Value) -> Result<Self, DisplayError> {
+        Ok(DisplayInfo {
+            name: value["name"]
+                .as_str()
+                .ok_or_else(|| DisplayError {
+                    message: "ディスプレイ名の取得に失敗しました".to_string(),
+                })?
+                .to_string(),
+            width: value["width"].as_i64().ok_or_else(|| DisplayError {
+                message: "ディスプレイ幅の取得に失敗しました".to_string(),
+            })? as i32,
+            height: value["height"].as_i64().ok_or_else(|| DisplayError {
+                message: "ディスプレイ高さの取得に失敗しました".to_string(),
+            })? as i32,
+            origin_x: value["origin_x"].as_i64().ok_or_else(|| DisplayError {
+                message: "ディスプレイ原点X座標の取得に失敗しました".to_string(),
+            })? as i32,
+            origin_y: value["origin_y"].as_i64().ok_or_else(|| DisplayError {
+                message: "ディスプレイ原点Y座標の取得に失敗しました".to_string(),
+            })? as i32,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -261,131 +285,32 @@ impl std::fmt::Display for DisplayError {
 
 impl std::error::Error for DisplayError {}
 
-/// Get display information using JXA and AppleScript
+/// 指定されたディスプレイ情報を取得する
+///
+/// 指定されたディスプレイ名に一致するディスプレイを返します。
+/// 見つからない場合やdisplay_nameがNoneの場合は、メインディスプレイを返します。
 #[allow(dead_code)]
 pub fn get_display_info(display_name: Option<&str>) -> Result<DisplayInfo, DisplayError> {
-    // Get all displays using JXA
-    let search_name_value = match display_name {
-        Some(name) if !name.is_empty() => format!("\"{}\"", name.replace("\"", "\\\"")),
-        _ => "null".to_string(),
-    };
+    // すべての接続ディスプレイを取得
+    let all_displays = get_all_connected_displays()?;
 
-    let jxa_script = format!(
-        r#"
-ObjC.import('AppKit')
-
-const screens = $.NSScreen.screens
-let targetDisplay = null
-
-if (screens.count === 0) {{
-    "error: no displays found"
-}} else {{
-    let searchName = {}
-
-    for (let i = 0; i < screens.count; i++) {{
-        const screen = screens.objectAtIndex(i)
-        const displayName = ObjC.unwrap(screen.localizedName) || "Unknown"
-
-        if (searchName === null || displayName === searchName) {{
-            const frame = screen.frame
-            const result = {{
-                name: displayName,
-                width: Math.round(frame.size.width),
-                height: Math.round(frame.size.height),
-                origin_x: Math.round(frame.origin.x),
-                origin_y: Math.round(frame.origin.y)
-            }}
-            targetDisplay = result
-            break
-        }}
-    }}
-
-    if (targetDisplay === null && searchName !== null) {{
-        // Display with specified name not found, use main display
-        const mainScreen = $.NSScreen.mainScreen
-        const displayName = ObjC.unwrap(mainScreen.localizedName) || "Main"
-        const frame = mainScreen.frame
-        const result = {{
-            name: displayName,
-            width: Math.round(frame.size.width),
-            height: Math.round(frame.size.height),
-            origin_x: Math.round(frame.origin.x),
-            origin_y: Math.round(frame.origin.y)
-        }}
-        targetDisplay = result
-    }} else if (targetDisplay === null) {{
-        // Use main display if no specific name requested
-        const mainScreen = $.NSScreen.mainScreen
-        const displayName = ObjC.unwrap(mainScreen.localizedName) || "Main"
-        const frame = mainScreen.frame
-        const result = {{
-            name: displayName,
-            width: Math.round(frame.size.width),
-            height: Math.round(frame.size.height),
-            origin_x: Math.round(frame.origin.x),
-            origin_y: Math.round(frame.origin.y)
-        }}
-        targetDisplay = result
-    }}
-
-    JSON.stringify(targetDisplay)
-}}
-"#,
-        search_name_value
-    );
-
-    let output = Command::new("osascript")
-        .arg("-l")
-        .arg("JavaScript")
-        .arg("-e")
-        .arg(jxa_script)
-        .output()
-        .map_err(|e| DisplayError {
-            message: format!("osascriptの実行に失敗しました: {}", e),
-        })?;
-
-    if !output.status.success() {
+    if all_displays.is_empty() {
         return Err(DisplayError {
-            message: format!(
-                "ディスプレイ情報取得に失敗しました: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ),
+            message: "接続されているディスプレイが見つかりません".to_string(),
         });
     }
 
-    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    // 指定されたディスプレイ名を検索
+    if let Some(name) = display_name {
+        if !name.is_empty() {
+            if let Some(display) = all_displays.iter().find(|d| d.name == name) {
+                return Ok(display.clone());
+            }
+        }
+    }
 
-    let json_value: serde_json::Value =
-        serde_json::from_str(&result_str).map_err(|e| DisplayError {
-            message: format!("ディスプレイ情報のパースに失敗しました: {}", e),
-        })?;
-
-    let display_info = DisplayInfo {
-        name: json_value["name"]
-            .as_str()
-            .ok_or_else(|| DisplayError {
-                message: "ディスプレイ名の取得に失敗しました".to_string(),
-            })?
-            .to_string(),
-        width: json_value["width"].as_i64().ok_or_else(|| DisplayError {
-            message: "ディスプレイ幅の取得に失敗しました".to_string(),
-        })? as i32,
-        height: json_value["height"].as_i64().ok_or_else(|| DisplayError {
-            message: "ディスプレイ高さの取得に失敗しました".to_string(),
-        })? as i32,
-        origin_x: json_value["origin_x"]
-            .as_i64()
-            .ok_or_else(|| DisplayError {
-                message: "ディスプレイ原点X座標の取得に失敗しました".to_string(),
-            })? as i32,
-        origin_y: json_value["origin_y"]
-            .as_i64()
-            .ok_or_else(|| DisplayError {
-                message: "ディスプレイ原点Y座標の取得に失敗しました".to_string(),
-            })? as i32,
-    };
-
-    Ok(display_info)
+    // 見つからない場合またはdisplay_nameがNoneの場合は、メインディスプレイ（最初のディスプレイ）を返す
+    Ok(all_displays.into_iter().next().unwrap())
 }
 
 // =============================================================================
@@ -1215,34 +1140,7 @@ if (screens.count === 0) {
     let mut displays = Vec::new();
 
     for display_value in displays_array {
-        let display_info = DisplayInfo {
-            name: display_value["name"]
-                .as_str()
-                .ok_or_else(|| DisplayError {
-                    message: "ディスプレイ名の取得に失敗しました".to_string(),
-                })?
-                .to_string(),
-            width: display_value["width"]
-                .as_i64()
-                .ok_or_else(|| DisplayError {
-                    message: "ディスプレイ幅の取得に失敗しました".to_string(),
-                })? as i32,
-            height: display_value["height"]
-                .as_i64()
-                .ok_or_else(|| DisplayError {
-                    message: "ディスプレイ高さの取得に失敗しました".to_string(),
-                })? as i32,
-            origin_x: display_value["origin_x"]
-                .as_i64()
-                .ok_or_else(|| DisplayError {
-                    message: "ディスプレイ原点X座標の取得に失敗しました".to_string(),
-                })? as i32,
-            origin_y: display_value["origin_y"]
-                .as_i64()
-                .ok_or_else(|| DisplayError {
-                    message: "ディスプレイ原点Y座標の取得に失敗しました".to_string(),
-                })? as i32,
-        };
+        let display_info = DisplayInfo::from_json_value(display_value)?;
         displays.push(display_info);
     }
 
