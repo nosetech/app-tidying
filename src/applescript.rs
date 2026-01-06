@@ -1075,7 +1075,8 @@ end tell
 /// タイトルでウィンドウを検索する
 ///
 /// 指定されたタイトルを含むウィンドウを検索します。
-/// 複数マッチした場合は最初のウィンドウを返します。
+/// **複数マッチした場合**は、`get_all_windows()` が返す順序の最初のウィンドウを返します。
+/// （通常は最前面のウィンドウですが、AppleScriptの実装に依存します）
 ///
 /// # Arguments
 /// * `app_name` - アプリケーション名
@@ -1120,7 +1121,17 @@ pub fn find_window_by_title(
 /// 新規ウィンドウを作成する（メニュー経由）
 ///
 /// AppleScriptでアプリケーションのFileメニューから
-/// 「New Window」「新規ウインドウ」メニューアイテムを検索して実行する
+/// 「New Window」「新規ウィンドウ」メニューアイテムを検索して実行します。
+///
+/// # 注意
+/// この関数はメニューをクリックするだけで、ウィンドウが実際に開くまで待機しません。
+/// 新規ウィンドウの作成完了を確認する必要がある場合は、呼び出し側で以下のような処理を実装してください：
+///
+/// ```ignore
+/// create_new_window("Safari")?;
+/// std::thread::sleep(std::time::Duration::from_millis(500));
+/// let window = find_window_by_title("Safari", "新しいウィンドウのタイトル")?;
+/// ```
 ///
 /// # Arguments
 /// * `app_name` - アプリケーション名（例: "Finder", "Safari", "Google Chrome"）
@@ -1160,7 +1171,7 @@ tell application "System Events"
             end repeat
 
             if fileMenu is {{}} then
-                return "error: File menu not found"
+                return "error: ファイルメニューが見つかりません"
             end if
 
             -- メニューアイテムを取得
@@ -1178,7 +1189,7 @@ tell application "System Events"
                 end try
             end repeat
 
-            return "error: New window menu item not found"
+            return "error: 新規ウィンドウメニューアイテムが見つかりません"
         on error errMsg
             return "error: " & errMsg
         end try
