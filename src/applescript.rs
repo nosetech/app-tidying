@@ -1072,6 +1072,155 @@ end tell
     parse_window_list(&result_str)
 }
 
+/// タイトルでウィンドウを検索する
+///
+/// 指定されたタイトルを含むウィンドウを検索します。
+/// **複数マッチした場合**は、`get_all_windows()` が返す順序の最初のウィンドウを返します。
+/// （通常は最前面のウィンドウですが、AppleScriptの実装に依存します）
+///
+/// # Arguments
+/// * `app_name` - アプリケーション名
+/// * `window_title` - 検索するウィンドウタイトル（部分一致）
+///
+/// # Returns
+/// * `Ok(Some(WindowInfo))` - ウィンドウが見つかった
+/// * `Ok(None)` - ウィンドウが見つからなかった
+/// * `Err(WindowInfoError)` - AppleScript実行エラー
+///
+/// # Examples
+/// ```ignore
+/// use apptidying::applescript::find_window_by_title;
+///
+/// let result = find_window_by_title("Safari", "Development")?;
+/// if let Some(window) = result {
+///     println!("ウィンドウが見つかりました: {:?}", window);
+/// } else {
+///     println!("ウィンドウが見つかりません");
+/// }
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+#[allow(dead_code)]
+pub fn find_window_by_title(
+    app_name: &str,
+    window_title: &str,
+) -> Result<Option<WindowInfo>, WindowInfoError> {
+    // 全ウィンドウを取得
+    let windows = get_all_windows(app_name)?;
+
+    // タイトルで検索（部分一致）
+    for window in windows {
+        if window.title.contains(window_title) {
+            return Ok(Some(window));
+        }
+    }
+
+    // 見つからなかった
+    Ok(None)
+}
+
+/// 新規ウィンドウを作成する（メニュー経由）
+///
+/// AppleScriptでアプリケーションのFileメニューから
+/// 「New Window」「新規ウィンドウ」メニューアイテムを検索して実行します。
+///
+/// # 注意
+/// この関数はメニューをクリックするだけで、ウィンドウが実際に開くまで待機しません。
+/// 新規ウィンドウの作成完了を確認する必要がある場合は、呼び出し側で以下のような処理を実装してください：
+///
+/// ```ignore
+/// create_new_window("Safari")?;
+/// std::thread::sleep(std::time::Duration::from_millis(500));
+/// let window = find_window_by_title("Safari", "新しいウィンドウのタイトル")?;
+/// ```
+///
+/// # Arguments
+/// * `app_name` - アプリケーション名（例: "Finder", "Safari", "Google Chrome"）
+///
+/// # Returns
+/// * `Ok(())` - 新規ウィンドウ作成に成功
+/// * `Err(WindowInfoError)` - 失敗（メニューが見つからない、権限がない等）
+///
+/// # Examples
+/// ```ignore
+/// use apptidying::applescript::create_new_window;
+///
+/// create_new_window("Safari")?;
+/// create_new_window("Google Chrome")?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+#[allow(dead_code)]
+pub fn create_new_window(app_name: &str) -> Result<(), WindowInfoError> {
+    let script = format!(
+        r#"
+tell application "System Events"
+    tell process "{}"
+        try
+            activate
+
+            -- メニューバーを取得
+            set menubar to menu bar 1
+            set allMenus to (every menu of menubar)
+            set fileMenu to {{}}
+
+            -- File または ファイル メニューを検索
+            repeat with m in allMenus
+                if name of m is "File" or name of m is "ファイル" then
+                    set fileMenu to m
+                    exit repeat
+                end if
+            end repeat
+
+            if fileMenu is {{}} then
+                return "error: ファイルメニューが見つかりません"
+            end if
+
+            -- メニューアイテムを取得
+            set menuItems to (every menu item of fileMenu)
+
+            -- 「New Window」「新規ウインドウ」「新規Finderウインドウ」を検索してクリック
+            repeat with mi in menuItems
+                try
+                    set itemName to name of mi
+                    -- 英語と日本語の両方に対応
+                    if (itemName contains "New Window") or (itemName contains "新規ウインドウ") or (itemName contains "新規Finderウインドウ") then
+                        click mi
+                        return "success"
+                    end if
+                end try
+            end repeat
+
+            return "error: 新規ウィンドウメニューアイテムが見つかりません"
+        on error errMsg
+            return "error: " & errMsg
+        end try
+    end tell
+end tell
+"#,
+        escape_applescript_string(app_name)
+    );
+
+    let output = run_osascript(&script).map_err(|e| WindowInfoError { message: e.message })?;
+
+    if !output.status.success() {
+        return Err(WindowInfoError {
+            message: format!(
+                "新規ウィンドウ作成に失敗しました: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        });
+    }
+
+    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if result_str.starts_with("error:") {
+        return Err(WindowInfoError {
+            message: result_str,
+        });
+    }
+
+    Ok(())
+}
+
 // =============================================================================
 // Get all connected displays
 // =============================================================================
