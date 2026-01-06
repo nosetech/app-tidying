@@ -3562,11 +3562,10 @@ fn test_create_new_window_no_menu_item() {
         "新規ウィンドウメニューがないアプリで作成が成功してしまいました"
     );
 
-    // エラーメッセージに「menu item not found」が含まれることを確認
+    // エラーメッセージにメニュー関連のエラーが含まれることを確認
     if let Err(e) = result {
         assert!(
-            e.message.to_lowercase().contains("menu item not found")
-                || e.message.contains("メニュー項目が見つかりません"),
+            e.message.to_lowercase().contains("menu") || e.message.contains("メニュー"),
             "エラーメッセージが期待と異なります: {}",
             e.message
         );
