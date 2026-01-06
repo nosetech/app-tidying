@@ -3111,3 +3111,464 @@ fn test_get_all_windows_json_serialization() {
         }
     }
 }
+
+// =============================================================================
+// Find Window by Title Tests
+// =============================================================================
+
+/// Integration test: find_window_by_title でウィンドウが見つかった場合
+///
+/// # テスト概要
+/// Finderで新規ウィンドウを作成し、タイトルでウィンドウを検索する
+///
+/// # テストシナリオ
+/// 1. Finderの既存ウィンドウ数を取得
+/// 2. 新規ウィンドウを作成
+/// 3. ウィンドウ数が増えていることを確認
+/// 4. find_window_by_title で検索
+/// 5. 見つかったウィンドウ情報が正しいことを確認
+///
+/// # 境界値
+/// - ウィンドウタイトルの部分一致検索
+/// - 複数ウィンドウがある場合は最初のウィンドウを返す
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
+fn test_find_window_by_title_found() {
+    use apptidying::applescript::{create_new_window, find_window_by_title, get_all_windows};
+
+    // Arrange: Finderの現在のウィンドウ数を取得
+    let windows_before = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
+    let count_before = windows_before.len();
+
+    // Act: 新規ウィンドウを作成
+    let create_result = create_new_window("Finder");
+    assert!(
+        create_result.is_ok(),
+        "新規ウィンドウ作成に失敗: {:?}",
+        create_result.err()
+    );
+
+    // 少し待機（ウィンドウ作成完了を待つ）
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // ウィンドウが増えていることを確認
+    let windows_after = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
+    assert!(
+        windows_after.len() > count_before,
+        "新規ウィンドウが作成されていません。before: {}, after: {}",
+        count_before,
+        windows_after.len()
+    );
+
+    // ウィンドウタイトルで検索（Finderは通常「デスクトップ」「Desktop」など）
+    // 空文字列で検索すると、すべてのウィンドウにマッチ（部分一致）
+    let result = find_window_by_title("Finder", "");
+
+    // Assert: ウィンドウが見つかることを確認
+    assert!(
+        result.is_ok(),
+        "find_window_by_title がエラーを返しました: {:?}",
+        result.as_ref().err()
+    );
+    let window_option = result.unwrap();
+    assert!(window_option.is_some(), "ウィンドウが見つかりませんでした");
+
+    let window = window_option.unwrap();
+    assert!(!window.title.is_empty(), "ウィンドウタイトルが空です");
+    assert!(window.size.0 > 0, "ウィンドウ幅が0以下です");
+    assert!(window.size.1 > 0, "ウィンドウ高さが0以下です");
+}
+
+/// Integration test: find_window_by_title でウィンドウが見つからなかった場合
+///
+/// # テスト概要
+/// 存在しないタイトルでウィンドウを検索し、None が返ることを確認
+///
+/// # テストシナリオ
+/// 1. Finderで存在しないタイトルを検索
+/// 2. None が返ることを確認
+///
+/// # 境界値
+/// - 完全に一致しないタイトル
+/// - ランダム文字列を使用して誤マッチを防ぐ
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
+fn test_find_window_by_title_not_found() {
+    use apptidying::applescript::find_window_by_title;
+
+    // Arrange & Act: 存在しないタイトルで検索
+    let result = find_window_by_title("Finder", "NonExistentWindowTitle_XYZ_12345_ABCDE");
+
+    // Assert: None が返ることを確認
+    assert!(
+        result.is_ok(),
+        "find_window_by_title がエラーを返しました: {:?}",
+        result.err()
+    );
+    let window_option = result.unwrap();
+    assert!(
+        window_option.is_none(),
+        "存在しないタイトルでウィンドウが見つかりました: {:?}",
+        window_option
+    );
+}
+
+/// Integration test: find_window_by_title の部分一致検索
+///
+/// # テスト概要
+/// Finderのウィンドウタイトルの一部で検索し、正しくマッチすることを確認
+///
+/// # テストシナリオ
+/// 1. Finderのウィンドウを取得
+/// 2. 最初のウィンドウタイトルの一部で検索
+/// 3. 見つかったウィンドウが同じタイトルであることを確認
+///
+/// # 境界値
+/// - タイトルの先頭部分での検索
+/// - タイトルの中間部分での検索
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
+fn test_find_window_by_title_partial_match() {
+    use apptidying::applescript::{find_window_by_title, get_all_windows};
+
+    // Arrange: Finderのウィンドウを取得
+    let windows = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
+
+    if windows.is_empty() {
+        // ウィンドウがない場合は新規作成
+        use apptidying::applescript::create_new_window;
+        create_new_window("Finder").expect("新規ウィンドウ作成に失敗");
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    let windows = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
+    assert!(
+        !windows.is_empty(),
+        "テスト実行に必要なウィンドウが存在しません"
+    );
+
+    let first_window_title = &windows[0].title;
+    assert!(!first_window_title.is_empty(), "ウィンドウタイトルが空です");
+
+    // Act: タイトルの最初の1文字で検索（部分一致）
+    // Unicode文字境界を考慮して、chars().next() で最初の文字を取得
+    let first_char = first_window_title.chars().next().unwrap().to_string();
+    let result = find_window_by_title("Finder", &first_char);
+
+    // Assert: ウィンドウが見つかることを確認
+    assert!(
+        result.is_ok(),
+        "find_window_by_title がエラーを返しました: {:?}",
+        result.as_ref().err()
+    );
+    let window_option = result.unwrap();
+    assert!(
+        window_option.is_some(),
+        "部分一致でウィンドウが見つかりませんでした"
+    );
+
+    let found_window = window_option.unwrap();
+    assert!(
+        found_window.title.contains(&first_char),
+        "見つかったウィンドウタイトル「{}」に検索文字列「{}」が含まれていません",
+        found_window.title,
+        first_char
+    );
+}
+
+/// Integration test: 複数ウィンドウがある場合、最初のウィンドウを返す
+///
+/// # テスト概要
+/// 複数のFinderウィンドウを開いた状態で、find_window_by_title が最初のウィンドウを返すことを確認
+///
+/// # テストシナリオ
+/// 1. Finderのウィンドウ数を確認
+/// 2. 2つ以上のウィンドウがあることを確認（なければ作成）
+/// 3. 空文字列で検索（すべてのウィンドウにマッチ）
+/// 4. get_all_windows の最初のウィンドウと一致することを確認
+///
+/// # 境界値
+/// - 複数マッチした場合の動作
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
+fn test_find_window_by_title_multiple_windows() {
+    use apptidying::applescript::{create_new_window, find_window_by_title, get_all_windows};
+
+    // Arrange: 複数ウィンドウを作成
+    let windows_before = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
+
+    // 少なくとも2つのウィンドウを確保
+    if windows_before.len() < 2 {
+        for _ in 0..(2 - windows_before.len()) {
+            create_new_window("Finder").expect("新規ウィンドウ作成に失敗");
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
+
+    let all_windows = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
+    assert!(
+        all_windows.len() >= 2,
+        "テスト実行に必要な複数ウィンドウが存在しません"
+    );
+
+    // Act: 空文字列で検索（すべてのウィンドウにマッチ）
+    let result = find_window_by_title("Finder", "");
+
+    // Assert: 最初のウィンドウが返ることを確認
+    assert!(result.is_ok(), "find_window_by_title がエラーを返しました");
+    let window_option = result.unwrap();
+    assert!(window_option.is_some(), "ウィンドウが見つかりませんでした");
+
+    let found_window = window_option.unwrap();
+    let first_window = &all_windows[0];
+
+    // タイトルと位置が一致することを確認
+    assert_eq!(
+        found_window.title, first_window.title,
+        "見つかったウィンドウが最初のウィンドウと一致しません"
+    );
+    assert_eq!(
+        found_window.position, first_window.position,
+        "見つかったウィンドウの位置が最初のウィンドウと一致しません"
+    );
+}
+
+// =============================================================================
+// Create New Window Tests
+// =============================================================================
+
+/// Integration test: Safari で新規ウィンドウを作成
+///
+/// # テスト概要
+/// Safariで新規ウィンドウを作成し、ウィンドウ数が増えることを確認
+///
+/// # テストシナリオ
+/// 1. Safari が起動していない場合は起動
+/// 2. 現在のウィンドウ数を取得
+/// 3. 新規ウィンドウを作成
+/// 4. ウィンドウ数が増えていることを確認
+///
+/// # 境界値
+/// - アプリケーション未起動状態からのウィンドウ作成
+/// - メニュー項目の多言語対応（英語「New Window」/日本語「新規ウインドウ」）
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
+fn test_create_new_window_safari() {
+    use apptidying::applescript::{create_new_window, get_all_windows};
+    use std::process::Command;
+
+    // Arrange: Safariを起動
+    let _ = Command::new("osascript")
+        .arg("-e")
+        .arg("tell application \"Safari\" to activate")
+        .output();
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    // 現在のウィンドウ数を取得
+    let windows_before = get_all_windows("Safari").expect("Safariのウィンドウ一覧取得に失敗");
+    let count_before = windows_before.len();
+
+    // Act: 新規ウィンドウを作成
+    let result = create_new_window("Safari");
+
+    // Assert: 成功することを確認
+    assert!(
+        result.is_ok(),
+        "Safari 新規ウィンドウ作成に失敗: {:?}",
+        result.err()
+    );
+
+    // 少し待機（ウィンドウ作成完了を待つ）
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // ウィンドウ数が増えていることを確認
+    let windows_after = get_all_windows("Safari").expect("Safariのウィンドウ一覧取得に失敗");
+    assert!(
+        windows_after.len() > count_before,
+        "Safari の新規ウィンドウが作成されていません。before: {}, after: {}",
+        count_before,
+        windows_after.len()
+    );
+}
+
+/// Integration test: Google Chrome で新規ウィンドウを作成
+///
+/// # テスト概要
+/// Google Chromeで新規ウィンドウを作成し、ウィンドウ数が増えることを確認
+///
+/// # テストシナリオ
+/// 1. Google Chrome が起動していない場合は起動
+/// 2. 現在のウィンドウ数を取得
+/// 3. 新規ウィンドウを作成
+/// 4. ウィンドウ数が増えていることを確認
+///
+/// # 境界値
+/// - アプリケーション名にスペースが含まれる場合
+/// - メニュー項目の多言語対応
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
+fn test_create_new_window_chrome() {
+    use apptidying::applescript::{create_new_window, get_all_windows};
+    use std::process::Command;
+
+    // Arrange: Google Chromeを起動
+    let chrome_launch = Command::new("osascript")
+        .arg("-e")
+        .arg("tell application \"Google Chrome\" to activate")
+        .output();
+    if chrome_launch.is_err() {
+        // Google Chromeがインストールされていない場合はスキップ
+        println!("Google Chrome がインストールされていないため、テストをスキップします");
+        return;
+    }
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    // 現在のウィンドウ数を取得
+    let windows_before = get_all_windows("Google Chrome");
+    if windows_before.is_err() {
+        println!("Google Chrome のウィンドウ情報取得に失敗したため、テストをスキップします");
+        return;
+    }
+    let count_before = windows_before.unwrap().len();
+
+    // Act: 新規ウィンドウを作成
+    let result = create_new_window("Google Chrome");
+
+    // Assert: 成功することを確認
+    assert!(
+        result.is_ok(),
+        "Google Chrome 新規ウィンドウ作成に失敗: {:?}",
+        result.err()
+    );
+
+    // 少し待機（ウィンドウ作成完了を待つ）
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // ウィンドウ数が増えていることを確認
+    let windows_after =
+        get_all_windows("Google Chrome").expect("Google Chromeのウィンドウ一覧取得に失敗");
+    assert!(
+        windows_after.len() > count_before,
+        "Google Chrome の新規ウィンドウが作成されていません。before: {}, after: {}",
+        count_before,
+        windows_after.len()
+    );
+}
+
+/// Integration test: Finder で新規ウィンドウを作成
+///
+/// # テスト概要
+/// Finderで新規ウィンドウを作成し、ウィンドウ数が増えることを確認
+///
+/// # テストシナリオ
+/// 1. Finderの現在のウィンドウ数を取得（Finderは常に起動している）
+/// 2. 新規ウィンドウを作成
+/// 3. ウィンドウ数が増えていることを確認
+///
+/// # 境界値
+/// - システムアプリケーション（Finder）での動作
+/// - 「新規Finderウインドウ」という特殊なメニュー項目名
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
+fn test_create_new_window_finder() {
+    use apptidying::applescript::{create_new_window, get_all_windows};
+
+    // Arrange: 現在のウィンドウ数を取得
+    let windows_before = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
+    let count_before = windows_before.len();
+
+    // Act: 新規ウィンドウを作成
+    let result = create_new_window("Finder");
+
+    // Assert: 成功することを確認
+    assert!(
+        result.is_ok(),
+        "Finder 新規ウィンドウ作成に失敗: {:?}",
+        result.err()
+    );
+
+    // 少し待機（ウィンドウ作成完了を待つ）
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // ウィンドウ数が増えていることを確認
+    let windows_after = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
+    assert!(
+        windows_after.len() > count_before,
+        "Finder の新規ウィンドウが作成されていません。before: {}, after: {}",
+        count_before,
+        windows_after.len()
+    );
+}
+
+/// Integration test: 存在しないアプリケーションで新規ウィンドウ作成を試みる
+///
+/// # テスト概要
+/// 存在しないアプリケーションで新規ウィンドウ作成を試み、適切なエラーが返ることを確認
+///
+/// # テストシナリオ
+/// 1. 存在しないアプリケーション名で create_new_window を呼び出す
+/// 2. エラーが返ることを確認
+///
+/// # 境界値
+/// - 存在しないアプリケーション名
+/// - エラーハンドリングの確認
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
+fn test_create_new_window_nonexistent_app() {
+    use apptidying::applescript::create_new_window;
+
+    // Act: 存在しないアプリケーションで新規ウィンドウ作成を試みる
+    let result = create_new_window("NonExistentApp12345XYZ");
+
+    // Assert: エラーが返ることを確認
+    assert!(
+        result.is_err(),
+        "存在しないアプリケーションで新規ウィンドウ作成が成功してしまいました"
+    );
+}
+
+/// Integration test: 新規ウィンドウメニューがないアプリケーション
+///
+/// # テスト概要
+/// 新規ウィンドウメニューを持たないアプリケーション（例: システム環境設定）で
+/// 新規ウィンドウ作成を試み、適切なエラーが返ることを確認
+///
+/// # テストシナリオ
+/// 1. Calculator（計算機）など、新規ウィンドウメニューがないアプリで create_new_window を呼び出す
+/// 2. エラーが返ることを確認
+/// 3. エラーメッセージに「menu item not found」が含まれることを確認
+///
+/// # 境界値
+/// - メニュー項目が存在しない場合のエラーハンドリング
+#[test]
+#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
+fn test_create_new_window_no_menu_item() {
+    use apptidying::applescript::create_new_window;
+    use std::process::Command;
+
+    // Arrange: Calculatorを起動（新規ウィンドウメニューがないアプリ）
+    let _ = Command::new("osascript")
+        .arg("-e")
+        .arg("tell application \"Calculator\" to activate")
+        .output();
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    // Act: 新規ウィンドウ作成を試みる
+    let result = create_new_window("Calculator");
+
+    // Assert: エラーが返ることを確認
+    assert!(
+        result.is_err(),
+        "新規ウィンドウメニューがないアプリで作成が成功してしまいました"
+    );
+
+    // エラーメッセージに「menu item not found」が含まれることを確認
+    if let Err(e) = result {
+        assert!(
+            e.message.to_lowercase().contains("menu item not found")
+                || e.message.contains("メニュー項目が見つかりません"),
+            "エラーメッセージが期待と異なります: {}",
+            e.message
+        );
+    }
+}
