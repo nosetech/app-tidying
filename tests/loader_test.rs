@@ -4,6 +4,7 @@
 // applescript モジュールの呼び出しをモック化できないため、
 // 実際の環境での動作検証が必要です。
 
+use apptidying::applescript;
 use apptidying::config::{AppConfig, AppWindowConfig, DisplayConfig, LayoutConfig, Position, Size};
 use apptidying::loader::{load_layout, LoadError, LoadResult};
 use serde_json::json;
@@ -12,14 +13,33 @@ use serde_json::json;
 // テスト用ヘルパー関数
 // =============================================================================
 
+/// 実際に接続されているディスプレイ名を取得
+fn get_first_connected_display_name() -> String {
+    match applescript::get_all_connected_displays() {
+        Ok(displays) => {
+            if !displays.is_empty() {
+                displays[0].name.clone()
+            } else {
+                // フォールバック: 接続されているディスプレイがない場合は Built-in Retina Display を使用
+                "Built-in Retina Display".to_string()
+            }
+        }
+        Err(_) => {
+            // エラーの場合もフォールバック
+            "Built-in Retina Display".to_string()
+        }
+    }
+}
+
 /// テスト用の基本的な AppConfig を作成
 fn create_test_config_single_window() -> AppConfig {
+    let display_name = get_first_connected_display_name();
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             name: "test-layout".to_string(),
             displays: vec![DisplayConfig {
-                name: "Built-in Retina Display".to_string(),
+                name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "TextEdit".to_string(),
                     title: None,
@@ -41,12 +61,13 @@ fn create_test_config_single_window() -> AppConfig {
 
 /// テスト用の複数ウィンドウ設定を作成
 fn create_test_config_multiple_windows() -> AppConfig {
+    let display_name = get_first_connected_display_name();
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             name: "multi-window".to_string(),
             displays: vec![DisplayConfig {
-                name: "Built-in Retina Display".to_string(),
+                name: display_name,
                 windows: vec![
                     AppWindowConfig {
                         app: "TextEdit".to_string(),
@@ -119,12 +140,13 @@ fn create_test_config_nonexistent_display() -> AppConfig {
 
 /// タイトル指定ありのウィンドウ設定を作成
 fn create_test_config_with_title() -> AppConfig {
+    let display_name = get_first_connected_display_name();
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             name: "with-title".to_string(),
             displays: vec![DisplayConfig {
-                name: "Built-in Retina Display".to_string(),
+                name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "TextEdit".to_string(),
                     title: Some("Untitled".to_string()),
@@ -146,12 +168,13 @@ fn create_test_config_with_title() -> AppConfig {
 
 /// 位置のみ指定（サイズなし）の設定を作成
 fn create_test_config_position_only() -> AppConfig {
+    let display_name = get_first_connected_display_name();
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             name: "position-only".to_string(),
             displays: vec![DisplayConfig {
-                name: "Built-in Retina Display".to_string(),
+                name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "TextEdit".to_string(),
                     title: None,
@@ -170,12 +193,13 @@ fn create_test_config_position_only() -> AppConfig {
 
 /// サイズのみ指定（位置なし）の設定を作成
 fn create_test_config_size_only() -> AppConfig {
+    let display_name = get_first_connected_display_name();
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             name: "size-only".to_string(),
             displays: vec![DisplayConfig {
-                name: "Built-in Retina Display".to_string(),
+                name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "TextEdit".to_string(),
                     title: None,
@@ -194,12 +218,13 @@ fn create_test_config_size_only() -> AppConfig {
 
 /// 位置もサイズも指定なしの設定を作成
 fn create_test_config_no_position_no_size() -> AppConfig {
+    let display_name = get_first_connected_display_name();
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             name: "no-position-no-size".to_string(),
             displays: vec![DisplayConfig {
-                name: "Built-in Retina Display".to_string(),
+                name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "TextEdit".to_string(),
                     title: None,
@@ -215,13 +240,14 @@ fn create_test_config_no_position_no_size() -> AppConfig {
 
 /// 複数ディスプレイの設定を作成
 fn create_test_config_multiple_displays() -> AppConfig {
+    let display_name = get_first_connected_display_name();
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             name: "multi-display".to_string(),
             displays: vec![
                 DisplayConfig {
-                    name: "Built-in Retina Display".to_string(),
+                    name: display_name,
                     windows: vec![AppWindowConfig {
                         app: "TextEdit".to_string(),
                         title: None,
@@ -259,12 +285,13 @@ fn create_test_config_multiple_displays() -> AppConfig {
 
 /// タイムアウト設定ありの設定を作成
 fn create_test_config_with_timeout() -> AppConfig {
+    let display_name = get_first_connected_display_name();
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             name: "with-timeout".to_string(),
             displays: vec![DisplayConfig {
-                name: "Built-in Retina Display".to_string(),
+                name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "TextEdit".to_string(),
                     title: None,
