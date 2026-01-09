@@ -194,41 +194,39 @@ fn process_window(
         thread::sleep(Duration::from_millis(500));
     }
 
-    // 4. サイズと位置を計算
-    let position_opt = if let Some(ref position) = window_config.position {
-        // サイズがあれば計算、なければデフォルトを使用
-        let width = if let Some(ref size) = window_config.size {
-            calculate_width(size, display_info.width)?
+    // 4. サイズを計算
+    let (size_opt, position_opt) = if let Some(ref size) = window_config.size {
+        let width = calculate_width(size, display_info.width)?;
+        let height = calculate_height(size, display_info.height)?;
+
+        let position = if let Some(ref position) = window_config.position {
+            Some(calculate_position(
+                position,
+                display_info.width,
+                display_info.height,
+                width,
+                height,
+            )?)
         } else {
-            display_info.width
+            None
         };
 
-        let height = if let Some(ref size) = window_config.size {
-            calculate_height(size, display_info.height)?
-        } else {
-            display_info.height
-        };
-
-        Some(calculate_position(
+        (Some((width, height)), position)
+    } else if let Some(ref position) = window_config.position {
+        // サイズ指定なしの場合はディスプレイサイズを使用
+        let position_coord = calculate_position(
             position,
             display_info.width,
             display_info.height,
-            width,
-            height,
-        )?)
+            display_info.width,
+            display_info.height,
+        )?;
+        (None, Some(position_coord))
     } else {
-        None
+        (None, None)
     };
 
-    let size_opt = if let Some(ref size) = window_config.size {
-        let width = calculate_width(size, display_info.width)?;
-        let height = calculate_height(size, display_info.height)?;
-        Some((width, height))
-    } else {
-        None
-    };
-
-    if let (Some(position), Some(size)) = (position_opt, size_opt) {
+    if let (Some(size), Some(position)) = (size_opt, position_opt) {
         log::debug!(
             "ウィンドウを配置します: 位置=({}, {}), サイズ=({}, {})",
             position.0,
@@ -248,6 +246,9 @@ fn process_window(
             size.0,
             size.1
         );
+    } else {
+        log::debug!("位置もサイズも指定されていないため、ウィンドウ操作をスキップします");
+        return Ok(());
     }
 
     // 5. ウィンドウを移動・リサイズ
@@ -257,7 +258,7 @@ fn process_window(
         position_opt,
         size_opt,
     )
-    .map_err(|e| format!("ウィンドウリサイズ失敗: {}", e))?;
+    .map_err(|e| format!("ウィンドウのリサイズに失敗しました: {}", e))?;
 
     Ok(())
 }
@@ -277,7 +278,12 @@ fn calculate_width(size: &crate::config::Size, display_width: i32) -> Result<i32
     }
 
     match parse_size_value(&width_value, display_width, display_width, "width") {
-        Ok((w, _)) => Ok(w),
+        Ok((w, _)) => {
+            if w <= 0 {
+                return Err("幅は正の値である必要があります".to_string());
+            }
+            Ok(w)
+        }
         Err(e) => Err(format!("幅計算失敗: {}", e)),
     }
 }
@@ -297,7 +303,12 @@ fn calculate_height(size: &crate::config::Size, display_height: i32) -> Result<i
     }
 
     match parse_size_value(&height_value, display_height, display_height, "height") {
-        Ok((_, h)) => Ok(h),
+        Ok((_, h)) => {
+            if h <= 0 {
+                return Err("高さは正の値である必要があります".to_string());
+            }
+            Ok(h)
+        }
         Err(e) => Err(format!("高さ計算失敗: {}", e)),
     }
 }
@@ -312,8 +323,11 @@ fn calculate_position(
 ) -> Result<(i32, i32), String> {
     use crate::config::parse_position_value;
 
+    let position_value = serde_json::to_value(position)
+        .map_err(|e| format!("位置情報のシリアライズに失敗しました: {}", e))?;
+
     match parse_position_value(
-        &serde_json::to_value(position).unwrap(),
+        &position_value,
         display_width,
         display_height,
         window_width,
