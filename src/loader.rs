@@ -13,6 +13,7 @@ pub struct LoadResult {
     /// 失敗したウィンドウ数
     pub failure_count: usize,
     /// 失敗したアプリ名のリスト
+    #[allow(dead_code)]
     pub failed_apps: Vec<String>,
 }
 
