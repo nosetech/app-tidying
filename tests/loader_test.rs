@@ -858,6 +858,19 @@ fn test_load_error_clone() {
 fn test_load_layout_pattern_left_top() {
     // パターン指定: left/top
     let mut config = create_test_config_single_window();
+
+    println!("\n=== テスト: test_load_layout_pattern_left_top ===");
+    println!("ディスプレイ情報:");
+    let displays = applescript::get_all_connected_displays().expect("ディスプレイ情報の取得に失敗");
+    for (i, display) in displays.iter().enumerate() {
+        println!(
+            "  [{}] {} ({}x{}, origin: ({}, {}))",
+            i, display.name, display.width, display.height, display.origin_x, display.origin_y
+        );
+    }
+
+    let display_info = &displays[0];
+
     config.layouts[0].displays[0].windows[0].position = Some(Position {
         x: json!("left"),
         y: json!("top"),
@@ -868,11 +881,48 @@ fn test_load_layout_pattern_left_top() {
     });
 
     let timeout_ms = 3000;
+
+    println!(
+        "設定されたウィンドウ: app={}, position=left/top, size=half/half",
+        config.layouts[0].displays[0].windows[0].app
+    );
+
+    // 計算されるサイズと位置を予測
+    let expected_width = display_info.width / 2;
+    let expected_height = display_info.height / 2;
+    let expected_x = 0; // left
+    let expected_y = 25; // top
+    println!(
+        "期待される座標: 位置=({}, {}), サイズ=({}, {})",
+        expected_x, expected_y, expected_width, expected_height
+    );
+
     let result = load_layout(&config, timeout_ms);
 
     match result {
         Ok(load_result) => {
             println!("✓ パターン left/top テスト成功");
+            println!(
+                "  成功: {}, 失敗: {}",
+                load_result.success_count, load_result.failure_count
+            );
+
+            // ウィンドウが実際に配置されたか確認
+            if let Ok(windows) = applescript::get_all_windows("Safari") {
+                println!("  Safari ウィンドウ情報:");
+                for (i, window) in windows.iter().enumerate() {
+                    println!(
+                        "    [{}] {} - 位置: ({}, {}), サイズ: ({}, {})",
+                        i,
+                        window.title,
+                        window.position.0,
+                        window.position.1,
+                        window.size.0,
+                        window.size.1
+                    );
+                }
+            }
+
             assert!(
                 load_result.success_count >= 1,
                 "パターン left/top で成功する必要があります"
@@ -880,6 +930,89 @@ fn test_load_layout_pattern_left_top() {
         }
         Err(e) => {
             println!("✗ パターン left/top テスト失敗: {}", e);
+
+            // エラーが発生した場合、process_window が呼ぶ各関数をテストしてみる
+            println!("\nデバッグ情報: 各機能の個別テスト");
+
+            // 1. Safari ウィンドウの有無を確認
+            println!("1. Safari ウィンドウ確認:");
+            match applescript::get_all_windows("Safari") {
+                Ok(windows) => {
+                    println!("   ウィンドウ数: {}", windows.len());
+                    for (i, window) in windows.iter().enumerate() {
+                        println!(
+                            "     [{}] {} - 位置: ({}, {}), サイズ: ({}, {})",
+                            i,
+                            window.title,
+                            window.position.0,
+                            window.position.1,
+                            window.size.0,
+                            window.size.1
+                        );
+                    }
+                }
+                Err(e) => println!("   エラー: {}", e),
+            }
+
+            // 2. 新規ウィンドウ作成をテスト
+            println!("2. 新規ウィンドウ作成テスト:");
+            match applescript::create_new_window("Safari") {
+                Ok(()) => println!("   成功"),
+                Err(e) => println!("   失敗エラー: {}", e),
+            }
+
+            // 3. resize_window() をテスト
+            println!("3. resize_window() テスト:");
+            match applescript::resize_window(
+                "Safari",
+                None,
+                Some((expected_x, expected_y)),
+                Some((expected_width, expected_height)),
+            ) {
+                Ok(result) => {
+                    println!("   成功: {}", result.message);
+                }
+                Err(e) => {
+                    println!("   失敗エラーメッセージ: {}", e.message);
+                }
+            }
+
+            // エラーが発生した場合、直接 AppleScript でテストしてみる
+            println!("\nデバッグ情報: 直接 AppleScript テスト");
+            let test_script = format!(
+                r#"tell application "System Events"
+    tell process "Safari"
+        try
+            set targetWindow to window 1
+            set position of targetWindow to {{{}, {}}}
+            set size of targetWindow to {{{}, {}}}
+            return "success"
+        on error errMsg
+            return "error: " & errMsg
+        end try
+    end tell
+end tell"#,
+                expected_x, expected_y, expected_width, expected_height
+            );
+
+            match std::process::Command::new("osascript")
+                .arg("-e")
+                .arg(&test_script)
+                .output()
+            {
+                Ok(output) => {
+                    let result_str = String::from_utf8_lossy(&output.stdout);
+                    println!("  AppleScript 直接実行結果: {}", result_str.trim());
+                    if !output.status.success() {
+                        let stderr_str = String::from_utf8_lossy(&output.stderr);
+                        println!("  AppleScript エラー: {}", stderr_str);
+                    }
+                }
+                Err(e) => println!("  AppleScript 実行失敗: {}", e),
+            }
+
+            // テストを失敗させない（デバッグ用）
+            // panic!("パターン left/top テスト失敗");
         }
     }
 }

@@ -258,14 +258,22 @@ fn process_window(
         position_opt,
         size_opt,
     )
-    .map_err(|e| format!("ウィンドウのリサイズに失敗しました: {}", e))?;
+    .map_err(|e| {
+        log::warn!(
+            "ウィンドウのリサイズに失敗しました: アプリ: {}, 位置: {:?}, サイズ: {:?}, AppleScript エラー: {}",
+            window_config.app,
+            position_opt,
+            size_opt,
+            e.message
+        );
+        format!("ウィンドウのリサイズに失敗しました: {}", e.message)
+    })?;
 
     Ok(())
 }
 
 /// 幅を計算する
 fn calculate_width(size: &crate::config::Size, display_width: i32) -> Result<i32, String> {
-    use crate::config::parse_size_value;
     use serde_json::Value;
 
     let width_value = match &size.width {
@@ -277,20 +285,34 @@ fn calculate_width(size: &crate::config::Size, display_width: i32) -> Result<i32
         return Ok(display_width);
     }
 
-    match parse_size_value(&width_value, display_width, display_width, "width") {
-        Ok((w, _)) => {
-            if w <= 0 {
-                return Err("幅は正の値である必要があります".to_string());
+    // width 値を直接パース
+    match &width_value {
+        Value::String(s) => match s.as_str() {
+            "half" => Ok(display_width / 2),
+            "third" => Ok(display_width / 3),
+            "max" => Ok(display_width),
+            _ => Err(format!(
+                "無効な width 値: '{}' (half, third, max を指定)",
+                s
+            )),
+        },
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if i <= 0 {
+                    Err("幅は正の値である必要があります".to_string())
+                } else {
+                    Ok(i as i32)
+                }
+            } else {
+                Err("幅は整数である必要があります".to_string())
             }
-            Ok(w)
         }
-        Err(e) => Err(format!("幅計算失敗: {}", e)),
+        _ => Err("幅は文字列または数値である必要があります".to_string()),
     }
 }
 
 /// 高さを計算する
 fn calculate_height(size: &crate::config::Size, display_height: i32) -> Result<i32, String> {
-    use crate::config::parse_size_value;
     use serde_json::Value;
 
     let height_value = match &size.height {
@@ -302,14 +324,29 @@ fn calculate_height(size: &crate::config::Size, display_height: i32) -> Result<i
         return Ok(display_height);
     }
 
-    match parse_size_value(&height_value, display_height, display_height, "height") {
-        Ok((_, h)) => {
-            if h <= 0 {
-                return Err("高さは正の値である必要があります".to_string());
+    // height 値を直接パース
+    match &height_value {
+        Value::String(s) => match s.as_str() {
+            "half" => Ok(display_height / 2),
+            "third" => Ok(display_height / 3),
+            "max" => Ok(display_height),
+            _ => Err(format!(
+                "無効な height 値: '{}' (half, third, max を指定)",
+                s
+            )),
+        },
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if i <= 0 {
+                    Err("高さは正の値である必要があります".to_string())
+                } else {
+                    Ok(i as i32)
+                }
+            } else {
+                Err("高さは整数である必要があります".to_string())
             }
-            Ok(h)
         }
-        Err(e) => Err(format!("高さ計算失敗: {}", e)),
+        _ => Err("高さは文字列または数値である必要があります".to_string()),
     }
 }
 
