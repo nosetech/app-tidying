@@ -31,6 +31,20 @@ fn get_first_connected_display_name() -> String {
     }
 }
 
+/// 実際に接続されている2番目のディスプレイ名を取得（複数ディスプレイテスト用）
+fn get_second_connected_display_name() -> Option<String> {
+    match applescript::get_all_connected_displays() {
+        Ok(displays) => {
+            if displays.len() > 1 {
+                Some(displays[1].name.clone())
+            } else {
+                None
+            }
+        }
+        Err(_) => None,
+    }
+}
+
 /// テスト用の基本的な AppConfig を作成
 fn create_test_config_single_window() -> AppConfig {
     let display_name = get_first_connected_display_name();
@@ -241,42 +255,46 @@ fn create_test_config_no_position_no_size() -> AppConfig {
 /// 複数ディスプレイの設定を作成
 fn create_test_config_multiple_displays() -> AppConfig {
     let display_name = get_first_connected_display_name();
+    let mut displays = vec![DisplayConfig {
+        name: display_name,
+        windows: vec![AppWindowConfig {
+            app: "TextEdit".to_string(),
+            title: None,
+            position: Some(Position {
+                x: json!("left"),
+                y: json!("top"),
+            }),
+            size: Some(Size {
+                width: json!("half"),
+                height: json!("half"),
+            }),
+        }],
+    }];
+
+    // 2番目のディスプレイが存在する場合のみ追加
+    if let Some(second_display_name) = get_second_connected_display_name() {
+        displays.push(DisplayConfig {
+            name: second_display_name,
+            windows: vec![AppWindowConfig {
+                app: "Finder".to_string(),
+                title: None,
+                position: Some(Position {
+                    x: json!("right"),
+                    y: json!("top"),
+                }),
+                size: Some(Size {
+                    width: json!("half"),
+                    height: json!("half"),
+                }),
+            }],
+        });
+    }
+
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             name: "multi-display".to_string(),
-            displays: vec![
-                DisplayConfig {
-                    name: display_name,
-                    windows: vec![AppWindowConfig {
-                        app: "TextEdit".to_string(),
-                        title: None,
-                        position: Some(Position {
-                            x: json!("left"),
-                            y: json!("top"),
-                        }),
-                        size: Some(Size {
-                            width: json!("half"),
-                            height: json!("half"),
-                        }),
-                    }],
-                },
-                DisplayConfig {
-                    name: "External Display".to_string(),
-                    windows: vec![AppWindowConfig {
-                        app: "Finder".to_string(),
-                        title: None,
-                        position: Some(Position {
-                            x: json!("right"),
-                            y: json!("top"),
-                        }),
-                        size: Some(Size {
-                            width: json!("half"),
-                            height: json!("half"),
-                        }),
-                    }],
-                },
-            ],
+            displays,
         }],
         notification: None,
         timeout: None,
