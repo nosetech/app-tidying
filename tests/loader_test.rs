@@ -55,7 +55,7 @@ fn create_test_config_single_window() -> AppConfig {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
-                    app: "TextEdit".to_string(),
+                    app: "Safari".to_string(),
                     title: None,
                     position: Some(Position {
                         x: json!("left"),
@@ -84,7 +84,7 @@ fn create_test_config_multiple_windows() -> AppConfig {
                 name: display_name,
                 windows: vec![
                     AppWindowConfig {
-                        app: "TextEdit".to_string(),
+                        app: "Safari".to_string(),
                         title: None,
                         position: Some(Position {
                             x: json!("left"),
@@ -134,7 +134,7 @@ fn create_test_config_nonexistent_display() -> AppConfig {
             displays: vec![DisplayConfig {
                 name: "NonExistentDisplay".to_string(),
                 windows: vec![AppWindowConfig {
-                    app: "TextEdit".to_string(),
+                    app: "Safari".to_string(),
                     title: None,
                     position: Some(Position {
                         x: json!("left"),
@@ -162,7 +162,7 @@ fn create_test_config_with_title() -> AppConfig {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
-                    app: "TextEdit".to_string(),
+                    app: "Safari".to_string(),
                     title: Some("Untitled".to_string()),
                     position: Some(Position {
                         x: json!(100),
@@ -190,7 +190,7 @@ fn create_test_config_position_only() -> AppConfig {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
-                    app: "TextEdit".to_string(),
+                    app: "Safari".to_string(),
                     title: None,
                     position: Some(Position {
                         x: json!(100),
@@ -215,7 +215,7 @@ fn create_test_config_size_only() -> AppConfig {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
-                    app: "TextEdit".to_string(),
+                    app: "Safari".to_string(),
                     title: None,
                     position: None,
                     size: Some(Size {
@@ -240,7 +240,7 @@ fn create_test_config_no_position_no_size() -> AppConfig {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
-                    app: "TextEdit".to_string(),
+                    app: "Safari".to_string(),
                     title: None,
                     position: None,
                     size: None,
@@ -258,7 +258,7 @@ fn create_test_config_multiple_displays() -> AppConfig {
     let mut displays = vec![DisplayConfig {
         name: display_name,
         windows: vec![AppWindowConfig {
-            app: "TextEdit".to_string(),
+            app: "Safari".to_string(),
             title: None,
             position: Some(Position {
                 x: json!("left"),
@@ -311,7 +311,7 @@ fn create_test_config_with_timeout() -> AppConfig {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
-                    app: "TextEdit".to_string(),
+                    app: "Safari".to_string(),
                     title: None,
                     position: Some(Position {
                         x: json!("left"),
