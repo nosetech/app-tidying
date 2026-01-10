@@ -163,7 +163,7 @@ fn create_test_config_with_title() -> AppConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "Safari".to_string(),
-                    title: Some("Untitled".to_string()),
+                    title: Some("スタートページ".to_string()),
                     position: Some(Position {
                         x: json!(100),
                         y: json!(200),
@@ -541,7 +541,7 @@ fn test_load_layout_timeout_large() {
 #[ignore] // osascript 実行に依存するため、CI環境ではスキップ
 fn test_load_layout_partial_failure() {
     // 部分失敗のシナリオ:
-    // - 有効なアプリ（TextEdit）と無効なアプリ（NonExistentApp）を混在させる
+    // - 有効なアプリ（Safari）と無効なアプリ（NonExistentApp）を混在させる
     let mut config = create_test_config_single_window();
 
     // 無効なアプリを追加

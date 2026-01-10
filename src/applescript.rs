@@ -288,7 +288,8 @@ impl std::error::Error for DisplayError {}
 /// 指定されたディスプレイ情報を取得する
 ///
 /// 指定されたディスプレイ名に一致するディスプレイを返します。
-/// 見つからない場合やdisplay_nameがNoneの場合は、メインディスプレイを返します。
+/// 指定されたディスプレイ名が見つからない場合はエラーを返します。
+/// display_nameがNoneの場合は、メインディスプレイ（最初のディスプレイ）を返します。
 #[allow(dead_code)]
 pub fn get_display_info(display_name: Option<&str>) -> Result<DisplayInfo, DisplayError> {
     // すべての接続ディスプレイを取得
@@ -305,11 +306,16 @@ pub fn get_display_info(display_name: Option<&str>) -> Result<DisplayInfo, Displ
         if !name.is_empty() {
             if let Some(display) = all_displays.iter().find(|d| d.name == name) {
                 return Ok(display.clone());
+            } else {
+                // ディスプレイ名が指定されたが見つからない場合はエラーを返す
+                return Err(DisplayError {
+                    message: format!("指定されたディスプレイ '{}' が見つかりません", name),
+                });
             }
         }
     }
 
-    // 見つからない場合またはdisplay_nameがNoneの場合は、メインディスプレイ（最初のディスプレイ）を返す
+    // display_nameがNoneまたは空の場合は、メインディスプレイ（最初のディスプレイ）を返す
     Ok(all_displays.into_iter().next().unwrap())
 }
 
