@@ -200,13 +200,15 @@ fn process_window(
         let height = calculate_height(size, display_info.height)?;
 
         let position = if let Some(ref position) = window_config.position {
-            Some(calculate_position(
+            let (x, y) = calculate_position(
                 position,
                 display_info.width,
                 display_info.height,
                 width,
                 height,
-            )?)
+            )?;
+            // ディスプレイの origin 座標を加算して、全体座標系に変換
+            Some((x + display_info.origin_x, y + display_info.origin_y))
         } else {
             None
         };
@@ -214,14 +216,18 @@ fn process_window(
         (Some((width, height)), position)
     } else if let Some(ref position) = window_config.position {
         // サイズ指定なしの場合はディスプレイサイズを使用
-        let position_coord = calculate_position(
+        let (x, y) = calculate_position(
             position,
             display_info.width,
             display_info.height,
             display_info.width,
             display_info.height,
         )?;
-        (None, Some(position_coord))
+        // ディスプレイの origin 座標を加算して、全体座標系に変換
+        (
+            None,
+            Some((x + display_info.origin_x, y + display_info.origin_y)),
+        )
     } else {
         (None, None)
     };
