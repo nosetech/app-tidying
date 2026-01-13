@@ -146,6 +146,42 @@ pub fn load_default_config() -> Result<AppConfig, AppConfigError> {
     load_config_file(&config_path)
 }
 
+/// デフォルト設定ファイルのパスを取得
+#[allow(dead_code)]
+pub fn get_default_config_path() -> Result<PathBuf, AppConfigError> {
+    let home = dirs::home_dir().ok_or_else(|| AppConfigError {
+        message: "ホームディレクトリの取得に失敗しました".to_string(),
+    })?;
+    Ok(home.join("Library/Application Support/biz.nosetech.apptidying/settings.json"))
+}
+
+/// 設定をファイルに保存する
+#[allow(dead_code)]
+pub fn save_config_file(config: &AppConfig, path: &PathBuf) -> Result<(), AppConfigError> {
+    // 親ディレクトリが存在しない場合は作成
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| AppConfigError {
+            message: format!(
+                "ディレクトリの作成に失敗しました ({}): {}",
+                parent.display(),
+                e
+            ),
+        })?;
+    }
+
+    // JSONに変換（整形あり）
+    let json_str = serde_json::to_string_pretty(config).map_err(|e| AppConfigError {
+        message: format!("JSON シリアライズエラー: {}", e),
+    })?;
+
+    // ファイルに書き込み
+    fs::write(path, json_str).map_err(|e| AppConfigError {
+        message: format!("ファイル書き込みエラー ({}): {}", path.display(), e),
+    })?;
+
+    Ok(())
+}
+
 #[allow(dead_code)]
 fn validate_config(config: &AppConfig) -> Result<(), AppConfigError> {
     // バージョンチェック
