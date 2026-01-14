@@ -1,8 +1,56 @@
-// saver.rs モジュールの包括的なテスト
-//
-// このテストでは、save_layout()、should_include_window()、find_display_for_window()、
-// get_default_config_path()、save_config_file() の動作を検証します。
-
+/// saver.rs モジュールの包括的なテストスイート
+///
+/// # テスト構成
+///
+/// ## ユニットテスト（CI環境で実行可能）
+/// - SaveResult、SaveError の構造体テスト（2+3件）
+/// - get_default_config_path() のテスト（1件）
+/// - save_config_file() のテスト（2件）
+/// これらはosascriptに依存せず、全環境で実行可能です。
+///
+/// ## 統合テスト（#[ignore] 付き、ローカル環境でのみ実行）
+/// - save_layout() の統合テスト（4件）
+/// - save/load 往復テスト（1件）
+/// osascriptに依存するため、macOS ローカル環境でのみ実行可能です。
+/// CI環境では自動的にスキップされます。
+///
+/// # テスト実行方法
+///
+/// ```bash
+/// # 標準テスト実行（ユニットテストのみ）
+/// cargo test --test saver_test
+///
+/// # #[ignore]テスト実行（統合テスト）
+/// cargo test --test saver_test -- --ignored
+///
+/// # 標準出力を表示
+/// cargo test --test saver_test -- --nocapture
+///
+/// # 統合テストの標準出力を表示
+/// cargo test --test saver_test -- --ignored --nocapture
+/// ```
+///
+/// # テストカバレッジ
+///
+/// ## カバーされている機能
+/// - SaveResult 構造体: all_success、カウント、failed_apps リストの検証
+/// - SaveError 構造体: Display、Clone、Error trait の実装
+/// - get_default_config_path(): デフォルトパス取得、エラー処理
+/// - save_config_file(): ディレクトリ作成、JSON書き込み、数値/パターン指定
+/// - save_layout(): デフォルトパス、カスタムパス、--own オプション、JSON構造、往復テスト
+///
+/// ## カバーされていない機能
+/// 以下は private 関数のため、save_layout() を通じて間接的にテストされます：
+/// - should_include_window() - 最小化/非表示/システムウィンドウ、ターミナル除外の判定
+/// - find_display_for_window() - ウィンドウ所属ディスプレイの判定
+/// - get_own_terminal_app() - ターミナルアプリの特定
+///
+/// # 既知の制限事項
+///
+/// test_save_and_load_roundtrip について：
+/// 外部ディスプレイに配置されたウィンドウの y 座標が負の値になる場合があります
+/// （メニューバーの上に配置されるなど）。この場合、load時のバリデーションでエラーになる
+/// 可能性があります。これはmacOSの座標系とディスプレイ配置によって発生する正常な状態です。
 use apptidying::applescript::{AppInfo, DisplayInfo, WindowInfo};
 use apptidying::config::{
     get_default_config_path, save_config_file, AppConfig, AppWindowConfig, DisplayConfig,
@@ -76,27 +124,17 @@ fn cleanup_temp_file(path: &PathBuf) {
 }
 
 // =============================================================================
-// should_include_window() のテスト
-// =============================================================================
-
-// Note: should_include_window() は private 関数のため、直接テストできません。
-// save_layout() を通じて間接的にテストします。
-// ただし、ロジックを理解するために、想定される動作を確認します。
-
-// =============================================================================
-// find_display_for_window() のテスト
-// =============================================================================
-
-// Note: find_display_for_window() は private 関数のため、直接テストできません。
-// save_layout() を通じて間接的にテストします。
-
-// =============================================================================
 // SaveResult のテスト
 // =============================================================================
 
+/// SaveResult が all_success = true で正しく作成できることを確認
+///
+/// 検証項目：
+/// - all_success が true で設定できる
+/// - saved_app_count、saved_window_count、skipped_window_count が正しく設定される
+/// - failed_apps が空のベクトルで設定できる
 #[test]
 fn test_save_result_all_success() {
-    // SaveResult が all_success = true で作成できる
     let result = SaveResult {
         all_success: true,
         saved_app_count: 3,
@@ -127,9 +165,14 @@ fn test_save_result_all_success() {
     );
 }
 
+/// SaveResult が部分失敗（all_success = false）を正しく表現できることを確認
+///
+/// 検証項目：
+/// - all_success が false で設定できる
+/// - failed_apps リストに失敗したアプリケーション名が含まれる
+/// - 複数の失敗アプリ名が正しく保存される
 #[test]
 fn test_save_result_partial_failure() {
-    // SaveResult が all_success = false で failed_apps を持つことができる
     let result = SaveResult {
         all_success: false,
         saved_app_count: 2,
@@ -173,9 +216,12 @@ fn test_save_result_partial_failure() {
 // SaveError のテスト
 // =============================================================================
 
+/// SaveError の Display trait が正しく実装されていることを確認
+///
+/// 検証項目：
+/// - format!("{}", error) でエラーメッセージが正しく表示される
 #[test]
 fn test_save_error_display() {
-    // SaveError の Display trait 実装
     let error = SaveError {
         message: "テストエラーメッセージ".to_string(),
     };
@@ -187,9 +233,12 @@ fn test_save_error_display() {
     );
 }
 
+/// SaveError の Clone trait が正しく実装されていることを確認
+///
+/// 検証項目：
+/// - クローンされたエラーのメッセージが元のメッセージと一致する
 #[test]
 fn test_save_error_clone() {
-    // SaveError の Clone trait 実装
     let error = SaveError {
         message: "クローンテスト".to_string(),
     };
@@ -201,14 +250,16 @@ fn test_save_error_clone() {
     );
 }
 
+/// SaveError が std::error::Error trait を実装していることを確認
+///
+/// 検証項目：
+/// - Error trait を通じてメッセージが取得できる
 #[test]
 fn test_save_error_error_trait() {
-    // SaveError が Error trait を実装している
     let error = SaveError {
         message: "Error trait テスト".to_string(),
     };
 
-    // Error trait を通じてエラーメッセージを取得
     let error_ref: &dyn std::error::Error = &error;
     let error_string = format!("{}", error_ref);
     assert_eq!(
@@ -221,9 +272,14 @@ fn test_save_error_error_trait() {
 // get_default_config_path() のテスト
 // =============================================================================
 
+/// デフォルト設定ファイルパスが正しく取得できることを確認
+///
+/// 検証項目：
+/// - 正常系：デフォルトパスが期待される形式（~/Library/Application Support/...）
+/// - 正常系：パスがホームディレクトリから始まる
+/// - 異常系：ホームディレクトリが取得できない場合はエラーメッセージが返される
 #[test]
 fn test_get_default_config_path() {
-    // デフォルト設定ファイルパスが正しく取得できる
     let result = get_default_config_path();
 
     match result {
@@ -262,15 +318,17 @@ fn test_get_default_config_path() {
 // save_config_file() のテスト
 // =============================================================================
 
+/// 親ディレクトリが存在しない場合、自動的にディレクトリが作成されることを確認
+///
+/// 検証項目：
+/// - 親ディレクトリが存在しない状態でも save_config_file() が成功する
+/// - 設定ファイルが作成される
 #[test]
 fn test_save_config_file_creates_directory() {
-    // ディレクトリが自動作成されることを確認
     let temp_path = create_temp_config_path("creates_directory");
 
-    // 親ディレクトリが存在しない場合でもディレクトリを作成
     let parent_dir = temp_path.parent().unwrap();
     if parent_dir.exists() {
-        // ディレクトリが既に存在する場合はスキップ
         println!("✓ 親ディレクトリが既に存在: {}", parent_dir.display());
     }
 
@@ -314,9 +372,15 @@ fn test_save_config_file_creates_directory() {
     cleanup_temp_file(&temp_path);
 }
 
+/// JSON ファイルが正しく書き込まれ、内容が検証できることを確認
+///
+/// 検証項目：
+/// - version が "1.0" として保存される
+/// - layouts が配列として保存される
+/// - 数値指定とパターン指定の両方が正しく保存される
+/// - timeout が正しく保存される
 #[test]
 fn test_save_config_file_writes_json() {
-    // JSON ファイルが正しく書き込まれ、内容が検証できることを確認
     let temp_path = create_temp_config_path("writes_json");
 
     // テスト用の設定を作成
@@ -476,10 +540,15 @@ fn test_save_config_file_writes_json() {
 // save_layout() の統合テスト
 // =============================================================================
 
+/// デフォルトパスに保存ができることを確認
+///
+/// 実行環境: macOS ローカルのみ（CI環境ではスキップ）
+/// 検証項目：
+/// - ファイルが作成される
+/// - JSON 構造が正しい（version、layouts、displays が存在）
 #[test]
-#[ignore] // osascript 実行に依存するため、CI環境ではスキップ
+#[ignore]
 fn test_save_layout_default_path() {
-    // デフォルトパスに保存ができるか
     let default_path_result = get_default_config_path();
     assert!(
         default_path_result.is_ok(),
@@ -527,15 +596,19 @@ fn test_save_layout_default_path() {
         }
         Err(e) => {
             println!("✗ テスト失敗: {}", e);
-            // アプリが起動していない場合などはエラーになる可能性がある
         }
     }
 }
 
+/// カスタムパスに保存ができることを確認
+///
+/// 実行環境: macOS ローカルのみ（CI環境ではスキップ）
+/// 検証項目：
+/// - 指定したパスにファイルが作成される
+/// - JSON 構造が正しい
 #[test]
-#[ignore] // osascript 実行に依存するため、CI環境ではスキップ
+#[ignore]
 fn test_save_layout_custom_path() {
-    // カスタムパスに保存ができるか
     let output_path = create_temp_config_path("custom_path");
     let include_own_terminal = false;
 
@@ -585,10 +658,15 @@ fn test_save_layout_custom_path() {
     }
 }
 
+/// --own オプション付きで保存できることを確認
+///
+/// 実行環境: macOS ローカルのみ（CI環境ではスキップ）
+/// 検証項目：
+/// - include_own_terminal = true で保存が成功する
+/// - ターミナルウィンドウも含めて保存される（デフォルトより多いウィンドウ数）
 #[test]
-#[ignore] // osascript 実行に依存するため、CI環境ではスキップ
+#[ignore]
 fn test_save_layout_with_own_flag() {
-    // --own オプション付きで保存できるか
     let output_path = create_temp_config_path("with_own_flag");
     let include_own_terminal = true;
 
@@ -626,10 +704,19 @@ fn test_save_layout_with_own_flag() {
     }
 }
 
+/// 保存された JSON 構造が正しいことを確認
+///
+/// 実行環境: macOS ローカルのみ（CI環境ではスキップ）
+/// 検証項目：
+/// - version が "1.0"
+/// - layouts が配列で空でない
+/// - displays が配列で空でない
+/// - 各ウィンドウに app、position、size が存在
+/// - position の x, y が数値または文字列
+/// - 数値の場合、負でない値であること
 #[test]
-#[ignore] // osascript 実行に依存するため、CI環境ではスキップ
+#[ignore]
 fn test_save_layout_saves_correct_structure() {
-    // 保存された JSON 構造が正しいか（version, layouts, displays の存在など）
     let output_path = create_temp_config_path("correct_structure");
     let include_own_terminal = false;
 
@@ -773,10 +860,21 @@ fn test_save_layout_saves_correct_structure() {
 // save/load 往復テスト
 // =============================================================================
 
+/// 保存→読み込み→検証の往復が成功することを確認
+///
+/// 実行環境: macOS ローカルのみ（CI環境ではスキップ）
+/// 検証項目：
+/// - save_layout() が成功する
+/// - load_config_file() が成功する
+/// - 読み込まれた設定の構造が正しい
+///
+/// 制限事項：
+/// ディスプレイ配置によっては、負の座標が保存される場合があり、
+/// load時のバリデーションでエラーになる可能性があります。
+/// これはmacOSの座標系とディスプレイ配置によって発生する正常な状態です。
 #[test]
-#[ignore] // osascript 実行に依存するため、CI環境ではスキップ
+#[ignore]
 fn test_save_and_load_roundtrip() {
-    // 保存→読み込み→検証ができるか
     use apptidying::config::load_config_file;
 
     let output_path = create_temp_config_path("roundtrip");

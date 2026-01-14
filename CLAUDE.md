@@ -467,6 +467,56 @@ Rust での実装では、以下を原則とする：
 ### テスト実装方針
 
 - テストコードはtests/配下に配置する。
+- **テストコード内にコメントを充実させる**
+  - 各テスト関数の目的を説明するコメントを記載（`//` または `///` コメント）
+  - テスト関数内の処理フローを説明するコメントを記載
+  - テストが検証する項目（正常系/異常系/境界条件など）をコメントで明記
+  - テストの実行環境や制限事項がある場合は `#[ignore]` の上にコメントで説明
+  - 複雑なアサーションには、期待値と実際の値の意味を日本語で説明するコメントを記載
+
+- **テストドキュメント（.md）ファイルは作成しない**
+  - テスト説明ドキュメント（`*_test_README.md` など）は作成禁止
+  - テストコード自体がドキュメントになるよう、コメントを充実させる
+  - テスト実行方法は CLAUDE.md に記載し、個別のドキュメントは作成しない
+
+- **テストコード例（推奨形式）**
+  ```rust
+  /// SaveResult が all_success = true で正しく作成できることを確認
+  #[test]
+  fn test_save_result_all_success() {
+      // 目的: SaveResult 構造体の正常系動作を検証
+      // 検証項目: all_success, saved_app_count, saved_window_count, skipped_window_count, failed_apps
+
+      // テストデータを構築
+      let result = SaveResult {
+          all_success: true,
+          saved_app_count: 3,
+          saved_window_count: 5,
+          skipped_window_count: 0,
+          failed_apps: vec![],
+      };
+
+      // 検証: すべてのフィールドが期待通りに設定されている
+      assert!(result.all_success);
+      assert_eq!(result.saved_app_count, 3);
+  }
+
+  /// osascript に依存する統合テスト
+  /// ローカル macOS 環境でのみ実行可能（CI環境ではスキップ）
+  #[test]
+  #[ignore]
+  fn test_save_layout_default_path() {
+      // 目的: デフォルトパスに保存ができることを確認
+      // 環境要件: macOS で osascript が利用可能
+      // 制限事項: 実行環境によってウィンドウの配置が異なるため、
+      //          JSON 構造の妥当性のみ検証し、具体的なウィンドウ数は検証しない
+
+      let result = save_layout(&get_default_config_path().unwrap(), false);
+
+      // 検証: save_layout が成功している
+      assert!(result.is_ok());
+  }
+  ```
 
 ### テスト実行方法
 
