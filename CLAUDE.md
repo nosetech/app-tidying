@@ -420,6 +420,40 @@ Rust での実装では、以下を原則とする：
 - プロジェクト固有のエラー型を定義
 - ユーザーに適切なエラーメッセージを提供
 
+### save コマンドのターミナルウィンドウ除外機能
+
+`apptidying save` コマンドを `--own` オプションなしで実行した場合、実行中のターミナルアプリケーションのウィンドウを自動的に除外します。
+
+#### 対応ターミナルアプリケーション
+
+以下のターミナルアプリケーションに対応しています：
+
+- Terminal.app（macOS 標準）
+- iTerm2 / iTerm
+- ghostty
+- kitty
+- WezTerm
+- Alacritty
+
+#### ターミナル特定メカニズム
+
+優先順位：
+1. **TERM_PROGRAM 環境変数** → ダイレクトに判定
+2. **ターミナル固有の環境変数** → tmux経由実行時に元のターミナルを特定
+   - ghostty: `GHOSTTY_BIN_DIR`, `__CFBundleIdentifier`
+   - iTerm2: `ITERM_SESSION_ID`, `ITERM_PROFILE`
+   - kitty: `KITTY_WINDOW_ID`, `KITTY_LISTEN_ON`
+   - WezTerm: `WEZTERM_PANE`, `WEZTERM_EXECUTABLE`
+3. **プロセスツリー遡り** → フォールバック
+
+#### 制限事項
+
+- **非サポートターミナル**: 上記以外のターミナルアプリケーション（例：screen経由の実行、カスタムターミナル）を使用している場合、ウィンドウが除外されない可能性があります
+- **環境変数なし**: 環境変数が設定されていない特殊な実行環境では、正しく特定できない場合があります
+- **tmux以外の多重化ツール**: screen や multiplexer など、tmux以外の多重化ツール経由での実行時は、ターミナルを特定できない可能性があります
+
+非サポートターミナルを使用している場合は、`apptidying save --own` で手動指定してください。
+
 ## テスト・品質保証
 
 ### テスト対象範囲
@@ -433,6 +467,56 @@ Rust での実装では、以下を原則とする：
 ### テスト実装方針
 
 - テストコードはtests/配下に配置する。
+- **テストコード内にコメントを充実させる**
+  - 各テスト関数の目的を説明するコメントを記載（`//` または `///` コメント）
+  - テスト関数内の処理フローを説明するコメントを記載
+  - テストが検証する項目（正常系/異常系/境界条件など）をコメントで明記
+  - テストの実行環境や制限事項がある場合は `#[ignore]` の上にコメントで説明
+  - 複雑なアサーションには、期待値と実際の値の意味を日本語で説明するコメントを記載
+
+- **テストドキュメント（.md）ファイルは作成しない**
+  - テスト説明ドキュメント（`*_test_README.md` など）は作成禁止
+  - テストコード自体がドキュメントになるよう、コメントを充実させる
+  - テスト実行方法は CLAUDE.md に記載し、個別のドキュメントは作成しない
+
+- **テストコード例（推奨形式）**
+  ```rust
+  /// SaveResult が all_success = true で正しく作成できることを確認
+  #[test]
+  fn test_save_result_all_success() {
+      // 目的: SaveResult 構造体の正常系動作を検証
+      // 検証項目: all_success, saved_app_count, saved_window_count, skipped_window_count, failed_apps
+
+      // テストデータを構築
+      let result = SaveResult {
+          all_success: true,
+          saved_app_count: 3,
+          saved_window_count: 5,
+          skipped_window_count: 0,
+          failed_apps: vec![],
+      };
+
+      // 検証: すべてのフィールドが期待通りに設定されている
+      assert!(result.all_success);
+      assert_eq!(result.saved_app_count, 3);
+  }
+
+  /// osascript に依存する統合テスト
+  /// ローカル macOS 環境でのみ実行可能（CI環境ではスキップ）
+  #[test]
+  #[ignore]
+  fn test_save_layout_default_path() {
+      // 目的: デフォルトパスに保存ができることを確認
+      // 環境要件: macOS で osascript が利用可能
+      // 制限事項: 実行環境によってウィンドウの配置が異なるため、
+      //          JSON 構造の妥当性のみ検証し、具体的なウィンドウ数は検証しない
+
+      let result = save_layout(&get_default_config_path().unwrap(), false);
+
+      // 検証: save_layout が成功している
+      assert!(result.is_ok());
+  }
+  ```
 
 ### テスト実行方法
 
