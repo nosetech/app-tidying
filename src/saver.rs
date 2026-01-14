@@ -2,6 +2,7 @@ use crate::applescript;
 use crate::config::{AppConfig, AppWindowConfig, DisplayConfig, LayoutConfig, Position, Size};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::process::Command;
 
 /// save機能の実行結果
 #[derive(Debug, Clone)]
@@ -61,11 +62,11 @@ pub fn save_layout(
         message: format!("実行中アプリケーション一覧の取得に失敗しました: {}", e),
     })?;
 
-    // 3. 自プロセスIDを取得（ターミナルウィンドウ除外判定用）
-    let own_process_id = if include_own_terminal {
+    // 3. 実行中のターミナルアプリを特定（ターミナルウィンドウ除外判定用）
+    let own_terminal_app = if include_own_terminal {
         None
     } else {
-        get_own_process_id()
+        get_own_terminal_app()
     };
 
     // 4. 各アプリケーションのウィンドウ情報を収集
@@ -94,7 +95,7 @@ pub fn save_layout(
         let mut app_saved_count = 0;
         for window in windows {
             // ウィンドウを保存対象に含めるか判定
-            if !should_include_window(&window, &app.name, own_process_id, app.process_id) {
+            if !should_include_window(&window, &app.name, &own_terminal_app) {
                 skipped_window_count += 1;
                 continue;
             }
@@ -215,8 +216,7 @@ pub fn save_layout(
 fn should_include_window(
     window: &applescript::WindowInfo,
     app_name: &str,
-    own_process_id: Option<i32>,
-    app_process_id: Option<i32>,
+    own_terminal_app: &Option<String>,
 ) -> bool {
     // 1. 最小化されたウィンドウを除外
     if window.minimized {
@@ -242,12 +242,13 @@ fn should_include_window(
         return false;
     }
 
-    // 4. --own オプションが無効の場合、自ターミナルを除外
-    if let (Some(own_pid), Some(app_pid)) = (own_process_id, app_process_id) {
-        if own_pid == app_pid {
+    // 4. --own オプションが無効の場合、実行中のターミナルアプリのウィンドウを除外
+    if let Some(terminal_app) = own_terminal_app {
+        if app_name == terminal_app {
             log::debug!(
-                "ウィンドウ '{}' は実行中のターミナルのためスキップ (--own なし)",
-                window.title
+                "ウィンドウ '{}' は実行中のターミナル '{}' のためスキップ (--own なし)",
+                window.title,
+                terminal_app
             );
             return false;
         }
@@ -306,7 +307,194 @@ fn find_display_for_window(
     None
 }
 
-/// 自プロセスIDを取得
-fn get_own_process_id() -> Option<i32> {
-    std::process::id().try_into().ok()
+/// 実行中のターミナルアプリケーションを特定する
+///
+/// 優先順位：
+/// 1. TERM_PROGRAM 環境変数から判定（tmux以外の場合）
+/// 2. TERM_PROGRAM=tmux の場合、ターミナル固有の環境変数をチェック
+/// 3. 親プロセスツリーから判定（フォールバック）
+fn get_own_terminal_app() -> Option<String> {
+    // 方法1: TERM_PROGRAM 環境変数から判定
+    if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
+        log::debug!("TERM_PROGRAM: {}", term_program);
+
+        // tmux以外の場合はそのまま使用
+        if term_program != "tmux" {
+            if let Some(app) = convert_term_program_to_app_name(&term_program) {
+                log::debug!("TERM_PROGRAM から特定: {}", app);
+                return Some(app);
+            }
+        } else {
+            // TERM_PROGRAM=tmux の場合、ターミナル固有の環境変数をチェック
+            log::debug!("tmux環境を検出。ターミナル固有の環境変数をチェック中");
+            if let Some(app) = detect_terminal_from_env_vars() {
+                log::debug!("ターミナル固有の環境変数から特定: {}", app);
+                return Some(app);
+            }
+        }
+    }
+
+    // 方法2: 環境変数から判定失敗時、ターミナル固有の環境変数をチェック
+    log::debug!("TERM_PROGRAM が設定されていないため、ターミナル固有の環境変数をチェック");
+    if let Some(app) = detect_terminal_from_env_vars() {
+        log::debug!("ターミナル固有の環境変数から特定: {}", app);
+        return Some(app);
+    }
+
+    // 方法3: 親プロセスツリーから判定（フォールバック）
+    log::debug!("環境変数からの判定失敗。プロセスツリーから検索します");
+    detect_terminal_from_process_tree()
+}
+
+/// ターミナル固有の環境変数から、ターミナルアプリを特定する
+fn detect_terminal_from_env_vars() -> Option<String> {
+    // ghostty
+    if std::env::var("GHOSTTY_BIN_DIR").is_ok()
+        || std::env::var("__CFBundleIdentifier")
+            .map(|v| v.contains("ghostty"))
+            .unwrap_or(false)
+    {
+        log::debug!("ghostty の環境変数を検出");
+        return Some("ghostty".to_string());
+    }
+
+    // iTerm2
+    if std::env::var("ITERM_SESSION_ID").is_ok() || std::env::var("ITERM_PROFILE").is_ok() {
+        log::debug!("iTerm2 の環境変数を検出");
+        return Some("iTerm2".to_string());
+    }
+
+    // kitty
+    if std::env::var("KITTY_WINDOW_ID").is_ok() || std::env::var("KITTY_LISTEN_ON").is_ok() {
+        log::debug!("kitty の環境変数を検出");
+        return Some("kitty".to_string());
+    }
+
+    // WezTerm
+    if std::env::var("WEZTERM_PANE").is_ok() || std::env::var("WEZTERM_EXECUTABLE").is_ok() {
+        log::debug!("WezTerm の環境変数を検出");
+        return Some("WezTerm".to_string());
+    }
+
+    None
+}
+
+/// 親プロセスツリーから、ターミナルアプリを特定する
+fn detect_terminal_from_process_tree() -> Option<String> {
+    let pid = std::process::id();
+    log::debug!("app-tidying PID: {}", pid);
+
+    // 親プロセスをたどってターミナルアプリを探す（最大10階層）
+    let mut current_pid = pid;
+    for level in 0..10 {
+        // 親プロセスIDを取得
+        let parent_pid = match get_parent_pid(current_pid) {
+            Some(ppid) => ppid,
+            None => {
+                log::debug!(
+                    "階層 {}: 親プロセスID取得失敗 (PID: {})",
+                    level,
+                    current_pid
+                );
+                break;
+            }
+        };
+
+        // 親プロセスの名前を取得
+        let process_name = match get_process_name(parent_pid) {
+            Some(name) => name,
+            None => {
+                log::debug!("階層 {}: プロセス名取得失敗 (PID: {})", level, parent_pid);
+                break;
+            }
+        };
+
+        log::debug!("階層 {}: {} (PID: {})", level, process_name, parent_pid);
+
+        // ターミナルアプリかを判定
+        if is_terminal_app(&process_name) {
+            log::debug!(
+                "プロセスツリーからターミナルアプリを特定: {} (PID: {})",
+                process_name,
+                parent_pid
+            );
+            return Some(process_name);
+        }
+
+        current_pid = parent_pid;
+    }
+
+    log::debug!("ターミナルアプリを特定できませんでした。ターミナル以外から実行されている可能性があります。");
+    None
+}
+
+/// 指定されたプロセスの親プロセスIDを取得する
+fn get_parent_pid(pid: u32) -> Option<u32> {
+    let output = Command::new("ps")
+        .arg("-o")
+        .arg("ppid=")
+        .arg("-p")
+        .arg(pid.to_string())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let ppid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    ppid_str.parse::<u32>().ok()
+}
+
+/// 指定されたプロセスIDのプロセス名を取得する
+fn get_process_name(pid: u32) -> Option<String> {
+    let output = Command::new("ps")
+        .arg("-o")
+        .arg("comm=")
+        .arg("-p")
+        .arg(pid.to_string())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if name.is_empty() {
+        return None;
+    }
+
+    Some(name)
+}
+
+/// アプリケーション名がターミナルアプリケーションかを判定する
+fn is_terminal_app(app_name: &str) -> bool {
+    const TERMINAL_APP_NAMES: &[&str] = &[
+        "Terminal",
+        "iTerm2",
+        "iTerm",
+        "ghostty",
+        "Alacritty",
+        "kitty",
+        "WezTerm",
+        "alacritty",
+        "wezterm",
+    ];
+
+    TERMINAL_APP_NAMES.contains(&app_name)
+}
+
+/// TERM_PROGRAM 環境変数の値をアプリケーション名に変換する
+fn convert_term_program_to_app_name(term_program: &str) -> Option<String> {
+    match term_program {
+        "Apple_Terminal" => Some("Terminal".to_string()),
+        "iTerm.app" => Some("iTerm2".to_string()),
+        "iTerm2" => Some("iTerm2".to_string()),
+        "ghostty" => Some("ghostty".to_string()),
+        "WezTerm" => Some("WezTerm".to_string()),
+        "kitty" => Some("kitty".to_string()),
+        "Alacritty" => Some("Alacritty".to_string()),
+        _ => None,
+    }
 }
