@@ -75,7 +75,7 @@ pub fn save_layout(
     let mut skipped_window_count = 0;
     let mut failed_apps = Vec::new();
 
-    for app in running_apps {
+    for app in &running_apps {
         // ウィンドウ情報を取得
         let windows = match applescript::get_all_windows(&app.name) {
             Ok(windows) => windows,
@@ -144,9 +144,22 @@ pub fn save_layout(
 
     // 5. 保存すべきウィンドウが存在するか確認
     if saved_window_count == 0 {
-        return Err(SaveError {
-            message: "保存すべきウィンドウが見つかりませんでした。アプリケーションを起動してから再度お試しください".to_string(),
-        });
+        if running_apps.is_empty() {
+            return Err(SaveError {
+                message: "実行中のアプリケーションが見つかりませんでした。アプリケーションを起動してから再度お試しください".to_string(),
+            });
+        } else if skipped_window_count > 0 {
+            return Err(SaveError {
+                message: format!(
+                    "保存可能なウィンドウが見つかりませんでした。{}個のウィンドウがスキップされました（最小化、非表示、システムウィンドウなど）",
+                    skipped_window_count
+                ),
+            });
+        } else {
+            return Err(SaveError {
+                message: "保存すべきウィンドウが見つかりませんでした。アプリケーションを起動してから再度お試しください".to_string(),
+            });
+        }
     }
 
     // 6. AppConfig 構造体を構築
@@ -243,6 +256,10 @@ fn should_include_window(
 ///
 /// ウィンドウの位置座標から、どのディスプレイに属するかを判定します。
 /// ウィンドウの中心座標がディスプレイの範囲内にあるかで判断します。
+///
+/// # 注意
+/// ウィンドウが複数ディスプレイにまたがる場合、中心座標で判定するため、
+/// 意図したディスプレイと異なる可能性があります。その場合はDEBUGログで警告します。
 fn find_display_for_window(
     window: &applescript::WindowInfo,
     displays: &[applescript::DisplayInfo],
@@ -261,6 +278,23 @@ fn find_display_for_window(
             && center_y >= display.origin_y
             && center_y < display_bottom
         {
+            // ウィンドウが複数ディスプレイにまたがるケースを検出
+            let window_right = window.position.0 + window.size.0;
+            let window_bottom = window.position.1 + window.size.1;
+
+            let spans_multiple = window.position.0 < display.origin_x
+                || window_right > display_right
+                || window.position.1 < display.origin_y
+                || window_bottom > display_bottom;
+
+            if spans_multiple {
+                log::debug!(
+                    "ウィンドウ '{}' は複数ディスプレイにまたがっています。中心座標のディスプレイ '{}' に保存します。",
+                    window.title,
+                    display.name
+                );
+            }
+
             return Some(display.clone());
         }
     }

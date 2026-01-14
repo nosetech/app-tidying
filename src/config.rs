@@ -111,12 +111,27 @@ impl std::fmt::Display for AppConfigError {
 
 impl std::error::Error for AppConfigError {}
 
+/// デフォルト設定ファイルのパスを取得
+/// macOS の標準に従い、~/Library/Application Support/biz.nosetech.apptidying/settings.json を返す
 #[allow(dead_code)]
-pub fn get_config_dir() -> Result<PathBuf, AppConfigError> {
+pub fn get_default_config_path() -> Result<PathBuf, AppConfigError> {
     let home = dirs::home_dir().ok_or_else(|| AppConfigError {
         message: "ホームディレクトリの取得に失敗しました".to_string(),
     })?;
-    Ok(home.join(".config/apptidying"))
+    Ok(home.join("Library/Application Support/biz.nosetech.apptidying/settings.json"))
+}
+
+/// 設定ディレクトリを取得
+/// デフォルト設定ファイルパスの親ディレクトリを返す
+#[allow(dead_code)]
+pub fn get_config_dir() -> Result<PathBuf, AppConfigError> {
+    let default_path = get_default_config_path()?;
+    default_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| AppConfigError {
+            message: "設定ディレクトリの取得に失敗しました".to_string(),
+        })
 }
 
 #[allow(dead_code)]
@@ -138,21 +153,11 @@ pub fn load_config_file(path: &PathBuf) -> Result<AppConfig, AppConfigError> {
     parse_config_from_json(&content)
 }
 
+/// デフォルト設定ファイルから設定を読み込む
 #[allow(dead_code)]
 pub fn load_default_config() -> Result<AppConfig, AppConfigError> {
-    let config_dir = get_config_dir()?;
-    let config_path = config_dir.join("settings.json");
-
+    let config_path = get_default_config_path()?;
     load_config_file(&config_path)
-}
-
-/// デフォルト設定ファイルのパスを取得
-#[allow(dead_code)]
-pub fn get_default_config_path() -> Result<PathBuf, AppConfigError> {
-    let home = dirs::home_dir().ok_or_else(|| AppConfigError {
-        message: "ホームディレクトリの取得に失敗しました".to_string(),
-    })?;
-    Ok(home.join("Library/Application Support/biz.nosetech.apptidying/settings.json"))
 }
 
 /// 設定をファイルに保存する
