@@ -420,6 +420,40 @@ Rust での実装では、以下を原則とする：
 - プロジェクト固有のエラー型を定義
 - ユーザーに適切なエラーメッセージを提供
 
+### save コマンドのターミナルウィンドウ除外機能
+
+`apptidying save` コマンドを `--own` オプションなしで実行した場合、実行中のターミナルアプリケーションのウィンドウを自動的に除外します。
+
+#### 対応ターミナルアプリケーション
+
+以下のターミナルアプリケーションに対応しています：
+
+- Terminal.app（macOS 標準）
+- iTerm2 / iTerm
+- ghostty
+- kitty
+- WezTerm
+- Alacritty
+
+#### ターミナル特定メカニズム
+
+優先順位：
+1. **TERM_PROGRAM 環境変数** → ダイレクトに判定
+2. **ターミナル固有の環境変数** → tmux経由実行時に元のターミナルを特定
+   - ghostty: `GHOSTTY_BIN_DIR`, `__CFBundleIdentifier`
+   - iTerm2: `ITERM_SESSION_ID`, `ITERM_PROFILE`
+   - kitty: `KITTY_WINDOW_ID`, `KITTY_LISTEN_ON`
+   - WezTerm: `WEZTERM_PANE`, `WEZTERM_EXECUTABLE`
+3. **プロセスツリー遡り** → フォールバック
+
+#### 制限事項
+
+- **非サポートターミナル**: 上記以外のターミナルアプリケーション（例：screen経由の実行、カスタムターミナル）を使用している場合、ウィンドウが除外されない可能性があります
+- **環境変数なし**: 環境変数が設定されていない特殊な実行環境では、正しく特定できない場合があります
+- **tmux以外の多重化ツール**: screen や multiplexer など、tmux以外の多重化ツール経由での実行時は、ターミナルを特定できない可能性があります
+
+非サポートターミナルを使用している場合は、`apptidying save --own` で手動指定してください。
+
 ## テスト・品質保証
 
 ### テスト対象範囲
