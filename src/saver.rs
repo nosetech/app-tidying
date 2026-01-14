@@ -113,13 +113,17 @@ pub fn save_layout(
                 }
             };
 
-            // AppWindowConfig を構築（ピクセル単位で保存）
+            // AppWindowConfig を構築
+            // ウィンドウの位置をディスプレイ相対座標に変換（負の値を避けるため）
+            let relative_x = window.position.0 - display.origin_x;
+            let relative_y = window.position.1 - display.origin_y;
+
             let window_config = AppWindowConfig {
                 app: app.name.clone(),
                 title: Some(window.title.clone()),
                 position: Some(Position {
-                    x: serde_json::json!(window.position.0),
-                    y: serde_json::json!(window.position.1),
+                    x: serde_json::json!(relative_x),
+                    y: serde_json::json!(relative_y),
                 }),
                 size: Some(Size {
                     width: serde_json::json!(window.size.0),
