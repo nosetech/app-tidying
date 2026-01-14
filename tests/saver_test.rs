@@ -6,11 +6,13 @@
 /// - SaveResult、SaveError の構造体テスト（2+3件）
 /// - get_default_config_path() のテスト（1件）
 /// - save_config_file() のテスト（2件）
+///
 /// これらはosascriptに依存せず、全環境で実行可能です。
 ///
 /// ## 統合テスト（#[ignore] 付き、ローカル環境でのみ実行）
 /// - save_layout() の統合テスト（4件）
 /// - save/load 往復テスト（1件）
+///
 /// osascriptに依存するため、macOS ローカル環境でのみ実行可能です。
 /// CI環境では自動的にスキップされます。
 ///
