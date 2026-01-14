@@ -722,6 +722,24 @@ fn test_save_layout_saves_correct_structure() {
                             position["y"].is_number() || position["y"].is_string(),
                             "position.y が数値または文字列である必要があります"
                         );
+
+                        // position.x が数値の場合、正の値であることを確認
+                        if let Some(x_num) = position["x"].as_i64() {
+                            assert!(
+                                x_num >= 0,
+                                "position.x は負でない値である必要があります（実際の値: {}）",
+                                x_num
+                            );
+                        }
+
+                        // position.y が数値の場合、正の値であることを確認
+                        if let Some(y_num) = position["y"].as_i64() {
+                            assert!(
+                                y_num >= 0,
+                                "position.y は負でない値である必要があります（実際の値: {}）",
+                                y_num
+                            );
+                        }
                     }
 
                     // size の検証
