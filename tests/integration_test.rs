@@ -6,7 +6,6 @@ fn test_parse_valid_config() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "development",
                 "displays": [
                     {
                         "name": "Built-in",
@@ -29,7 +28,6 @@ fn test_parse_valid_config() {
     let cfg = config.unwrap();
     assert_eq!(cfg.version, "1.0");
     assert_eq!(cfg.layouts.len(), 1);
-    assert_eq!(cfg.layouts[0].name, "development");
     assert_eq!(cfg.layouts[0].displays[0].name, "Built-in");
 }
 
@@ -39,7 +37,6 @@ fn test_parse_config_with_pattern_values() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -65,7 +62,6 @@ fn test_parse_config_missing_version() {
     let json = r#"{
         "layouts": [
             {
-                "name": "layout",
                 "displays": []
             }
         ]
@@ -111,7 +107,6 @@ fn test_parse_config_empty_displays() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": []
             }
         ]
@@ -150,7 +145,6 @@ fn test_parse_config_invalid_position_x() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -177,7 +171,6 @@ fn test_parse_config_invalid_position_y() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -204,7 +197,6 @@ fn test_parse_config_invalid_size_width() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -231,7 +223,6 @@ fn test_parse_config_invalid_size_height() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -258,7 +249,6 @@ fn test_parse_config_negative_coordinates() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -285,7 +275,6 @@ fn test_parse_config_zero_or_negative_size() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -312,7 +301,6 @@ fn test_parse_config_with_notification_settings() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -347,7 +335,6 @@ fn test_parse_config_invalid_notification_value() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -379,7 +366,6 @@ fn test_parse_config_with_timeout() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -407,7 +393,6 @@ fn test_parse_config_multiple_layouts_and_displays() {
         "version": "1.0",
         "layouts": [
             {
-                "name": "layout1",
                 "displays": [
                     {
                         "name": "Display 1",
@@ -428,7 +413,6 @@ fn test_parse_config_multiple_layouts_and_displays() {
                 ]
             },
             {
-                "name": "layout2",
                 "displays": [
                     {
                         "name": "Display 1",

@@ -62,7 +62,6 @@ pub struct DisplayConfig {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LayoutConfig {
-    pub name: String,
     pub displays: Vec<DisplayConfig>,
 }
 
@@ -210,7 +209,7 @@ fn validate_config(config: &AppConfig) -> Result<(), AppConfigError> {
     for layout in &config.layouts {
         if layout.displays.is_empty() {
             return Err(AppConfigError {
-                message: format!("レイアウト '{}' のディスプレイが空です", layout.name),
+                message: "レイアウトのディスプレイが空です".to_string(),
             });
         }
 
