@@ -338,7 +338,6 @@ fn test_save_config_file_creates_directory() {
     let config = AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "test-layout".to_string(),
             displays: vec![DisplayConfig {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
@@ -389,7 +388,6 @@ fn test_save_config_file_writes_json() {
     let config = AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "test-layout".to_string(),
             displays: vec![DisplayConfig {
                 name: "Built-in".to_string(),
                 windows: vec![
@@ -458,10 +456,6 @@ fn test_save_config_file_writes_json() {
     );
 
     let layout = &parsed["layouts"][0];
-    assert_eq!(
-        layout["name"], "test-layout",
-        "layout name が一致する必要があります"
-    );
     assert!(
         layout["displays"].is_array(),
         "displays は配列である必要があります"
@@ -761,10 +755,6 @@ fn test_save_layout_saves_correct_structure() {
             );
 
             let layout = &parsed["layouts"][0];
-            assert_eq!(
-                layout["name"], "saved_layout",
-                "layout name が 'saved_layout' である必要があります"
-            );
             assert!(
                 layout["displays"].is_array(),
                 "displays が配列である必要があります"
@@ -913,10 +903,6 @@ fn test_save_and_load_roundtrip() {
                     assert!(
                         !config.layouts.is_empty(),
                         "layouts が空でない必要があります"
-                    );
-                    assert_eq!(
-                        config.layouts[0].name, "saved_layout",
-                        "layout name が 'saved_layout' である必要があります"
                     );
                     assert!(
                         !config.layouts[0].displays.is_empty(),

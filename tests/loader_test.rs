@@ -51,7 +51,6 @@ fn create_test_config_single_window() -> AppConfig {
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "test-layout".to_string(),
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
@@ -79,7 +78,6 @@ fn create_test_config_multiple_windows() -> AppConfig {
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "multi-window".to_string(),
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![
@@ -130,7 +128,6 @@ fn create_test_config_nonexistent_display() -> AppConfig {
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "invalid-display".to_string(),
             displays: vec![DisplayConfig {
                 name: "NonExistentDisplay".to_string(),
                 windows: vec![AppWindowConfig {
@@ -158,7 +155,6 @@ fn create_test_config_with_title() -> AppConfig {
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "with-title".to_string(),
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
@@ -186,7 +182,6 @@ fn create_test_config_position_only() -> AppConfig {
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "position-only".to_string(),
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
@@ -211,7 +206,6 @@ fn create_test_config_size_only() -> AppConfig {
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "size-only".to_string(),
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
@@ -236,7 +230,6 @@ fn create_test_config_no_position_no_size() -> AppConfig {
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "no-position-no-size".to_string(),
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
@@ -292,10 +285,7 @@ fn create_test_config_multiple_displays() -> AppConfig {
 
     AppConfig {
         version: "1.0".to_string(),
-        layouts: vec![LayoutConfig {
-            name: "multi-display".to_string(),
-            displays,
-        }],
+        layouts: vec![LayoutConfig { displays }],
         notification: None,
         timeout: None,
     }
@@ -307,7 +297,6 @@ fn create_test_config_with_timeout() -> AppConfig {
     AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "with-timeout".to_string(),
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {

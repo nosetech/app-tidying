@@ -184,7 +184,6 @@ pub fn save_layout(
     let config = AppConfig {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
-            name: "saved_layout".to_string(),
             displays: display_configs,
         }],
         notification: None,

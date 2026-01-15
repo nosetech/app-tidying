@@ -54,7 +54,7 @@ pub fn load_layout(config: &AppConfig, timeout_ms: u64) -> Result<LoadResult, Lo
         message: "レイアウトが定義されていません".to_string(),
     })?;
 
-    log::info!("レイアウト '{}' を適用します", layout.name);
+    log::info!("レイアウトを適用します");
 
     // 3. 成功・失敗カウンタ
     let mut success_count = 0;
