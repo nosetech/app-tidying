@@ -43,13 +43,31 @@ impl std::error::Error for LoadError {}
 /// * `Err(LoadError)` - 全体失敗（致命的エラー）
 pub fn load_layout(config: &AppConfig, timeout_ms: u64) -> Result<LoadResult, LoadError> {
     // 1. 接続されているディスプレイ情報を取得
-    let _connected_displays = applescript::get_all_connected_displays().map_err(|e| LoadError {
+    let connected_displays = applescript::get_all_connected_displays().map_err(|e| LoadError {
         message: format!("ディスプレイ情報の取得に失敗しました: {}", e),
     })?;
 
     log::debug!("接続ディスプレイ情報を取得しました");
 
-    // 2. 最初のレイアウトを使用
+    // 2. 設定ファイルの境界値チェックを実行
+    let warnings =
+        crate::config::validate_config_bounds(config, &connected_displays).map_err(|e| {
+            LoadError {
+                message: format!("設定ファイルの検証に失敗しました: {}", e),
+            }
+        })?;
+
+    // ワーニングをログ出力
+    for warning in &warnings {
+        log::warn!(
+            "ディスプレイ '{}' のアプリ '{}': {}",
+            warning.display_name,
+            warning.app_name,
+            warning.issue
+        );
+    }
+
+    // 3. 最初のレイアウトを使用
     let layout = config.layouts.first().ok_or_else(|| LoadError {
         message: "レイアウトが定義されていません".to_string(),
     })?;
@@ -88,6 +106,23 @@ pub fn load_layout(config: &AppConfig, timeout_ms: u64) -> Result<LoadResult, Lo
         // 4.2 各ウィンドウの設定を処理
         for window_config in &display_config.windows {
             log::debug!("アプリ '{}' の処理を開始", window_config.app);
+
+            // ウィンドウがワーニング対象かチェック
+            let has_warning = warnings
+                .iter()
+                .any(|w| w.display_name == display_config.name && w.app_name == window_config.app);
+
+            if has_warning {
+                log::info!(
+                    "アプリ '{}' は検証エラーのためスキップされます",
+                    window_config.app
+                );
+                failure_count += 1;
+                if !failed_apps.contains(&window_config.app) {
+                    failed_apps.push(window_config.app.clone());
+                }
+                continue;
+            }
 
             match process_window(window_config, &display_info, timeout_ms) {
                 Ok(()) => {

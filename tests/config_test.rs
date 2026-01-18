@@ -1,4 +1,9 @@
-use apptidying::config::{parse_position_value, parse_size_value};
+use apptidying::applescript::DisplayInfo;
+use apptidying::config::{
+    parse_position_value, parse_size_value, validate_config, validate_config_bounds,
+    validate_config_syntax, AppConfig, AppWindowConfig, DisplayConfig, LayoutConfig, Position,
+    Size,
+};
 use serde_json::json;
 
 // =============================================================================
@@ -659,4 +664,352 @@ fn test_parse_size_odd_display_dimensions() {
     let (width, height) = result.unwrap();
     assert_eq!(width, 1921 / 2); // 整数除算
     assert_eq!(height, 1081 / 3);
+}
+
+// =============================================================================
+// Configuration Validation Tests (Phase 3-4)
+// =============================================================================
+
+/// validate_config_syntax() がバージョン確認を正確に実行することを検証
+#[test]
+fn test_validate_config_syntax_version_ok() {
+    // 目的: サポートされているバージョン (1.0) の設定が成功することを確認
+    // 検証項目: バージョン 1.0 がサポートされていることを確認
+
+    let config = AppConfig {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Google Chrome".to_string(),
+                    title: None,
+                    position: None,
+                    size: None,
+                }],
+            }],
+        }],
+        notification: None,
+        timeout: None,
+    };
+
+    // 検証: バージョンチェックが成功する
+    let result = validate_config_syntax(&config);
+    assert!(result.is_ok());
+}
+
+/// validate_config_syntax() がサポートされていないバージョンでエラーを返すことを確認
+#[test]
+fn test_validate_config_syntax_version_ng() {
+    // 目的: サポートされていないバージョン (2.0) の設定がエラーになることを確認
+    // 検証項目: バージョン 2.0 がエラーになる
+
+    let config = AppConfig {
+        version: "2.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Google Chrome".to_string(),
+                    title: None,
+                    position: None,
+                    size: None,
+                }],
+            }],
+        }],
+        notification: None,
+        timeout: None,
+    };
+
+    // 検証: バージョンチェックがエラーになる
+    let result = validate_config_syntax(&config);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("サポートされていないバージョン"));
+}
+
+/// validate_config_bounds() がディスプレイ外の座標を検出することを確認
+#[test]
+fn test_validate_display_bounds_position_out_of_display() {
+    // 目的: ウィンドウの右端がディスプレイを超える場合にワーニングが発生することを確認
+    // 検証項目: 座標とサイズの組み合わせでディスプレイ外判定が正確に動作
+
+    let config = AppConfig {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Google Chrome".to_string(),
+                    title: None,
+                    position: Some(Position {
+                        x: json!(1800), // 1800 から始まる
+                        y: json!("top"),
+                    }),
+                    size: Some(Size {
+                        width: json!(500), // 500 幅（1800 + 500 = 2300 > 1920）
+                        height: json!("max"),
+                    }),
+                }],
+            }],
+        }],
+        notification: None,
+        timeout: None,
+    };
+
+    let connected_displays = vec![DisplayInfo {
+        name: "Built-in".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 0,
+        origin_y: 0,
+    }];
+
+    // 検証: 座標がディスプレイ外の場合、ワーニングが返される
+    let result = validate_config_bounds(&config, &connected_displays);
+    assert!(result.is_ok());
+    let warnings = result.unwrap();
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].issue.contains("ウィンドウの右端"));
+    assert_eq!(warnings[0].app_name, "Google Chrome");
+}
+
+/// validate_config_bounds() が画面より大きいサイズを検出することを確認
+#[test]
+fn test_validate_display_bounds_size_larger_than_display() {
+    // 目的: ウィンドウの高さがディスプレイを超える場合にワーニングが発生することを確認
+    // 検証項目: サイズがディスプレイより大きい場合の検出
+
+    let config = AppConfig {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Safari".to_string(),
+                    title: None,
+                    position: Some(Position {
+                        x: json!("left"),
+                        y: json!("top"),
+                    }),
+                    size: Some(Size {
+                        width: json!(800),
+                        height: json!(1500), // 1500 > 1080（ディスプレイ高）
+                    }),
+                }],
+            }],
+        }],
+        notification: None,
+        timeout: None,
+    };
+
+    let connected_displays = vec![DisplayInfo {
+        name: "Built-in".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 0,
+        origin_y: 0,
+    }];
+
+    // 検証: サイズがディスプレイを超える場合、ワーニングが返される
+    let result = validate_config_bounds(&config, &connected_displays);
+    assert!(result.is_ok());
+    let warnings = result.unwrap();
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].issue.contains("ウィンドウの下端"));
+    assert_eq!(warnings[0].app_name, "Safari");
+}
+
+/// validate_config_bounds() が接続されているディスプレイを正確に判定することを確認
+#[test]
+fn test_validate_display_exists_ok() {
+    // 目的: 接続されているディスプレイ名が正確に判定されることを確認
+    // 検証項目: 複数のディスプレイが接続されている場合、正しいものを特定
+
+    let config = AppConfig {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "External Display".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Xcode".to_string(),
+                    title: None,
+                    position: None,
+                    size: None,
+                }],
+            }],
+        }],
+        notification: None,
+        timeout: None,
+    };
+
+    let connected_displays = vec![
+        DisplayInfo {
+            name: "Built-in".to_string(),
+            width: 1440,
+            height: 900,
+            origin_x: 0,
+            origin_y: 0,
+        },
+        DisplayInfo {
+            name: "External Display".to_string(),
+            width: 2560,
+            height: 1440,
+            origin_x: 1440,
+            origin_y: 0,
+        },
+    ];
+
+    // 検証: 接続されているディスプレイに対してワーニングが発生しない
+    let result = validate_config_bounds(&config, &connected_displays);
+    assert!(result.is_ok());
+    let warnings = result.unwrap();
+    assert!(warnings.is_empty());
+}
+
+/// validate_config_bounds() が接続されていないディスプレイを検出することを確認
+#[test]
+fn test_validate_display_exists_ng() {
+    // 目的: 接続されていないディスプレイ名でワーニングが発生することを確認
+    // 検証項目: 存在しないディスプレイに対してワーニングが返される
+
+    let config = AppConfig {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Nonexistent Display".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Terminal".to_string(),
+                    title: None,
+                    position: None,
+                    size: None,
+                }],
+            }],
+        }],
+        notification: None,
+        timeout: None,
+    };
+
+    let connected_displays = vec![DisplayInfo {
+        name: "Built-in".to_string(),
+        width: 1440,
+        height: 900,
+        origin_x: 0,
+        origin_y: 0,
+    }];
+
+    // 検証: 接続されていないディスプレイに対してワーニングが発生する
+    let result = validate_config_bounds(&config, &connected_displays);
+    assert!(result.is_ok());
+    let warnings = result.unwrap();
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].issue.contains("ディスプレイ '"));
+    assert!(warnings[0].issue.contains("が接続されていません"));
+    assert_eq!(warnings[0].display_name, "Nonexistent Display");
+}
+
+/// validate_config_bounds() が複数の警告を正確に返すことを確認
+#[test]
+fn test_validate_config_bounds_all_warnings() {
+    // 目的: 複数の問題（座標外、サイズ大きい、ディスプレイなし）が同時に検出されることを確認
+    // 検証項目: 複数の異なるウィンドウ設定で複数の警告が返される
+
+    let config = AppConfig {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![
+                // ディスプレイ 1: 座標外
+                DisplayConfig {
+                    name: "Built-in".to_string(),
+                    windows: vec![AppWindowConfig {
+                        app: "Chrome".to_string(),
+                        title: None,
+                        position: Some(Position {
+                            x: json!(1900),
+                            y: json!("top"),
+                        }),
+                        size: Some(Size {
+                            width: json!(500),
+                            height: json!(600),
+                        }),
+                    }],
+                },
+                // ディスプレイ 2: 接続されていない
+                DisplayConfig {
+                    name: "Disconnected".to_string(),
+                    windows: vec![AppWindowConfig {
+                        app: "Safari".to_string(),
+                        title: None,
+                        position: None,
+                        size: None,
+                    }],
+                },
+            ],
+        }],
+        notification: None,
+        timeout: None,
+    };
+
+    let connected_displays = vec![DisplayInfo {
+        name: "Built-in".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 0,
+        origin_y: 0,
+    }];
+
+    // 検証: 複数の警告が返される
+    let result = validate_config_bounds(&config, &connected_displays);
+    assert!(result.is_ok());
+    let warnings = result.unwrap();
+    assert_eq!(warnings.len(), 2); // 座標外 + ディスプレイなし
+    assert!(warnings[0].issue.contains("ウィンドウの右端"));
+    assert!(warnings[1].issue.contains("ディスプレイ"));
+}
+
+/// validate_config() が構文チェックと境界値チェックを組み合わせることを確認
+#[test]
+fn test_validate_config_syntax_and_bounds() {
+    // 目的: ラッパー関数が構文チェックと境界値チェックを正確に実行することを確認
+    // 検証項目: バージョンエラー（構文）と座標外エラー（境界値）の両方が検出される
+
+    let config = AppConfig {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "App".to_string(),
+                    title: None,
+                    position: Some(Position {
+                        x: json!(2000),
+                        y: json!("top"),
+                    }),
+                    size: Some(Size {
+                        width: json!(500),
+                        height: json!(600),
+                    }),
+                }],
+            }],
+        }],
+        notification: None,
+        timeout: None,
+    };
+
+    let connected_displays = vec![DisplayInfo {
+        name: "Built-in".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 0,
+        origin_y: 0,
+    }];
+
+    // 検証: 構文チェックを通り、境界値警告が返される
+    let result = validate_config(&config, Some(&connected_displays));
+    assert!(result.is_ok());
+    let warnings = result.unwrap();
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].issue.contains("右端"));
 }

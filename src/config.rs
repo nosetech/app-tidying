@@ -133,13 +133,24 @@ pub fn get_config_dir() -> Result<PathBuf, AppConfigError> {
         })
 }
 
+/// 設定ファイルの検証結果として、ディスプレイ外の座標やサイズが大きすぎる場合などの警告を格納する構造体
+#[derive(Debug, Clone)]
+pub struct ValidationWarning {
+    /// ディスプレイ名
+    pub display_name: String,
+    /// アプリケーション名
+    pub app_name: String,
+    /// 問題の説明
+    pub issue: String,
+}
+
 #[allow(dead_code)]
 pub fn parse_config_from_json(json_str: &str) -> Result<AppConfig, AppConfigError> {
     let config: AppConfig = serde_json::from_str(json_str).map_err(|e| AppConfigError {
         message: format!("JSON パースエラー: {}", e),
     })?;
 
-    validate_config(&config)?;
+    validate_config_syntax(&config)?;
     Ok(config)
 }
 
@@ -186,8 +197,10 @@ pub fn save_config_file(config: &AppConfig, path: &PathBuf) -> Result<(), AppCon
     Ok(())
 }
 
+/// 設定ファイルの構文チェックのみを実行する
+/// バージョンチェック、構造の妥当性、パターン値の検証などを行う
 #[allow(dead_code)]
-fn validate_config(config: &AppConfig) -> Result<(), AppConfigError> {
+pub fn validate_config_syntax(config: &AppConfig) -> Result<(), AppConfigError> {
     // バージョンチェック
     if config.version != SUPPORTED_VERSION {
         return Err(AppConfigError {
@@ -355,6 +368,256 @@ fn validate_notification_config(notification: &NotificationConfig) -> Result<(),
     }
 
     Ok(())
+}
+
+/// ウィンドウの座標・サイズがディスプレイの境界内に収まっているかを検証
+/// ディスプレイ外の座標や、画面より大きいサイズが設定されている場合は警告を返す
+#[allow(dead_code)]
+fn validate_display_bounds(
+    window: &AppWindowConfig,
+    display_info: &crate::applescript::DisplayInfo,
+    display_name: &str,
+) -> Option<ValidationWarning> {
+    // 座標をピクセル単位で計算してチェック
+    if let Some(ref position) = window.position {
+        // サイズを計算（デフォルトはディスプレイサイズ）
+        let window_width = if let Some(ref size) = window.size {
+            calculate_size_for_validation(&size.width, display_info.width)
+        } else {
+            display_info.width
+        };
+
+        let window_height = if let Some(ref size) = window.size {
+            calculate_size_for_validation(&size.height, display_info.height)
+        } else {
+            display_info.height
+        };
+
+        // 座標を計算
+        let (x, y) = match calculate_position_for_validation(
+            position,
+            display_info.width,
+            display_info.height,
+            window_width,
+            window_height,
+        ) {
+            Ok((x, y)) => (x, y),
+            Err(_) => return None, // エラーは構文チェックで処理済み
+        };
+
+        // ウィンドウの右端がディスプレイを超えるかチェック
+        if x + window_width > display_info.width {
+            return Some(ValidationWarning {
+                display_name: display_name.to_string(),
+                app_name: window.app.clone(),
+                issue: format!(
+                    "ウィンドウの右端 ({}) がディスプレイの幅 ({}) を超えています",
+                    x + window_width,
+                    display_info.width
+                ),
+            });
+        }
+
+        // ウィンドウの下端がディスプレイを超えるかチェック
+        if y + window_height > display_info.height {
+            return Some(ValidationWarning {
+                display_name: display_name.to_string(),
+                app_name: window.app.clone(),
+                issue: format!(
+                    "ウィンドウの下端 ({}) がディスプレイの高さ ({}) を超えています",
+                    y + window_height,
+                    display_info.height
+                ),
+            });
+        }
+    }
+
+    None
+}
+
+/// ディスプレイ名が実際に接続されているかを検証
+#[allow(dead_code)]
+fn validate_display_exists(
+    display_name: &str,
+    connected_displays: &[crate::applescript::DisplayInfo],
+) -> bool {
+    connected_displays
+        .iter()
+        .any(|display| display.name == display_name)
+}
+
+/// 境界値チェックを実行（ディスプレイ情報が必要）
+/// 警告リストを返す（エラーではなく警告）
+#[allow(dead_code)]
+pub fn validate_config_bounds(
+    config: &AppConfig,
+    connected_displays: &[crate::applescript::DisplayInfo],
+) -> Result<Vec<ValidationWarning>, AppConfigError> {
+    let mut warnings = Vec::new();
+
+    // 最初のレイアウトをチェック
+    let layout = config.layouts.first().ok_or_else(|| AppConfigError {
+        message: "レイアウトが定義されていません".to_string(),
+    })?;
+
+    for display_config in &layout.displays {
+        // ディスプレイが接続されているかチェック
+        if !validate_display_exists(&display_config.name, connected_displays) {
+            for window in &display_config.windows {
+                warnings.push(ValidationWarning {
+                    display_name: display_config.name.clone(),
+                    app_name: window.app.clone(),
+                    issue: format!(
+                        "ディスプレイ '{}' が接続されていません",
+                        display_config.name
+                    ),
+                });
+            }
+            continue;
+        }
+
+        // ディスプレイ情報を取得
+        if let Some(display_info) = connected_displays
+            .iter()
+            .find(|d| d.name == display_config.name)
+        {
+            for window in &display_config.windows {
+                if let Some(warning) =
+                    validate_display_bounds(window, display_info, &display_config.name)
+                {
+                    warnings.push(warning);
+                }
+            }
+        }
+    }
+
+    Ok(warnings)
+}
+
+/// 構文チェックと境界値チェックの両方を実行
+/// connected_displays が指定されていない場合は構文チェックのみを実行
+#[allow(dead_code)]
+pub fn validate_config(
+    config: &AppConfig,
+    connected_displays: Option<&[crate::applescript::DisplayInfo]>,
+) -> Result<Vec<ValidationWarning>, AppConfigError> {
+    // 構文チェックを実行
+    validate_config_syntax(config)?;
+
+    // 境界値チェックを実行
+    if let Some(displays) = connected_displays {
+        validate_config_bounds(config, displays)
+    } else {
+        Ok(Vec::new())
+    }
+}
+
+// =============================================================================
+// Helper Functions for Validation
+// =============================================================================
+
+/// サイズ値をピクセル単位で計算（検証用）
+fn calculate_size_for_validation(value: &serde_json::Value, display_size: i32) -> i32 {
+    match value {
+        serde_json::Value::String(s) => match s.as_str() {
+            "half" => display_size / 2,
+            "third" => display_size / 3,
+            "max" => display_size,
+            _ => display_size, // デフォルト
+        },
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                i as i32
+            } else {
+                display_size
+            }
+        }
+        _ => display_size, // デフォルト
+    }
+}
+
+/// 座標値をピクセル単位で計算（検証用）
+fn calculate_position_for_validation(
+    position: &Position,
+    display_width: i32,
+    display_height: i32,
+    window_width: i32,
+    window_height: i32,
+) -> Result<(i32, i32), AppConfigError> {
+    let x = calculate_x_for_validation(&position.x, display_width, window_width)?;
+    let y = calculate_y_for_validation(&position.y, display_height, window_height)?;
+
+    Ok((x, y))
+}
+
+/// X座標を計算（検証用）
+fn calculate_x_for_validation(
+    value: &serde_json::Value,
+    display_width: i32,
+    window_width: i32,
+) -> Result<i32, AppConfigError> {
+    match value {
+        serde_json::Value::String(s) => match s.as_str() {
+            "left" => Ok(0),
+            "right" => Ok((display_width - window_width).max(0)),
+            _ => Err(AppConfigError {
+                message: format!("無効な x 値: '{}'", s),
+            }),
+        },
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if i < 0 {
+                    Err(AppConfigError {
+                        message: "x が負です".to_string(),
+                    })
+                } else {
+                    Ok(i as i32)
+                }
+            } else {
+                Err(AppConfigError {
+                    message: "x は整数である必要があります".to_string(),
+                })
+            }
+        }
+        _ => Err(AppConfigError {
+            message: "x は文字列または数値である必要があります".to_string(),
+        }),
+    }
+}
+
+/// Y座標を計算（検証用）
+fn calculate_y_for_validation(
+    value: &serde_json::Value,
+    display_height: i32,
+    window_height: i32,
+) -> Result<i32, AppConfigError> {
+    match value {
+        serde_json::Value::String(s) => match s.as_str() {
+            "top" => Ok(25), // メニューバーの高さ
+            "bottom" => Ok((display_height - window_height).max(0)),
+            _ => Err(AppConfigError {
+                message: format!("無効な y 値: '{}'", s),
+            }),
+        },
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if i < 0 {
+                    Err(AppConfigError {
+                        message: "y が負です".to_string(),
+                    })
+                } else {
+                    Ok(i as i32)
+                }
+            } else {
+                Err(AppConfigError {
+                    message: "y は整数である必要があります".to_string(),
+                })
+            }
+        }
+        _ => Err(AppConfigError {
+            message: "y は文字列または数値である必要があります".to_string(),
+        }),
+    }
 }
 
 // =============================================================================
