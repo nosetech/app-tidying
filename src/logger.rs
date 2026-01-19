@@ -105,6 +105,8 @@ pub fn init_simple() {
 
 #[allow(dead_code)]
 pub fn show_notification(level: NotificationLevel, message: &str) {
+    use chrono::Local;
+
     let notification_type = match level {
         NotificationLevel::Info => "INFO",
         NotificationLevel::Warn => "WARN",
@@ -113,8 +115,13 @@ pub fn show_notification(level: NotificationLevel, message: &str) {
 
     let output_message = format!("[{}] {}", notification_type, message);
 
-    // ログファイルに記録
-    let _ = append_to_log_file(&output_message);
+    // タイムスタンプ付きメッセージをログファイルに記録
+    let log_message = format!(
+        "[{}] {}",
+        Local::now().format("%Y-%m-%d %H:%M:%S"),
+        output_message
+    );
+    let _ = append_to_log_file(&log_message);
 
     if is_running_in_terminal() {
         // ターミナル実行時は標準出力のみ
