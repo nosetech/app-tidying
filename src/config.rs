@@ -140,8 +140,8 @@ pub struct ValidationWarning {
     pub display_name: String,
     /// アプリケーション名
     pub app_name: String,
-    /// 問題の説明
-    pub issue: String,
+    /// 警告メッセージ
+    pub message: String,
 }
 
 #[allow(dead_code)]
@@ -382,13 +382,19 @@ fn validate_display_bounds(
     if let Some(ref position) = window.position {
         // サイズを計算（デフォルトはディスプレイサイズ）
         let window_width = if let Some(ref size) = window.size {
-            calculate_size_for_validation(&size.width, display_info.width)
+            match calculate_size_for_validation(&size.width, display_info.width) {
+                Ok(w) => w,
+                Err(_) => return None, // エラーは構文チェックで処理済み
+            }
         } else {
             display_info.width
         };
 
         let window_height = if let Some(ref size) = window.size {
-            calculate_size_for_validation(&size.height, display_info.height)
+            match calculate_size_for_validation(&size.height, display_info.height) {
+                Ok(h) => h,
+                Err(_) => return None, // エラーは構文チェックで処理済み
+            }
         } else {
             display_info.height
         };
@@ -410,7 +416,7 @@ fn validate_display_bounds(
             return Some(ValidationWarning {
                 display_name: display_name.to_string(),
                 app_name: window.app.clone(),
-                issue: format!(
+                message: format!(
                     "ウィンドウの右端 ({}) がディスプレイの幅 ({}) を超えています",
                     x + window_width,
                     display_info.width
@@ -423,7 +429,7 @@ fn validate_display_bounds(
             return Some(ValidationWarning {
                 display_name: display_name.to_string(),
                 app_name: window.app.clone(),
-                issue: format!(
+                message: format!(
                     "ウィンドウの下端 ({}) がディスプレイの高さ ({}) を超えています",
                     y + window_height,
                     display_info.height
@@ -467,7 +473,7 @@ pub fn validate_config_bounds(
                 warnings.push(ValidationWarning {
                     display_name: display_config.name.clone(),
                     app_name: window.app.clone(),
-                    issue: format!(
+                    message: format!(
                         "ディスプレイ '{}' が接続されていません",
                         display_config.name
                     ),
@@ -517,22 +523,37 @@ pub fn validate_config(
 // =============================================================================
 
 /// サイズ値をピクセル単位で計算（検証用）
-fn calculate_size_for_validation(value: &serde_json::Value, display_size: i32) -> i32 {
+fn calculate_size_for_validation(
+    value: &serde_json::Value,
+    display_size: i32,
+) -> Result<i32, AppConfigError> {
     match value {
         serde_json::Value::String(s) => match s.as_str() {
-            "half" => display_size / 2,
-            "third" => display_size / 3,
-            "max" => display_size,
-            _ => display_size, // デフォルト
+            "half" => Ok(display_size / 2),
+            "third" => Ok(display_size / 3),
+            "max" => Ok(display_size),
+            _ => Err(AppConfigError {
+                message: format!("無効なサイズ値: '{}' (half, third, max を指定)", s),
+            }),
         },
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
-                i as i32
+                if i <= 0 {
+                    Err(AppConfigError {
+                        message: "サイズは正の値である必要があります".to_string(),
+                    })
+                } else {
+                    Ok(i as i32)
+                }
             } else {
-                display_size
+                Err(AppConfigError {
+                    message: "サイズは整数である必要があります".to_string(),
+                })
             }
         }
-        _ => display_size, // デフォルト
+        _ => Err(AppConfigError {
+            message: "サイズは文字列または数値である必要があります".to_string(),
+        }),
     }
 }
 
@@ -559,7 +580,7 @@ fn calculate_x_for_validation(
     match value {
         serde_json::Value::String(s) => match s.as_str() {
             "left" => Ok(0),
-            "right" => Ok((display_width - window_width).max(0)),
+            "right" => Ok(display_width - window_width),
             _ => Err(AppConfigError {
                 message: format!("無効な x 値: '{}'", s),
             }),
@@ -593,8 +614,8 @@ fn calculate_y_for_validation(
 ) -> Result<i32, AppConfigError> {
     match value {
         serde_json::Value::String(s) => match s.as_str() {
-            "top" => Ok(25), // メニューバーの高さ
-            "bottom" => Ok((display_height - window_height).max(0)),
+            "top" => Ok(25), // メニューバーの高さは25pxと想定
+            "bottom" => Ok(display_height - window_height),
             _ => Err(AppConfigError {
                 message: format!("無効な y 値: '{}'", s),
             }),
@@ -699,7 +720,7 @@ fn parse_y_value(
 ) -> Result<i32, AppConfigError> {
     match value {
         serde_json::Value::String(s) => match s.as_str() {
-            "top" => Ok(25), // Menu bar height is assumed to be 25px
+            "top" => Ok(25), // メニューバーの高さは25pxと想定
             "bottom" => Ok(display_height - window_height),
             _ => Err(AppConfigError {
                 message: format!("無効な y 値: '{}' (top, bottom を指定)", s),

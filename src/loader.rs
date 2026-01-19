@@ -1,5 +1,6 @@
 use crate::applescript::{self, DisplayInfo};
 use crate::config::{AppConfig, AppWindowConfig};
+use std::collections::HashSet;
 use std::thread;
 use std::time::Duration;
 
@@ -63,7 +64,7 @@ pub fn load_layout(config: &AppConfig, timeout_ms: u64) -> Result<LoadResult, Lo
             "ディスプレイ '{}' のアプリ '{}': {}",
             warning.display_name,
             warning.app_name,
-            warning.issue
+            warning.message
         );
     }
 
@@ -74,16 +75,22 @@ pub fn load_layout(config: &AppConfig, timeout_ms: u64) -> Result<LoadResult, Lo
 
     log::info!("レイアウトを適用します");
 
-    // 3. 成功・失敗カウンタ
+    // 3. ワーニング対象をHashSetに変換（O(1)検索用）
+    let warning_set: HashSet<(String, String)> = warnings
+        .iter()
+        .map(|w| (w.display_name.clone(), w.app_name.clone()))
+        .collect();
+
+    // 4. 成功・失敗カウンタ
     let mut success_count = 0;
     let mut failure_count = 0;
     let mut failed_apps: Vec<String> = Vec::new();
 
-    // 4. 各ディスプレイの設定を処理
+    // 5. 各ディスプレイの設定を処理
     for display_config in &layout.displays {
         log::debug!("ディスプレイ '{}' の処理を開始", display_config.name);
 
-        // 4.1 ディスプレイ情報を取得
+        // 5.1 ディスプレイ情報を取得
         let display_info = match applescript::get_display_info(Some(&display_config.name)) {
             Ok(info) => info,
             Err(e) => {
@@ -103,17 +110,16 @@ pub fn load_layout(config: &AppConfig, timeout_ms: u64) -> Result<LoadResult, Lo
             display_info.height
         );
 
-        // 4.2 各ウィンドウの設定を処理
+        // 5.2 各ウィンドウの設定を処理
         for window_config in &display_config.windows {
             log::debug!("アプリ '{}' の処理を開始", window_config.app);
 
-            // ウィンドウがワーニング対象かチェック
-            let has_warning = warnings
-                .iter()
-                .any(|w| w.display_name == display_config.name && w.app_name == window_config.app);
+            // ウィンドウがワーニング対象かチェック（O(1)で検索）
+            let has_warning =
+                warning_set.contains(&(display_config.name.clone(), window_config.app.clone()));
 
             if has_warning {
-                log::info!(
+                log::warn!(
                     "アプリ '{}' は検証エラーのためスキップされます",
                     window_config.app
                 );
@@ -231,17 +237,28 @@ fn process_window(
 
     // 4. サイズを計算
     let (size_opt, position_opt) = if let Some(ref size) = window_config.size {
-        let width = calculate_width(size, display_info.width)?;
-        let height = calculate_height(size, display_info.height)?;
+        let size_value = serde_json::to_value(size)
+            .map_err(|e| format!("サイズ情報のシリアライズに失敗しました: {}", e))?;
+        let (width, height) = crate::config::parse_size_value(
+            &size_value,
+            display_info.width,
+            display_info.height,
+            "size",
+        )
+        .map_err(|e| format!("サイズ計算失敗: {}", e))?;
 
         let position = if let Some(ref position) = window_config.position {
-            let (x, y) = calculate_position(
-                position,
+            let position_value = serde_json::to_value(position)
+                .map_err(|e| format!("位置情報のシリアライズに失敗しました: {}", e))?;
+            let (x, y) = crate::config::parse_position_value(
+                &position_value,
                 display_info.width,
                 display_info.height,
                 width,
                 height,
-            )?;
+                "position",
+            )
+            .map_err(|e| format!("位置計算失敗: {}", e))?;
             // ディスプレイの origin 座標を加算して、全体座標系に変換
             Some((x + display_info.origin_x, y + display_info.origin_y))
         } else {
@@ -251,13 +268,17 @@ fn process_window(
         (Some((width, height)), position)
     } else if let Some(ref position) = window_config.position {
         // サイズ指定なしの場合はディスプレイサイズを使用
-        let (x, y) = calculate_position(
-            position,
+        let position_value = serde_json::to_value(position)
+            .map_err(|e| format!("位置情報のシリアライズに失敗しました: {}", e))?;
+        let (x, y) = crate::config::parse_position_value(
+            &position_value,
             display_info.width,
             display_info.height,
             display_info.width,
             display_info.height,
-        )?;
+            "position",
+        )
+        .map_err(|e| format!("位置計算失敗: {}", e))?;
         // ディスプレイの origin 座標を加算して、全体座標系に変換
         (
             None,
@@ -311,108 +332,4 @@ fn process_window(
     })?;
 
     Ok(())
-}
-
-/// 幅を計算する
-fn calculate_width(size: &crate::config::Size, display_width: i32) -> Result<i32, String> {
-    use serde_json::Value;
-
-    let width_value = match &size.width {
-        v if *v == Value::Null => Value::Null,
-        v => v.clone(),
-    };
-
-    if width_value == Value::Null {
-        return Ok(display_width);
-    }
-
-    // width 値を直接パース
-    match &width_value {
-        Value::String(s) => match s.as_str() {
-            "half" => Ok(display_width / 2),
-            "third" => Ok(display_width / 3),
-            "max" => Ok(display_width),
-            _ => Err(format!(
-                "無効な width 値: '{}' (half, third, max を指定)",
-                s
-            )),
-        },
-        Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                if i <= 0 {
-                    Err("幅は正の値である必要があります".to_string())
-                } else {
-                    Ok(i as i32)
-                }
-            } else {
-                Err("幅は整数である必要があります".to_string())
-            }
-        }
-        _ => Err("幅は文字列または数値である必要があります".to_string()),
-    }
-}
-
-/// 高さを計算する
-fn calculate_height(size: &crate::config::Size, display_height: i32) -> Result<i32, String> {
-    use serde_json::Value;
-
-    let height_value = match &size.height {
-        v if *v == Value::Null => Value::Null,
-        v => v.clone(),
-    };
-
-    if height_value == Value::Null {
-        return Ok(display_height);
-    }
-
-    // height 値を直接パース
-    match &height_value {
-        Value::String(s) => match s.as_str() {
-            "half" => Ok(display_height / 2),
-            "third" => Ok(display_height / 3),
-            "max" => Ok(display_height),
-            _ => Err(format!(
-                "無効な height 値: '{}' (half, third, max を指定)",
-                s
-            )),
-        },
-        Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                if i <= 0 {
-                    Err("高さは正の値である必要があります".to_string())
-                } else {
-                    Ok(i as i32)
-                }
-            } else {
-                Err("高さは整数である必要があります".to_string())
-            }
-        }
-        _ => Err("高さは文字列または数値である必要があります".to_string()),
-    }
-}
-
-/// 位置を計算する
-fn calculate_position(
-    position: &crate::config::Position,
-    display_width: i32,
-    display_height: i32,
-    window_width: i32,
-    window_height: i32,
-) -> Result<(i32, i32), String> {
-    use crate::config::parse_position_value;
-
-    let position_value = serde_json::to_value(position)
-        .map_err(|e| format!("位置情報のシリアライズに失敗しました: {}", e))?;
-
-    match parse_position_value(
-        &position_value,
-        display_width,
-        display_height,
-        window_width,
-        window_height,
-        "position",
-    ) {
-        Ok((x, y)) => Ok((x, y)),
-        Err(e) => Err(format!("位置計算失敗: {}", e)),
-    }
 }

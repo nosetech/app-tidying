@@ -772,7 +772,7 @@ fn test_validate_display_bounds_position_out_of_display() {
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 1);
-    assert!(warnings[0].issue.contains("ウィンドウの右端"));
+    assert!(warnings[0].message.contains("ウィンドウの右端"));
     assert_eq!(warnings[0].app_name, "Google Chrome");
 }
 
@@ -818,7 +818,7 @@ fn test_validate_display_bounds_size_larger_than_display() {
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 1);
-    assert!(warnings[0].issue.contains("ウィンドウの下端"));
+    assert!(warnings[0].message.contains("ウィンドウの下端"));
     assert_eq!(warnings[0].app_name, "Safari");
 }
 
@@ -905,8 +905,8 @@ fn test_validate_display_exists_ng() {
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 1);
-    assert!(warnings[0].issue.contains("ディスプレイ '"));
-    assert!(warnings[0].issue.contains("が接続されていません"));
+    assert!(warnings[0].message.contains("ディスプレイ '"));
+    assert!(warnings[0].message.contains("が接続されていません"));
     assert_eq!(warnings[0].display_name, "Nonexistent Display");
 }
 
@@ -965,8 +965,8 @@ fn test_validate_config_bounds_all_warnings() {
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 2); // 座標外 + ディスプレイなし
-    assert!(warnings[0].issue.contains("ウィンドウの右端"));
-    assert!(warnings[1].issue.contains("ディスプレイ"));
+    assert!(warnings[0].message.contains("ウィンドウの右端"));
+    assert!(warnings[1].message.contains("ディスプレイ"));
 }
 
 /// validate_config() が構文チェックと境界値チェックを組み合わせることを確認
@@ -1011,5 +1011,5 @@ fn test_validate_config_syntax_and_bounds() {
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 1);
-    assert!(warnings[0].issue.contains("右端"));
+    assert!(warnings[0].message.contains("右端"));
 }
