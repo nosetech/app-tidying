@@ -80,6 +80,7 @@ dependencies = [
  "env_logger",
  "log",
  "predicates",
+ "regex",
  "serde",
  "serde_json",
  "tempfile",

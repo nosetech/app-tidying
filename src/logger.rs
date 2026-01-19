@@ -58,6 +58,12 @@ fn append_to_log_file(message: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// 現在時刻のタイムスタンプを YYYY-MM-DD HH:MM:SS 形式で取得する
+fn get_timestamp_string() -> String {
+    use chrono::Local;
+    Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
 #[allow(dead_code)]
 pub fn init(config: LoggerConfig) {
     let filter_level = if config.debug_mode {
@@ -77,10 +83,9 @@ pub fn init(config: LoggerConfig) {
     env_logger::Builder::from_default_env()
         .filter_level(filter_level)
         .format(|buf, record| {
-            use chrono::Local;
             let log_message = format!(
                 "[{}] [{}] {}",
-                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                get_timestamp_string(),
                 record.level(),
                 record.args()
             );
@@ -113,8 +118,9 @@ pub fn show_notification(level: NotificationLevel, message: &str) {
 
     let output_message = format!("[{}] {}", notification_type, message);
 
-    // ログファイルに記録
-    let _ = append_to_log_file(&output_message);
+    // タイムスタンプ付きメッセージをログファイルに記録
+    let log_message = format!("[{}] {}", get_timestamp_string(), output_message);
+    let _ = append_to_log_file(&log_message);
 
     if is_running_in_terminal() {
         // ターミナル実行時は標準出力のみ
