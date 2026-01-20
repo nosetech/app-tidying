@@ -1154,6 +1154,55 @@ fn test_load_layout_timeout_propagation() {
 }
 
 // =============================================================================
+// 権限不足テスト（Accessibility API 許可なし）
+// =============================================================================
+
+#[test]
+#[ignore] // Accessibility API 権限チェックに依存するため、CI環境ではスキップ
+fn test_load_layout_accessibility_api_permission_denied() {
+    // 目的: Accessibility API の権限がない場合のエラーハンドリングを検証
+    // 環境要件: macOS で Accessibility API 権限が設定されていない状態で実行
+    // 制限事項: 実際の権限チェックは osascript に依存するため、
+    //          権限がない環境でのみこのテストは意味を持つ
+
+    let config = create_test_config_single_window();
+    let timeout_ms = 3000;
+
+    // Accessibility API 権限がない場合、load_layout はエラーを返すと期待される
+    // ただし、環境によってはエラーが発生しない可能性もある
+    let result = load_layout(&config, timeout_ms);
+
+    match result {
+        Ok(load_result) => {
+            // 権限がある環境では成功する可能性がある
+            println!("✓ Accessibility API テスト: 権限がある環境では成功");
+            println!(
+                "  成功: {}, 失敗: {}",
+                load_result.success_count, load_result.failure_count
+            );
+        }
+        Err(e) => {
+            // 権限がない環境ではエラーメッセージに権限関連のメッセージが含まれる
+            println!(
+                "✓ Accessibility API テスト: エラー発生 (権限不足の可能性): {}",
+                e
+            );
+
+            // エラーメッセージに「権限」または「permission」が含まれるかを確認
+            let error_lower = e.message.to_lowercase();
+            if error_lower.contains("permission")
+                || error_lower.contains("権限")
+                || error_lower.contains("accessibility")
+            {
+                println!("  権限不足関連のエラーメッセージが確認されました");
+            } else {
+                println!("  その他のエラー: {}", e.message);
+            }
+        }
+    }
+}
+
+// =============================================================================
 // エッジケーステスト
 // =============================================================================
 

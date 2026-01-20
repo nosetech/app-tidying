@@ -567,6 +567,60 @@ cargo test logger -- --nocapture
 cargo test test_show_notification_info_non_terminal -- --ignored --nocapture
 ```
 
+### テストカバレッジ
+
+#### 現在のテスト実行状況（Issue #31 完了時点）
+
+- **合計テスト数**: 522 テスト
+  - 実行可能テスト: 406 テスト（passed）
+  - スキップテスト: 116 テスト（ignored、osascript依存）
+  - 失敗テスト: 0 テスト
+
+#### テストファイル別の構成
+
+1. **tests/config_test.rs**: 56 テスト
+   - JSONパーサ、バリデーション、パターン計算テスト
+
+2. **tests/cli_test.rs**: 32 テスト
+   - CLI引数解析、コマンドテスト
+
+3. **tests/integration_test.rs**: 17 テスト
+   - JSON設定ファイル統合テスト
+
+4. **tests/loader_test.rs**: 27 テスト（6 passed + 21 ignored）
+   - ウィンドウ配置テスト、エラーケーステスト
+   - Accessibility API 権限テストを追加
+
+5. **tests/applescript_test.rs**: 207 テスト（128 passed + 79 ignored）
+   - AppleScript エスケープ、ディスプレイ情報、ウィンドウ操作テスト
+
+6. **tests/logger_test.rs**: 89 テスト（81 passed + 8 ignored）
+   - ログ出力、通知機能テスト
+
+7. **tests/saver_test.rs**: 13 テスト（8 passed + 5 ignored）
+   - save/load往復テスト
+
+8. **tests/system_window_detection_test.rs**: 74 テスト
+   - システムウィンドウ分類、ターミナル検出テスト
+
+#### テスト実行方法 - カバレッジ測定
+
+ローカル macOS 環境でのテスト実行：
+
+```bash
+# 標準テスト実行（CI環境推奨）
+cargo test
+
+# すべてのテストを実行（#[ignore]テストも含める）
+cargo test -- --ignored
+
+# テスト出力を表示
+cargo test -- --nocapture
+
+# 特定のモジュールのテストのみ実行
+cargo test loader -- --ignored --nocapture
+```
+
 ### 本番環境での確認項目
 
 - 複数アプリの同時操作
