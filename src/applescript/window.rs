@@ -9,6 +9,9 @@ use crate::applescript::utils::{
     escape_applescript_string, parse_single_window, parse_window_list,
 };
 
+#[allow(unused_imports)]
+pub use crate::applescript::utils::WindowType;
+
 /// ウィンドウ情報
 #[derive(Debug, Clone)]
 #[allow(dead_code)]

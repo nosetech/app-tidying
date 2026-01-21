@@ -9,9 +9,20 @@ pub mod osascript;
 pub mod utils;
 pub mod window;
 
-pub use app::{get_running_applications, launch_or_activate_app};
+#[allow(unused_imports)]
+pub use app::{
+    get_running_applications, launch_or_activate_app, AppInfo, AppLaunchError, AppLaunchResult,
+    RunningAppsError,
+};
+#[allow(unused_imports)]
 pub use display::{get_all_connected_displays, get_display_info, DisplayInfo};
-pub use utils::{escape_applescript_string, is_excluded_window};
+#[allow(unused_imports)]
+pub use utils::{
+    classify_window, escape_applescript_string, is_excluded_window, is_system_app,
+    parse_single_window, parse_window_list,
+};
+#[allow(unused_imports)]
 pub use window::{
-    create_new_window, find_window_by_title, get_all_windows, resize_window, WindowInfo,
+    create_new_window, find_window_by_title, get_all_windows, get_window_info, resize_window,
+    WindowInfo, WindowInfoError, WindowResizeError, WindowResizeResult, WindowType,
 };
