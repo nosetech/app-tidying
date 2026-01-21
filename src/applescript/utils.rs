@@ -145,7 +145,6 @@ pub fn is_system_app(app_name: &str) -> bool {
 /// assert!(is_excluded_window("Finder", "Menu"));
 /// assert!(!is_excluded_window("Finder", "Documents"));
 /// ```
-#[allow(dead_code)]
 pub fn is_excluded_window(app_name: &str, window_title: &str) -> bool {
     // システムUIプロセスを除外
     const EXCLUDED_APP_NAMES: &[&str] = &[
@@ -244,7 +243,6 @@ pub fn classify_window(app_name: &str, window_title: &str) -> WindowType {
 /// assert_eq!(result.size, (1440, 900));
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(dead_code)]
 pub fn parse_single_window(entry: &str) -> Result<WindowInfo, WindowInfoError> {
     let parts: Vec<&str> = entry.split('|').collect();
     if parts.len() < 5 {
@@ -325,7 +323,6 @@ pub fn parse_single_window(entry: &str) -> Result<WindowInfo, WindowInfoError> {
 /// # Returns
 /// * `Ok(Vec<WindowInfo>)` - パース成功。空の結果は空のベクトルを返す
 /// * `Err(WindowInfoError)` - 重大なパース失敗
-#[allow(dead_code)]
 pub fn parse_window_list(result_str: &str) -> Result<Vec<WindowInfo>, WindowInfoError> {
     // 空の結果はウィンドウなしを意味する
     if result_str.is_empty() {

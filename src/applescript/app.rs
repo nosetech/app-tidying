@@ -9,7 +9,6 @@ use crate::applescript::utils::escape_applescript_string;
 
 /// アプリケーション起動エラー
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct AppLaunchError {
     pub message: String,
 }
@@ -24,7 +23,6 @@ impl std::error::Error for AppLaunchError {}
 
 /// アプリケーション起動結果
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct AppLaunchResult {
     /// 実行結果のステータス（"success" など）
     pub status: String,
@@ -56,7 +54,6 @@ impl AppLaunchResult {
 
 /// 実行中のアプリケーション情報
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct AppInfo {
     /// アプリケーション名
     pub name: String,
@@ -82,7 +79,6 @@ impl AppInfo {
 
 /// 実行中アプリケーション一覧取得エラー
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct RunningAppsError {
     pub message: String,
 }
@@ -235,7 +231,6 @@ end tell
 /// println!("Message: {}", result.message);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(dead_code)]
 pub fn launch_or_activate_app(
     app_name: &str,
     timeout_ms: u64,
@@ -293,7 +288,6 @@ pub fn launch_or_activate_app(
 /// }
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(dead_code)]
 pub fn get_running_applications() -> Result<Vec<AppInfo>, RunningAppsError> {
     let script = r#"
 tell application "System Events"

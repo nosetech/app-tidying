@@ -4,13 +4,13 @@
 //! 各ディスプレイの名前、解像度、原点座標を取得します。
 
 use serde_json::{json, Value};
-use std::process::Command;
+
+use crate::applescript::osascript::run_jxa;
 
 /// ディスプレイ情報構造体
 ///
 /// macOS のディスプレイの物理的な情報を保持します。
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct DisplayInfo {
     /// ディスプレイ名（例: "Built-in", "Enhanced"）
     pub name: String,
@@ -64,7 +64,6 @@ impl DisplayInfo {
 
 /// ディスプレイ情報取得エラー
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct DisplayError {
     pub message: String,
 }
@@ -98,7 +97,6 @@ impl std::error::Error for DisplayError {}
 /// }
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(dead_code)]
 pub fn get_all_connected_displays() -> Result<Vec<DisplayInfo>, DisplayError> {
     let jxa_script = r#"
 ObjC.import('AppKit')
@@ -128,15 +126,7 @@ if (screens.count === 0) {
 }
 "#;
 
-    let output = Command::new("osascript")
-        .arg("-l")
-        .arg("JavaScript")
-        .arg("-e")
-        .arg(jxa_script)
-        .output()
-        .map_err(|e| DisplayError {
-            message: format!("osascriptの実行に失敗しました: {}", e),
-        })?;
+    let output = run_jxa(jxa_script).map_err(|e| DisplayError { message: e.message })?;
 
     if !output.status.success() {
         return Err(DisplayError {
@@ -201,7 +191,6 @@ if (screens.count === 0) {
 /// println!("Display: {}x{}", display.width, display.height);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(dead_code)]
 pub fn get_display_info(display_name: Option<&str>) -> Result<DisplayInfo, DisplayError> {
     // すべての接続ディスプレイを取得
     let all_displays = get_all_connected_displays()?;

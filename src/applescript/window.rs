@@ -9,12 +9,8 @@ use crate::applescript::utils::{
     escape_applescript_string, parse_single_window, parse_window_list,
 };
 
-#[allow(unused_imports)]
-pub use crate::applescript::utils::WindowType;
-
 /// ウィンドウ情報
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct WindowInfo {
     /// ウィンドウタイトル
     pub title: String,
@@ -50,7 +46,6 @@ impl WindowInfo {
 
 /// ウィンドウ情報取得エラー
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct WindowInfoError {
     pub message: String,
 }
@@ -65,7 +60,6 @@ impl std::error::Error for WindowInfoError {}
 
 /// ウィンドウリサイズ結果
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct WindowResizeResult {
     /// 実行結果のステータス
     pub status: String,
@@ -100,7 +94,6 @@ impl WindowResizeResult {
 
 /// ウィンドウリサイズエラー
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct WindowResizeError {
     pub message: String,
 }
@@ -134,7 +127,6 @@ impl std::error::Error for WindowResizeError {}
 /// }
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(dead_code)]
 pub fn get_all_windows(app_name: &str) -> Result<Vec<WindowInfo>, WindowInfoError> {
     let script = format!(
         r#"
@@ -331,7 +323,6 @@ end tell
 /// }
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(dead_code)]
 pub fn find_window_by_title(
     app_name: &str,
     window_title: &str,
@@ -372,7 +363,6 @@ pub fn find_window_by_title(
 /// println!("Resized: {}", result.message);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(dead_code)]
 pub fn resize_window(
     app_name: &str,
     window_title: Option<&str>,
@@ -493,7 +483,6 @@ end tell
 /// create_new_window("Google Chrome")?;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(dead_code)]
 pub fn create_new_window(app_name: &str) -> Result<(), WindowInfoError> {
     let script = format!(
         r#"
