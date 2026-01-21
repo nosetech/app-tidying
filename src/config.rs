@@ -87,14 +87,21 @@ pub struct NotificationConfig {
     pub error: String,
 }
 
+/// settings.json 用構造体
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AppConfig {
+pub struct AppSettings {
     pub version: String,
-    pub layouts: Vec<LayoutConfig>,
     #[serde(default)]
     pub notification: Option<NotificationConfig>,
     #[serde(default)]
     pub timeout: Option<u64>,
+}
+
+/// layout.json 用構造体
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LayoutFile {
+    pub version: String,
+    pub layouts: Vec<LayoutConfig>,
 }
 
 #[derive(Debug)]
@@ -110,21 +117,31 @@ impl std::fmt::Display for AppConfigError {
 
 impl std::error::Error for AppConfigError {}
 
-/// デフォルト設定ファイルのパスを取得
+/// デフォルト設定ファイル (settings.json) のパスを取得
 /// macOS の標準に従い、~/Library/Application Support/biz.nosetech.apptidying/settings.json を返す
 #[allow(dead_code)]
-pub fn get_default_config_path() -> Result<PathBuf, AppConfigError> {
+pub fn get_default_settings_path() -> Result<PathBuf, AppConfigError> {
     let home = dirs::home_dir().ok_or_else(|| AppConfigError {
         message: "ホームディレクトリの取得に失敗しました".to_string(),
     })?;
     Ok(home.join("Library/Application Support/biz.nosetech.apptidying/settings.json"))
 }
 
+/// デフォルトレイアウトファイル (layout.json) のパスを取得
+/// macOS の標準に従い、~/Library/Application Support/biz.nosetech.apptidying/layout.json を返す
+#[allow(dead_code)]
+pub fn get_default_layout_path() -> Result<PathBuf, AppConfigError> {
+    let home = dirs::home_dir().ok_or_else(|| AppConfigError {
+        message: "ホームディレクトリの取得に失敗しました".to_string(),
+    })?;
+    Ok(home.join("Library/Application Support/biz.nosetech.apptidying/layout.json"))
+}
+
 /// 設定ディレクトリを取得
 /// デフォルト設定ファイルパスの親ディレクトリを返す
 #[allow(dead_code)]
 pub fn get_config_dir() -> Result<PathBuf, AppConfigError> {
-    let default_path = get_default_config_path()?;
+    let default_path = get_default_settings_path()?;
     default_path
         .parent()
         .map(|p| p.to_path_buf())
@@ -144,35 +161,65 @@ pub struct ValidationWarning {
     pub message: String,
 }
 
+/// settings.json をパースする
 #[allow(dead_code)]
-pub fn parse_config_from_json(json_str: &str) -> Result<AppConfig, AppConfigError> {
-    let config: AppConfig = serde_json::from_str(json_str).map_err(|e| AppConfigError {
+pub fn parse_settings_from_json(json_str: &str) -> Result<AppSettings, AppConfigError> {
+    let settings: AppSettings = serde_json::from_str(json_str).map_err(|e| AppConfigError {
         message: format!("JSON パースエラー: {}", e),
     })?;
 
-    validate_config_syntax(&config)?;
-    Ok(config)
+    validate_settings_syntax(&settings)?;
+    Ok(settings)
 }
 
+/// layout.json をパースする
 #[allow(dead_code)]
-pub fn load_config_file(path: &PathBuf) -> Result<AppConfig, AppConfigError> {
+pub fn parse_layout_from_json(json_str: &str) -> Result<LayoutFile, AppConfigError> {
+    let layout: LayoutFile = serde_json::from_str(json_str).map_err(|e| AppConfigError {
+        message: format!("JSON パースエラー: {}", e),
+    })?;
+
+    validate_layout_syntax(&layout)?;
+    Ok(layout)
+}
+
+/// settings.json ファイルを読み込む
+#[allow(dead_code)]
+pub fn load_settings_file(path: &PathBuf) -> Result<AppSettings, AppConfigError> {
     let content = fs::read_to_string(path).map_err(|e| AppConfigError {
         message: format!("ファイル読み込みエラー ({}): {}", path.display(), e),
     })?;
 
-    parse_config_from_json(&content)
+    parse_settings_from_json(&content)
 }
 
-/// デフォルト設定ファイルから設定を読み込む
+/// layout.json ファイルを読み込む
 #[allow(dead_code)]
-pub fn load_default_config() -> Result<AppConfig, AppConfigError> {
-    let config_path = get_default_config_path()?;
-    load_config_file(&config_path)
+pub fn load_layout_file(path: &PathBuf) -> Result<LayoutFile, AppConfigError> {
+    let content = fs::read_to_string(path).map_err(|e| AppConfigError {
+        message: format!("ファイル読み込みエラー ({}): {}", path.display(), e),
+    })?;
+
+    parse_layout_from_json(&content)
 }
 
-/// 設定をファイルに保存する
+/// デフォルト settings.json から設定を読み込む
 #[allow(dead_code)]
-pub fn save_config_file(config: &AppConfig, path: &PathBuf) -> Result<(), AppConfigError> {
+pub fn load_default_settings() -> Result<AppSettings, AppConfigError> {
+    let config_path = get_default_settings_path()?;
+    load_settings_file(&config_path)
+}
+
+/// デフォルト layout.json からレイアウトを読み込む
+#[allow(dead_code)]
+pub fn load_default_layout() -> Result<LayoutFile, AppConfigError> {
+    let layout_path = get_default_layout_path()?;
+    load_layout_file(&layout_path)
+}
+
+/// settings.json をファイルに保存する
+#[allow(dead_code)]
+pub fn save_settings_file(settings: &AppSettings, path: &PathBuf) -> Result<(), AppConfigError> {
     // 親ディレクトリが存在しない場合は作成
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| AppConfigError {
@@ -185,7 +232,7 @@ pub fn save_config_file(config: &AppConfig, path: &PathBuf) -> Result<(), AppCon
     }
 
     // JSONに変換（整形あり）
-    let json_str = serde_json::to_string_pretty(config).map_err(|e| AppConfigError {
+    let json_str = serde_json::to_string_pretty(settings).map_err(|e| AppConfigError {
         message: format!("JSON シリアライズエラー: {}", e),
     })?;
 
@@ -197,37 +244,84 @@ pub fn save_config_file(config: &AppConfig, path: &PathBuf) -> Result<(), AppCon
     Ok(())
 }
 
-/// 設定ファイルの構文チェックのみを実行する
-/// バージョンチェック、構造の妥当性、パターン値の検証などを行う
+/// layout.json をファイルに保存する
 #[allow(dead_code)]
-pub fn validate_config_syntax(config: &AppConfig) -> Result<(), AppConfigError> {
+pub fn save_layout_file(layout: &LayoutFile, path: &PathBuf) -> Result<(), AppConfigError> {
+    // 親ディレクトリが存在しない場合は作成
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| AppConfigError {
+            message: format!(
+                "ディレクトリの作成に失敗しました ({}): {}",
+                parent.display(),
+                e
+            ),
+        })?;
+    }
+
+    // JSONに変換（整形あり）
+    let json_str = serde_json::to_string_pretty(layout).map_err(|e| AppConfigError {
+        message: format!("JSON シリアライズエラー: {}", e),
+    })?;
+
+    // ファイルに書き込み
+    fs::write(path, json_str).map_err(|e| AppConfigError {
+        message: format!("ファイル書き込みエラー ({}): {}", path.display(), e),
+    })?;
+
+    Ok(())
+}
+
+/// settings.json の構文チェックを実行する
+#[allow(dead_code)]
+pub fn validate_settings_syntax(settings: &AppSettings) -> Result<(), AppConfigError> {
     // バージョンチェック
-    if config.version != SUPPORTED_VERSION {
+    if settings.version != SUPPORTED_VERSION {
         return Err(AppConfigError {
             message: format!(
                 "サポートされていないバージョン: {}（サポート: {}）",
-                config.version, SUPPORTED_VERSION
+                settings.version, SUPPORTED_VERSION
+            ),
+        });
+    }
+
+    // 通知設定の検証
+    if let Some(ref notification) = settings.notification {
+        validate_notification_config(notification)?;
+    }
+
+    Ok(())
+}
+
+/// layout.json の構文チェックを実行する
+#[allow(dead_code)]
+pub fn validate_layout_syntax(layout: &LayoutFile) -> Result<(), AppConfigError> {
+    // バージョンチェック
+    if layout.version != SUPPORTED_VERSION {
+        return Err(AppConfigError {
+            message: format!(
+                "サポートされていないバージョン: {}（サポート: {}）",
+                layout.version, SUPPORTED_VERSION
             ),
         });
     }
 
     // レイアウトが空でないかチェック
-    if config.layouts.is_empty() {
+    if layout.layouts.is_empty() {
         return Err(AppConfigError {
             message: "layouts フィールドが空です".to_string(),
         });
     }
 
     // 各レイアウトのディスプレイをチェック
-    for layout in &config.layouts {
-        if layout.displays.is_empty() {
+    for layout_config in &layout.layouts {
+        if layout_config.displays.is_empty() {
             return Err(AppConfigError {
                 message: "レイアウトのディスプレイが空です".to_string(),
             });
         }
 
         // 各ディスプレイのウィンドウをチェック
-        for display in &layout.displays {
+        for display in &layout_config.displays {
             if display.windows.is_empty() {
                 return Err(AppConfigError {
                     message: format!("ディスプレイ '{}' のウィンドウが空です", display.name),
@@ -239,11 +333,6 @@ pub fn validate_config_syntax(config: &AppConfig) -> Result<(), AppConfigError> 
                 validate_window_config(window, &display.name)?;
             }
         }
-    }
-
-    // 通知設定の検証
-    if let Some(ref notification) = config.notification {
-        validate_notification_config(notification)?;
     }
 
     Ok(())
@@ -455,18 +544,18 @@ fn validate_display_exists(
 /// 境界値チェックを実行（ディスプレイ情報が必要）
 /// 警告リストを返す（エラーではなく警告）
 #[allow(dead_code)]
-pub fn validate_config_bounds(
-    config: &AppConfig,
+pub fn validate_layout_bounds(
+    layout: &LayoutFile,
     connected_displays: &[crate::applescript::DisplayInfo],
 ) -> Result<Vec<ValidationWarning>, AppConfigError> {
     let mut warnings = Vec::new();
 
     // 最初のレイアウトをチェック
-    let layout = config.layouts.first().ok_or_else(|| AppConfigError {
+    let layout_config = layout.layouts.first().ok_or_else(|| AppConfigError {
         message: "レイアウトが定義されていません".to_string(),
     })?;
 
-    for display_config in &layout.displays {
+    for display_config in &layout_config.displays {
         // ディスプレイが接続されているかチェック
         if !validate_display_exists(&display_config.name, connected_displays) {
             for window in &display_config.windows {
@@ -500,19 +589,19 @@ pub fn validate_config_bounds(
     Ok(warnings)
 }
 
-/// 構文チェックと境界値チェックの両方を実行
+/// layout.json の構文チェックと境界値チェックの両方を実行
 /// connected_displays が指定されていない場合は構文チェックのみを実行
 #[allow(dead_code)]
-pub fn validate_config(
-    config: &AppConfig,
+pub fn validate_layout(
+    layout: &LayoutFile,
     connected_displays: Option<&[crate::applescript::DisplayInfo]>,
 ) -> Result<Vec<ValidationWarning>, AppConfigError> {
     // 構文チェックを実行
-    validate_config_syntax(config)?;
+    validate_layout_syntax(layout)?;
 
     // 境界値チェックを実行
     if let Some(displays) = connected_displays {
-        validate_config_bounds(config, displays)
+        validate_layout_bounds(layout, displays)
     } else {
         Ok(Vec::new())
     }

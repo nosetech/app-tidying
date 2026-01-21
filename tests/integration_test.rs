@@ -1,7 +1,7 @@
 use apptidying::config;
 
 #[test]
-fn test_parse_valid_config() {
+fn test_parse_valid_layout() {
     let json = r#"{
         "version": "1.0",
         "layouts": [
@@ -23,12 +23,12 @@ fn test_parse_valid_config() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
-    assert!(config.is_ok());
-    let cfg = config.unwrap();
-    assert_eq!(cfg.version, "1.0");
-    assert_eq!(cfg.layouts.len(), 1);
-    assert_eq!(cfg.layouts[0].displays[0].name, "Built-in");
+    let layout = config::parse_layout_from_json(json);
+    assert!(layout.is_ok());
+    let lyt = layout.unwrap();
+    assert_eq!(lyt.version, "1.0");
+    assert_eq!(lyt.layouts.len(), 1);
+    assert_eq!(lyt.layouts[0].displays[0].name, "Built-in");
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn test_parse_config_with_pattern_values() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_ok());
 }
 
@@ -67,7 +67,7 @@ fn test_parse_config_missing_version() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
 }
 
@@ -78,7 +78,7 @@ fn test_parse_config_unsupported_version() {
         "layouts": []
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
     assert!(config
         .unwrap_err()
@@ -93,7 +93,7 @@ fn test_parse_config_empty_layouts() {
         "layouts": []
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
     assert!(config
         .unwrap_err()
@@ -112,7 +112,7 @@ fn test_parse_config_empty_displays() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
     assert!(config.unwrap_err().message.contains("ディスプレイが空"));
 }
@@ -134,7 +134,7 @@ fn test_parse_config_empty_windows() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
     assert!(config.unwrap_err().message.contains("ウィンドウが空"));
 }
@@ -160,7 +160,7 @@ fn test_parse_config_invalid_position_x() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
     assert!(config.unwrap_err().message.contains("無効な x 値"));
 }
@@ -186,7 +186,7 @@ fn test_parse_config_invalid_position_y() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
     assert!(config.unwrap_err().message.contains("無効な y 値"));
 }
@@ -212,7 +212,7 @@ fn test_parse_config_invalid_size_width() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
     assert!(config.unwrap_err().message.contains("無効な width 値"));
 }
@@ -238,7 +238,7 @@ fn test_parse_config_invalid_size_height() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
     assert!(config.unwrap_err().message.contains("無効な height 値"));
 }
@@ -264,7 +264,7 @@ fn test_parse_config_negative_coordinates() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
     assert!(config.unwrap_err().message.contains("が負です"));
 }
@@ -290,101 +290,9 @@ fn test_parse_config_zero_or_negative_size() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_err());
     assert!(config.unwrap_err().message.contains("正の数値"));
-}
-
-#[test]
-fn test_parse_config_with_notification_settings() {
-    let json = r#"{
-        "version": "1.0",
-        "layouts": [
-            {
-                "displays": [
-                    {
-                        "name": "Display 1",
-                        "windows": [
-                            {
-                                "app": "Finder"
-                            }
-                        ]
-                    }
-                ]
-            }
-        ],
-        "notification": {
-            "info": "notification",
-            "warn": "notification",
-            "error": "dialog"
-        }
-    }"#;
-
-    let config = config::parse_config_from_json(json);
-    assert!(config.is_ok());
-    let cfg = config.unwrap();
-    assert!(cfg.notification.is_some());
-    let notif = cfg.notification.unwrap();
-    assert_eq!(notif.info, "notification");
-    assert_eq!(notif.error, "dialog");
-}
-
-#[test]
-fn test_parse_config_invalid_notification_value() {
-    let json = r#"{
-        "version": "1.0",
-        "layouts": [
-            {
-                "displays": [
-                    {
-                        "name": "Display 1",
-                        "windows": [
-                            {
-                                "app": "Finder"
-                            }
-                        ]
-                    }
-                ]
-            }
-        ],
-        "notification": {
-            "info": "invalid"
-        }
-    }"#;
-
-    let config = config::parse_config_from_json(json);
-    assert!(config.is_err());
-    assert!(config
-        .unwrap_err()
-        .message
-        .contains("無効な notification.info 値"));
-}
-
-#[test]
-fn test_parse_config_with_timeout() {
-    let json = r#"{
-        "version": "1.0",
-        "layouts": [
-            {
-                "displays": [
-                    {
-                        "name": "Display 1",
-                        "windows": [
-                            {
-                                "app": "Finder"
-                            }
-                        ]
-                    }
-                ]
-            }
-        ],
-        "timeout": 5000
-    }"#;
-
-    let config = config::parse_config_from_json(json);
-    assert!(config.is_ok());
-    let cfg = config.unwrap();
-    assert_eq!(cfg.timeout, Some(5000));
 }
 
 #[test]
@@ -427,7 +335,7 @@ fn test_parse_config_multiple_layouts_and_displays() {
         ]
     }"#;
 
-    let config = config::parse_config_from_json(json);
+    let config = config::parse_layout_from_json(json);
     assert!(config.is_ok());
     let cfg = config.unwrap();
     assert_eq!(cfg.layouts.len(), 2);

@@ -158,12 +158,42 @@ apptidying save --own <path/to/layout.json>  # ターミナルウィンドウも
 
 ### ファイルパスとデフォルト設定
 
-- **デフォルト設定ファイル**: `~/Library/Application Support/biz.nosetech.apptidying/settings.json`
+- **設定ファイル (settings.json)**: `~/Library/Application Support/biz.nosetech.apptidying/settings.json`
+- **レイアウトファイル (layout.json)**: `~/Library/Application Support/biz.nosetech.apptidying/layout.json`
 - **ログファイル**: `~/Library/Application Support/biz.nosetech.apptidying/apptidying.log`
 
 ### 設定ファイルフォーマット
 
-#### 基本構造
+設定ファイルは2つのファイルに分離されています：
+
+#### 1. settings.json（アプリケーション設定）
+
+アプリケーションの動作設定と通知設定を定義します。
+
+```json
+{
+  "version": "1.0",
+  "timeout": 3000,
+  "notification": {
+    "info": "notification",
+    "warn": "notification",
+    "error": "dialog"
+  }
+}
+```
+
+**フィールド説明**:
+
+- `version`: バージョン情報（サポート: `1.0`）
+- `timeout`: アプリケーション起動待機時間（ミリ秒、デフォルト: 3000）
+- `notification`: 通知設定（オプション）
+  - `info`: INFO レベルの通知方式（`notification`, `dialog`, `none`）
+  - `warn`: WARN レベルの通知方式（`notification`, `dialog`, `none`）
+  - `error`: ERROR レベルの通知方式（`notification`, `dialog`, `none`）
+
+#### 2. layout.json（ウィンドウレイアウト定義）
+
+ウィンドウのレイアウト定義を格納します。
 
 ```json
 {
@@ -266,17 +296,24 @@ apptidying save --own <path/to/layout.json>  # ターミナルウィンドウも
 
 ### 通知のカスタマイズ
 
-設定ファイルで各レベルの通知方式を指定可能：
+settings.json で各レベルの通知方式を指定可能：
 
 ```json
 {
+  "version": "1.0",
   "notification": {
-    "info": "notification", // notification, dialog, none
+    "info": "notification",
     "warn": "notification",
     "error": "dialog"
   }
 }
 ```
+
+**指定可能な値**:
+
+- `notification`: macOS 通知センターに表示
+- `dialog`: ダイアログボックスで表示
+- `none`: 通知なし
 
 ## エラーハンドリング方針
 
@@ -509,7 +546,7 @@ Rust での実装では、以下を原則とする：
       // 制限事項: 実行環境によってウィンドウの配置が異なるため、
       //          JSON 構造の妥当性のみ検証し、具体的なウィンドウ数は検証しない
 
-      let result = save_layout(&get_default_config_path().unwrap(), false);
+      let result = save_layout(&get_default_layout_path().unwrap(), false);
 
       // 検証: save_layout が成功している
       assert!(result.is_ok());
@@ -569,11 +606,11 @@ cargo test test_show_notification_info_non_terminal -- --ignored --nocapture
 
 ### テストカバレッジ
 
-#### 現在のテスト実行状況（Issue #31 完了時点）
+#### 現在のテスト実行状況（Issue #79 完了時点）
 
-- **合計テスト数**: 522 テスト
-  - 実行可能テスト: 406 テスト（passed）
-  - スキップテスト: 116 テスト（ignored、osascript依存）
+- **合計テスト数**: 512 テスト
+  - 実行可能テスト: 399 テスト（passed）
+  - スキップテスト: 113 テスト（ignored、osascript/Accessibility API依存）
   - 失敗テスト: 0 テスト
 
 #### テストファイル別の構成

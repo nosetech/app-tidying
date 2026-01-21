@@ -25,40 +25,52 @@ fn main() {
 
     match args.command {
         Commands::Load { path } => {
-            // 1. 設定ファイルのロード
-            let config = if let Some(path) = path {
+            // 1. settings.json をロード（エラー時はデフォルト値を使用）
+            let timeout = if let Ok(settings) = config::load_default_settings() {
+                log::debug!("デフォルト settings.json を読み込みました");
+                settings.timeout.unwrap_or(3000)
+            } else {
+                log::debug!("デフォルト settings.json が見つかりません。デフォルト設定（3000ms）を使用します");
+                3000
+            };
+
+            // 2. layout.json をロード
+            let layout = if let Some(path) = path {
                 log::info!("Loading layout from: {}", path.display());
-                match config::load_config_file(&path) {
-                    Ok(cfg) => cfg,
+                match config::load_layout_file(&path) {
+                    Ok(layout_file) => layout_file,
                     Err(e) => {
-                        log::error!("設定ファイルの読み込みに失敗しました: {}", e);
+                        log::error!("レイアウトファイルの読み込みに失敗しました: {}", e);
                         logger::show_notification(
                             logger::NotificationLevel::Error,
-                            &format!("設定ファイルの読み込みに失敗しました: {}", e),
+                            &format!("レイアウトファイルの読み込みに失敗しました: {}", e),
                         );
                         std::process::exit(1);
                     }
                 }
             } else {
                 log::info!("Loading layout from default configuration");
-                match config::load_default_config() {
-                    Ok(cfg) => cfg,
+                match config::load_default_layout() {
+                    Ok(layout_file) => layout_file,
                     Err(e) => {
-                        log::error!("デフォルト設定ファイルの読み込みに失敗しました: {}", e);
+                        log::error!(
+                            "デフォルトレイアウトファイルの読み込みに失敗しました: {}",
+                            e
+                        );
                         logger::show_notification(
                             logger::NotificationLevel::Error,
-                            &format!("デフォルト設定ファイルの読み込みに失敗しました: {}", e),
+                            &format!(
+                                "デフォルトレイアウトファイルの読み込みに失敗しました: {}",
+                                e
+                            ),
                         );
                         std::process::exit(1);
                     }
                 }
             };
 
-            // 2. タイムアウト設定の取得（デフォルト3000ms）
-            let timeout = config.timeout.unwrap_or(3000);
-
             // 3. load処理の実行
-            match loader::load_layout(&config, timeout) {
+            match loader::load_layout(&layout, timeout) {
                 Ok(result) => {
                     // 成功時の処理
                     if result.all_success {
@@ -94,14 +106,14 @@ fn main() {
                 log::info!("レイアウトを保存します: {}", path.display());
                 path
             } else {
-                log::info!("デフォルト設定にレイアウトを保存します");
-                match config::get_default_config_path() {
+                log::info!("デフォルトレイアウトファイルにレイアウトを保存します");
+                match config::get_default_layout_path() {
                     Ok(default_path) => default_path,
                     Err(e) => {
-                        log::error!("デフォルト設定パスの取得に失敗しました: {}", e);
+                        log::error!("デフォルトレイアウトパスの取得に失敗しました: {}", e);
                         logger::show_notification(
                             logger::NotificationLevel::Error,
-                            &format!("デフォルト設定パスの取得に失敗しました: {}", e),
+                            &format!("デフォルトレイアウトパスの取得に失敗しました: {}", e),
                         );
                         std::process::exit(1);
                     }

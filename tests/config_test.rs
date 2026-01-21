@@ -1,7 +1,7 @@
 use apptidying::applescript::DisplayInfo;
 use apptidying::config::{
-    parse_position_value, parse_size_value, validate_config, validate_config_bounds,
-    validate_config_syntax, AppConfig, AppWindowConfig, DisplayConfig, LayoutConfig, Position,
+    parse_position_value, parse_size_value, validate_layout, validate_layout_bounds,
+    validate_layout_syntax, AppWindowConfig, DisplayConfig, LayoutConfig, LayoutFile, Position,
     Size,
 };
 use serde_json::json;
@@ -670,13 +670,13 @@ fn test_parse_size_odd_display_dimensions() {
 // Configuration Validation Tests (Phase 3-4)
 // =============================================================================
 
-/// validate_config_syntax() がバージョン確認を正確に実行することを検証
+/// validate_layout_syntax() がバージョン確認を正確に実行することを検証
 #[test]
-fn test_validate_config_syntax_version_ok() {
+fn test_validate_layout_syntax_version_ok() {
     // 目的: サポートされているバージョン (1.0) の設定が成功することを確認
     // 検証項目: バージョン 1.0 がサポートされていることを確認
 
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -689,22 +689,20 @@ fn test_validate_config_syntax_version_ok() {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     };
 
     // 検証: バージョンチェックが成功する
-    let result = validate_config_syntax(&config);
+    let result = validate_layout_syntax(&layout);
     assert!(result.is_ok());
 }
 
-/// validate_config_syntax() がサポートされていないバージョンでエラーを返すことを確認
+/// validate_layout_syntax() がサポートされていないバージョンでエラーを返すことを確認
 #[test]
-fn test_validate_config_syntax_version_ng() {
+fn test_validate_layout_syntax_version_ng() {
     // 目的: サポートされていないバージョン (2.0) の設定がエラーになることを確認
     // 検証項目: バージョン 2.0 がエラーになる
 
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "2.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -717,12 +715,10 @@ fn test_validate_config_syntax_version_ng() {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     };
 
     // 検証: バージョンチェックがエラーになる
-    let result = validate_config_syntax(&config);
+    let result = validate_layout_syntax(&layout);
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -730,13 +726,13 @@ fn test_validate_config_syntax_version_ng() {
         .contains("サポートされていないバージョン"));
 }
 
-/// validate_config_bounds() がディスプレイ外の座標を検出することを確認
+/// validate_layout_bounds() がディスプレイ外の座標を検出することを確認
 #[test]
 fn test_validate_display_bounds_position_out_of_display() {
     // 目的: ウィンドウの右端がディスプレイを超える場合にワーニングが発生することを確認
     // 検証項目: 座標とサイズの組み合わせでディスプレイ外判定が正確に動作
 
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -755,8 +751,6 @@ fn test_validate_display_bounds_position_out_of_display() {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     };
 
     let connected_displays = vec![DisplayInfo {
@@ -768,7 +762,7 @@ fn test_validate_display_bounds_position_out_of_display() {
     }];
 
     // 検証: 座標がディスプレイ外の場合、ワーニングが返される
-    let result = validate_config_bounds(&config, &connected_displays);
+    let result = validate_layout_bounds(&layout, &connected_displays);
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 1);
@@ -776,13 +770,13 @@ fn test_validate_display_bounds_position_out_of_display() {
     assert_eq!(warnings[0].app_name, "Google Chrome");
 }
 
-/// validate_config_bounds() が画面より大きいサイズを検出することを確認
+/// validate_layout_bounds() が画面より大きいサイズを検出することを確認
 #[test]
 fn test_validate_display_bounds_size_larger_than_display() {
     // 目的: ウィンドウの高さがディスプレイを超える場合にワーニングが発生することを確認
     // 検証項目: サイズがディスプレイより大きい場合の検出
 
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -801,8 +795,6 @@ fn test_validate_display_bounds_size_larger_than_display() {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     };
 
     let connected_displays = vec![DisplayInfo {
@@ -814,7 +806,7 @@ fn test_validate_display_bounds_size_larger_than_display() {
     }];
 
     // 検証: サイズがディスプレイを超える場合、ワーニングが返される
-    let result = validate_config_bounds(&config, &connected_displays);
+    let result = validate_layout_bounds(&layout, &connected_displays);
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 1);
@@ -822,13 +814,13 @@ fn test_validate_display_bounds_size_larger_than_display() {
     assert_eq!(warnings[0].app_name, "Safari");
 }
 
-/// validate_config_bounds() が接続されているディスプレイを正確に判定することを確認
+/// validate_layout_bounds() が接続されているディスプレイを正確に判定することを確認
 #[test]
 fn test_validate_display_exists_ok() {
     // 目的: 接続されているディスプレイ名が正確に判定されることを確認
     // 検証項目: 複数のディスプレイが接続されている場合、正しいものを特定
 
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -841,8 +833,6 @@ fn test_validate_display_exists_ok() {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     };
 
     let connected_displays = vec![
@@ -863,19 +853,19 @@ fn test_validate_display_exists_ok() {
     ];
 
     // 検証: 接続されているディスプレイに対してワーニングが発生しない
-    let result = validate_config_bounds(&config, &connected_displays);
+    let result = validate_layout_bounds(&layout, &connected_displays);
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert!(warnings.is_empty());
 }
 
-/// validate_config_bounds() が接続されていないディスプレイを検出することを確認
+/// validate_layout_bounds() が接続されていないディスプレイを検出することを確認
 #[test]
 fn test_validate_display_exists_ng() {
     // 目的: 接続されていないディスプレイ名でワーニングが発生することを確認
     // 検証項目: 存在しないディスプレイに対してワーニングが返される
 
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -888,8 +878,6 @@ fn test_validate_display_exists_ng() {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     };
 
     let connected_displays = vec![DisplayInfo {
@@ -901,7 +889,7 @@ fn test_validate_display_exists_ng() {
     }];
 
     // 検証: 接続されていないディスプレイに対してワーニングが発生する
-    let result = validate_config_bounds(&config, &connected_displays);
+    let result = validate_layout_bounds(&layout, &connected_displays);
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 1);
@@ -910,13 +898,13 @@ fn test_validate_display_exists_ng() {
     assert_eq!(warnings[0].display_name, "Nonexistent Display");
 }
 
-/// validate_config_bounds() が複数の警告を正確に返すことを確認
+/// validate_layout_bounds() が複数の警告を正確に返すことを確認
 #[test]
 fn test_validate_config_bounds_all_warnings() {
     // 目的: 複数の問題（座標外、サイズ大きい、ディスプレイなし）が同時に検出されることを確認
     // 検証項目: 複数の異なるウィンドウ設定で複数の警告が返される
 
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![
@@ -948,8 +936,6 @@ fn test_validate_config_bounds_all_warnings() {
                 },
             ],
         }],
-        notification: None,
-        timeout: None,
     };
 
     let connected_displays = vec![DisplayInfo {
@@ -961,7 +947,7 @@ fn test_validate_config_bounds_all_warnings() {
     }];
 
     // 検証: 複数の警告が返される
-    let result = validate_config_bounds(&config, &connected_displays);
+    let result = validate_layout_bounds(&layout, &connected_displays);
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 2); // 座標外 + ディスプレイなし
@@ -969,13 +955,13 @@ fn test_validate_config_bounds_all_warnings() {
     assert!(warnings[1].message.contains("ディスプレイ"));
 }
 
-/// validate_config() が構文チェックと境界値チェックを組み合わせることを確認
+/// validate_layout() が構文チェックと境界値チェックを組み合わせることを確認
 #[test]
-fn test_validate_config_syntax_and_bounds() {
+fn test_validate_layout_syntax_and_bounds() {
     // 目的: ラッパー関数が構文チェックと境界値チェックを正確に実行することを確認
     // 検証項目: バージョンエラー（構文）と座標外エラー（境界値）の両方が検出される
 
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -994,8 +980,6 @@ fn test_validate_config_syntax_and_bounds() {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     };
 
     let connected_displays = vec![DisplayInfo {
@@ -1007,7 +991,7 @@ fn test_validate_config_syntax_and_bounds() {
     }];
 
     // 検証: 構文チェックを通り、境界値警告が返される
-    let result = validate_config(&config, Some(&connected_displays));
+    let result = validate_layout(&layout, Some(&connected_displays));
     assert!(result.is_ok());
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 1);

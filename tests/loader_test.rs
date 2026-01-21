@@ -5,7 +5,9 @@
 // 実際の環境での動作検証が必要です。
 
 use apptidying::applescript;
-use apptidying::config::{AppConfig, AppWindowConfig, DisplayConfig, LayoutConfig, Position, Size};
+use apptidying::config::{
+    AppWindowConfig, DisplayConfig, LayoutConfig, LayoutFile, Position, Size,
+};
 use apptidying::loader::{load_layout, LoadError, LoadResult};
 use serde_json::json;
 
@@ -45,10 +47,10 @@ fn get_second_connected_display_name() -> Option<String> {
     }
 }
 
-/// テスト用の基本的な AppConfig を作成
-fn create_test_config_single_window() -> AppConfig {
+/// テスト用の基本的な LayoutFile を作成
+fn create_test_config_single_window() -> LayoutFile {
     let display_name = get_first_connected_display_name();
-    AppConfig {
+    LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -67,15 +69,13 @@ fn create_test_config_single_window() -> AppConfig {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     }
 }
 
 /// テスト用の複数ウィンドウ設定を作成
-fn create_test_config_multiple_windows() -> AppConfig {
+fn create_test_config_multiple_windows() -> LayoutFile {
     let display_name = get_first_connected_display_name();
-    AppConfig {
+    LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -108,24 +108,20 @@ fn create_test_config_multiple_windows() -> AppConfig {
                 ],
             }],
         }],
-        notification: None,
-        timeout: None,
     }
 }
 
 /// レイアウトが空の設定を作成
-fn create_test_config_empty_layouts() -> AppConfig {
-    AppConfig {
+fn create_test_config_empty_layouts() -> LayoutFile {
+    LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![],
-        notification: None,
-        timeout: None,
     }
 }
 
 /// 存在しないディスプレイを指定した設定を作成
-fn create_test_config_nonexistent_display() -> AppConfig {
-    AppConfig {
+fn create_test_config_nonexistent_display() -> LayoutFile {
+    LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -144,15 +140,13 @@ fn create_test_config_nonexistent_display() -> AppConfig {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     }
 }
 
 /// タイトル指定ありのウィンドウ設定を作成
-fn create_test_config_with_title() -> AppConfig {
+fn create_test_config_with_title() -> LayoutFile {
     let display_name = get_first_connected_display_name();
-    AppConfig {
+    LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -171,15 +165,13 @@ fn create_test_config_with_title() -> AppConfig {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     }
 }
 
 /// 位置のみ指定（サイズなし）の設定を作成
-fn create_test_config_position_only() -> AppConfig {
+fn create_test_config_position_only() -> LayoutFile {
     let display_name = get_first_connected_display_name();
-    AppConfig {
+    LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -195,15 +187,13 @@ fn create_test_config_position_only() -> AppConfig {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     }
 }
 
 /// サイズのみ指定（位置なし）の設定を作成
-fn create_test_config_size_only() -> AppConfig {
+fn create_test_config_size_only() -> LayoutFile {
     let display_name = get_first_connected_display_name();
-    AppConfig {
+    LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -219,15 +209,13 @@ fn create_test_config_size_only() -> AppConfig {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     }
 }
 
 /// 位置もサイズも指定なしの設定を作成
-fn create_test_config_no_position_no_size() -> AppConfig {
+fn create_test_config_no_position_no_size() -> LayoutFile {
     let display_name = get_first_connected_display_name();
-    AppConfig {
+    LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -240,13 +228,11 @@ fn create_test_config_no_position_no_size() -> AppConfig {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     }
 }
 
 /// 複数ディスプレイの設定を作成
-fn create_test_config_multiple_displays() -> AppConfig {
+fn create_test_config_multiple_displays() -> LayoutFile {
     let display_name = get_first_connected_display_name();
     let mut displays = vec![DisplayConfig {
         name: display_name,
@@ -283,18 +269,16 @@ fn create_test_config_multiple_displays() -> AppConfig {
         });
     }
 
-    AppConfig {
+    LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig { displays }],
-        notification: None,
-        timeout: None,
     }
 }
 
 /// タイムアウト設定ありの設定を作成
-fn create_test_config_with_timeout() -> AppConfig {
+fn create_test_config_with_timeout() -> LayoutFile {
     let display_name = get_first_connected_display_name();
-    AppConfig {
+    LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -313,8 +297,6 @@ fn create_test_config_with_timeout() -> AppConfig {
                 }],
             }],
         }],
-        notification: None,
-        timeout: Some(5000),
     }
 }
 
@@ -1133,9 +1115,9 @@ fn test_load_layout_absolute_position() {
 #[test]
 #[ignore] // osascript 実行に依存するため、CI環境ではスキップ
 fn test_load_layout_timeout_propagation() {
-    // 設定ファイルで指定されたタイムアウト値が使用される
+    // タイムアウト値を使用してload_layout が実行されることを確認
     let config = create_test_config_with_timeout();
-    let timeout_ms = config.timeout.unwrap_or(3000);
+    let timeout_ms = 5000; // LayoutFileにはtimeoutがないため、ここで直接指定
 
     let result = load_layout(&config, timeout_ms);
 

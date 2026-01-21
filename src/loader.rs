@@ -1,5 +1,5 @@
 use crate::applescript::{self, DisplayInfo};
-use crate::config::{AppConfig, AppWindowConfig};
+use crate::config::{AppWindowConfig, LayoutFile};
 use std::collections::HashSet;
 use std::thread;
 use std::time::Duration;
@@ -36,13 +36,13 @@ impl std::error::Error for LoadError {}
 /// ウィンドウレイアウトを復元する
 ///
 /// # Arguments
-/// * `config` - 設定ファイル (AppConfig)
+/// * `layout` - レイアウトファイル (LayoutFile)
 /// * `timeout_ms` - アプリ起動待機時間（ミリ秒）
 ///
 /// # Returns
 /// * `Ok(LoadResult)` - 成功または部分成功
 /// * `Err(LoadError)` - 全体失敗（致命的エラー）
-pub fn load_layout(config: &AppConfig, timeout_ms: u64) -> Result<LoadResult, LoadError> {
+pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, LoadError> {
     // 1. 接続されているディスプレイ情報を取得
     let connected_displays = applescript::get_all_connected_displays().map_err(|e| LoadError {
         message: format!("ディスプレイ情報の取得に失敗しました: {}", e),
@@ -50,9 +50,9 @@ pub fn load_layout(config: &AppConfig, timeout_ms: u64) -> Result<LoadResult, Lo
 
     log::debug!("接続ディスプレイ情報を取得しました");
 
-    // 2. 設定ファイルの境界値チェックを実行
+    // 2. レイアウトファイルの境界値チェックを実行
     let warnings =
-        crate::config::validate_config_bounds(config, &connected_displays).map_err(|e| {
+        crate::config::validate_layout_bounds(layout, &connected_displays).map_err(|e| {
             LoadError {
                 message: format!("設定ファイルの検証に失敗しました: {}", e),
             }
@@ -69,7 +69,7 @@ pub fn load_layout(config: &AppConfig, timeout_ms: u64) -> Result<LoadResult, Lo
     }
 
     // 3. 最初のレイアウトを使用
-    let layout = config.layouts.first().ok_or_else(|| LoadError {
+    let layout_config = layout.layouts.first().ok_or_else(|| LoadError {
         message: "レイアウトが定義されていません".to_string(),
     })?;
 
@@ -87,7 +87,7 @@ pub fn load_layout(config: &AppConfig, timeout_ms: u64) -> Result<LoadResult, Lo
     let mut failed_apps: Vec<String> = Vec::new();
 
     // 5. 各ディスプレイの設定を処理
-    for display_config in &layout.displays {
+    for display_config in &layout_config.displays {
         log::debug!("ディスプレイ '{}' の処理を開始", display_config.name);
 
         // 5.1 ディスプレイ情報を取得
