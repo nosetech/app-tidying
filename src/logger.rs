@@ -4,6 +4,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 
 #[allow(dead_code)]
 pub enum NotificationLevel {
@@ -25,6 +26,14 @@ thread_local! {
     static LOGGER_CONFIG: RefCell<Option<LoggerConfig>> = const { RefCell::new(None) };
 }
 
+/// ログファイルアクセスの排他制御用 Mutex
+/// マルチスレッド環境でのローテーション処理とログ書き込みを保護する
+static LOG_FILE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+fn get_log_file_lock() -> &'static Mutex<()> {
+    LOG_FILE_LOCK.get_or_init(|| Mutex::new(()))
+}
+
 fn get_log_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let home = dirs::home_dir().ok_or("Failed to get home directory")?;
     let log_dir = home.join("Library/Application Support/biz.nosetech.apptidying");
@@ -44,16 +53,19 @@ fn should_rotate_log(log_path: &std::path::Path) -> std::io::Result<bool> {
         return Ok(false);
     }
 
-    // ファイルサイズを取得
+    // ファイルサイズをバイト単位で取得
     let metadata = fs::metadata(log_path)?;
-    let file_size_mb = metadata.len() / (1024 * 1024);
+    let file_size_bytes = metadata.len();
 
     // 設定値を取得（デフォルト: 10MB）
     let max_size_mb = get_log_rotation_config()
         .map(|c| c.max_size_mb)
         .unwrap_or(10);
 
-    Ok(file_size_mb >= max_size_mb)
+    // バイト単位での正確な比較
+    let max_size_bytes = max_size_mb * 1024 * 1024;
+
+    Ok(file_size_bytes >= max_size_bytes)
 }
 
 /// ログファイルをローテーションする
@@ -101,12 +113,25 @@ fn get_log_rotation_config() -> Option<crate::config::LogRotationConfig> {
 }
 
 fn append_to_log_file(message: &str) -> std::io::Result<()> {
+    // ログファイルアクセスを排他制御で保護（マルチスレッド環境での競合を防止）
+    let _guard = get_log_file_lock().lock().map_err(|e| {
+        std::io::Error::other(format!("ログファイルロックの取得に失敗しました: {}", e))
+    })?;
+
     if let Ok(path) = get_log_file_path() {
         // ローテーションチェック
         if should_rotate_log(&path).unwrap_or(false) {
             if let Err(e) = rotate_log_file(&path) {
-                // ローテーション失敗をエラー出力に記録（ログ書き込みは継続）
-                eprintln!("[WARN] ログローテーションに失敗しました: {}", e);
+                let error_message = format!("ログローテーションに失敗しました: {}", e);
+
+                // ターミナル実行時は標準エラー出力のみ
+                if is_running_in_terminal() {
+                    eprintln!("[WARN] {}", error_message);
+                } else {
+                    // 非ターミナル実行時は通知センターにも表示
+                    eprintln!("[WARN] {}", error_message);
+                    show_rotation_error_notification(&error_message);
+                }
             }
         }
 
@@ -291,4 +316,25 @@ pub fn get_notification_config() -> Option<NotificationConfig> {
 pub fn escape_applescript_string_for_test(s: &str) -> String {
     // This function is for test compatibility, delegates to applescript module
     super::applescript::escape_applescript_string(s)
+}
+
+/// ローテーション失敗時の通知を表示（循環依存を避けるため単純な実装）
+fn show_rotation_error_notification(error_message: &str) {
+    let notification_message =
+        format!("App Tidying: ログローテーションエラー\n\n{}", error_message);
+
+    let script = format!(
+        r#"display notification "{}" with title "App Tidying""#,
+        super::applescript::escape_applescript_string(&notification_message)
+    );
+
+    match Command::new("osascript").arg("-e").arg(&script).output() {
+        Ok(output) if !output.status.success() => {
+            eprintln!("Failed to show rotation error notification");
+        }
+        Err(e) => {
+            eprintln!("Failed to execute osascript for rotation error: {}", e);
+        }
+        _ => {}
+    }
 }
