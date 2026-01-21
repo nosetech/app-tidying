@@ -13,9 +13,21 @@ use logger::LoggerConfig;
 fn main() {
     let args = Cli::parse();
 
+    // settings.json から設定を読み込む
+    let settings_result = config::load_default_settings();
+    let notification_config = settings_result
+        .as_ref()
+        .ok()
+        .and_then(|s| s.notification.clone());
+    let log_rotation_config = settings_result
+        .as_ref()
+        .ok()
+        .and_then(|s| s.log_rotation.clone());
+
     let logger_config = LoggerConfig {
         debug_mode: args.verbose,
-        notification_config: None,
+        notification_config,
+        log_rotation_config,
     };
 
     logger::init(logger_config);
@@ -26,7 +38,7 @@ fn main() {
     match args.command {
         Commands::Load { path } => {
             // 1. settings.json をロード（エラー時はデフォルト値を使用）
-            let timeout = if let Ok(settings) = config::load_default_settings() {
+            let timeout = if let Ok(settings) = &settings_result {
                 log::debug!("デフォルト settings.json を読み込みました");
                 settings.timeout.unwrap_or(3000)
             } else {

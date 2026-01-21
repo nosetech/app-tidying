@@ -14,25 +14,12 @@ pub enum NotificationLevel {
 
 pub struct LoggerConfig {
     pub debug_mode: bool,
-    pub notification_config: Option<NotificationConfig>,
+    pub notification_config: Option<crate::config::NotificationConfig>,
+    pub log_rotation_config: Option<crate::config::LogRotationConfig>,
 }
 
-#[derive(Clone)]
-pub struct NotificationConfig {
-    pub info: String,
-    pub warn: String,
-    pub error: String,
-}
-
-impl Default for NotificationConfig {
-    fn default() -> Self {
-        NotificationConfig {
-            info: "notification".to_string(),
-            warn: "notification".to_string(),
-            error: "dialog".to_string(),
-        }
-    }
-}
+// NotificationConfig は config モジュールから再エクスポート
+pub use crate::config::NotificationConfig;
 
 thread_local! {
     static LOGGER_CONFIG: RefCell<Option<LoggerConfig>> = const { RefCell::new(None) };
@@ -50,8 +37,80 @@ fn is_running_in_terminal() -> bool {
     std::env::var("TERM").is_ok()
 }
 
+/// ログローテーションが必要かどうかを判定する
+fn should_rotate_log(log_path: &std::path::Path) -> std::io::Result<bool> {
+    // ファイルが存在しない場合はローテーション不要
+    if !log_path.exists() {
+        return Ok(false);
+    }
+
+    // ファイルサイズを取得
+    let metadata = fs::metadata(log_path)?;
+    let file_size_mb = metadata.len() / (1024 * 1024);
+
+    // 設定値を取得（デフォルト: 10MB）
+    let max_size_mb = get_log_rotation_config()
+        .map(|c| c.max_size_mb)
+        .unwrap_or(10);
+
+    Ok(file_size_mb >= max_size_mb)
+}
+
+/// ログファイルをローテーションする
+fn rotate_log_file(log_path: &std::path::Path) -> std::io::Result<()> {
+    // 世代数を取得（デフォルト: 5）
+    let max_files = get_log_rotation_config().map(|c| c.max_files).unwrap_or(5);
+
+    let log_dir = log_path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "ログディレクトリが見つかりません",
+        )
+    })?;
+
+    // 最古の世代を削除
+    let oldest_path = log_dir.join(format!("apptidying.log.{}", max_files - 1));
+    if oldest_path.exists() {
+        fs::remove_file(&oldest_path)?;
+    }
+
+    // 世代をずらす（古い方から）
+    for i in (1..max_files).rev() {
+        let src = if i == 1 {
+            log_dir.join("apptidying.log")
+        } else {
+            log_dir.join(format!("apptidying.log.{}", i - 1))
+        };
+        let dst = log_dir.join(format!("apptidying.log.{}", i));
+
+        if src.exists() {
+            fs::rename(&src, &dst)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// ログローテーション設定を取得する
+fn get_log_rotation_config() -> Option<crate::config::LogRotationConfig> {
+    LOGGER_CONFIG.with(|cfg| {
+        cfg.borrow()
+            .as_ref()
+            .and_then(|c| c.log_rotation_config.clone())
+    })
+}
+
 fn append_to_log_file(message: &str) -> std::io::Result<()> {
     if let Ok(path) = get_log_file_path() {
+        // ローテーションチェック
+        if should_rotate_log(&path).unwrap_or(false) {
+            if let Err(e) = rotate_log_file(&path) {
+                // ローテーション失敗をエラー出力に記録（ログ書き込みは継続）
+                eprintln!("[WARN] ログローテーションに失敗しました: {}", e);
+            }
+        }
+
+        // ログファイルに追記
         let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         writeln!(file, "{}", message)?;
     }
@@ -77,6 +136,7 @@ pub fn init(config: LoggerConfig) {
         *cfg.borrow_mut() = Some(LoggerConfig {
             debug_mode: config.debug_mode,
             notification_config: config.notification_config.clone(),
+            log_rotation_config: config.log_rotation_config.clone(),
         });
     });
 
@@ -104,6 +164,7 @@ pub fn init_simple() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 }

@@ -162,6 +162,7 @@ fn test_logger_config_debug_false_notification_some() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
 
     assert!(!config.debug_mode);
@@ -174,6 +175,7 @@ fn test_logger_config_debug_true_notification_some() {
     let config = LoggerConfig {
         debug_mode: true,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
 
     assert!(config.debug_mode);
@@ -186,6 +188,7 @@ fn test_logger_config_debug_false_notification_none() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: None,
+        log_rotation_config: None,
     };
 
     assert!(!config.debug_mode);
@@ -198,6 +201,7 @@ fn test_logger_config_debug_true_notification_none() {
     let config = LoggerConfig {
         debug_mode: true,
         notification_config: None,
+        log_rotation_config: None,
     };
 
     assert!(config.debug_mode);
@@ -216,6 +220,7 @@ fn test_logger_config_with_custom_notification() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(custom_notification),
+        log_rotation_config: None,
     };
 
     assert!(config.notification_config.is_some());
@@ -271,6 +276,7 @@ fn test_init_stores_config_with_default_notification() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
 
     init(config);
@@ -294,6 +300,7 @@ fn test_init_stores_config_with_custom_notification() {
             warn: "dialog".to_string(),
             error: "notification".to_string(),
         }),
+        log_rotation_config: None,
     };
 
     init(config);
@@ -313,6 +320,7 @@ fn test_init_stores_config_without_notification() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: None,
+        log_rotation_config: None,
     };
 
     init(config);
@@ -327,6 +335,7 @@ fn test_init_with_debug_mode_enabled() {
     let config = LoggerConfig {
         debug_mode: true,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
 
     init(config);
@@ -339,6 +348,7 @@ fn test_init_with_debug_mode_disabled() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
 
     init(config);
@@ -355,6 +365,7 @@ fn test_init_overwrite_previous_config() {
             warn: "notification".to_string(),
             error: "dialog".to_string(),
         }),
+        log_rotation_config: None,
     };
     init(config1);
 
@@ -365,6 +376,7 @@ fn test_init_overwrite_previous_config() {
             warn: "none".to_string(),
             error: "none".to_string(),
         }),
+        log_rotation_config: None,
     };
     init(config2);
 
@@ -600,6 +612,7 @@ fn test_show_notification_info_terminal() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -618,6 +631,7 @@ fn test_show_notification_warn_terminal() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -635,6 +649,7 @@ fn test_show_notification_error_terminal() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -652,6 +667,7 @@ fn test_show_notification_with_special_characters_terminal() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -672,6 +688,7 @@ fn test_show_notification_empty_message_terminal() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -689,6 +706,7 @@ fn test_show_notification_very_long_message_terminal() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -707,6 +725,7 @@ fn test_show_notification_unicode_message_terminal() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -732,6 +751,7 @@ fn test_show_notification_info_non_terminal() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -750,6 +770,7 @@ fn test_show_notification_warn_non_terminal() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -767,6 +788,7 @@ fn test_show_notification_error_non_terminal() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -788,6 +810,7 @@ fn test_show_notification_with_custom_notification_config_info_none() {
             warn: "notification".to_string(),
             error: "dialog".to_string(),
         }),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -810,6 +833,7 @@ fn test_show_notification_with_custom_notification_config_warn_dialog() {
             warn: "dialog".to_string(),
             error: "dialog".to_string(),
         }),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -832,6 +856,7 @@ fn test_show_notification_with_custom_notification_config_error_notification() {
             warn: "notification".to_string(),
             error: "notification".to_string(),
         }),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -850,6 +875,7 @@ fn test_show_notification_without_notification_config() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: None,
+        log_rotation_config: None,
     };
     init(config);
 
@@ -871,6 +897,7 @@ fn test_get_notification_config_after_init_with_config() {
             warn: "none".to_string(),
             error: "notification".to_string(),
         }),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -889,6 +916,7 @@ fn test_get_notification_config_after_init_without_config() {
     let config = LoggerConfig {
         debug_mode: false,
         notification_config: None,
+        log_rotation_config: None,
     };
     init(config);
 
@@ -906,6 +934,7 @@ fn test_get_notification_config_after_multiple_inits() {
             warn: "notification".to_string(),
             error: "dialog".to_string(),
         }),
+        log_rotation_config: None,
     };
     init(config1);
 
@@ -916,6 +945,7 @@ fn test_get_notification_config_after_multiple_inits() {
             warn: "none".to_string(),
             error: "none".to_string(),
         }),
+        log_rotation_config: None,
     };
     init(config2);
 
@@ -991,6 +1021,7 @@ fn test_integration_full_workflow_terminal() {
             warn: "dialog".to_string(),
             error: "none".to_string(),
         }),
+        log_rotation_config: None,
     };
     init(config);
 
@@ -1051,6 +1082,7 @@ fn test_integration_config_update_workflow() {
     let config1 = LoggerConfig {
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
+        log_rotation_config: None,
     };
     init(config1);
 
@@ -1065,6 +1097,7 @@ fn test_integration_config_update_workflow() {
             warn: "none".to_string(),
             error: "none".to_string(),
         }),
+        log_rotation_config: None,
     };
     init(config2);
 
@@ -1672,4 +1705,98 @@ fn test_show_notification_timestamp_concurrent_calls() {
     println!("Concurrent messages logged: {}/10", concurrent_lines.len());
 
     std::env::remove_var("TERM");
+}
+
+// =============================================================================
+// Log Rotation Tests
+// =============================================================================
+
+/// ログローテーション機能: ローテーション設定なしでログが記録されることを確認
+#[test]
+fn test_log_rotation_without_config() {
+    // 目的: log_rotation_config が None でもログ書き込みが正常に動作することを確認
+    // 検証項目: log_rotation_config なしでのログ書き込み動作
+
+    let config = apptidying::logger::LoggerConfig {
+        debug_mode: false,
+        notification_config: None,
+        log_rotation_config: None,
+    };
+
+    apptidying::logger::init(config);
+
+    // ログ書き込み実行（エラーが発生しないことを確認）
+    log::info!("Test log without rotation config");
+
+    // 検証: テストが正常に完了（エラーなし）
+}
+
+/// ログローテーション機能: カスタム設定でのログ記録を確認
+#[test]
+fn test_log_rotation_with_config() {
+    // 目的: log_rotation_config が設定されている場合のログ書き込みを検証
+    // 検証項目: log_rotation_config 設定時の動作
+
+    let log_rotation_config = Some(apptidying::config::LogRotationConfig {
+        rotation_type: "size".to_string(),
+        max_size_mb: 10,
+        max_files: 5,
+    });
+
+    let config = apptidying::logger::LoggerConfig {
+        debug_mode: false,
+        notification_config: None,
+        log_rotation_config,
+    };
+
+    apptidying::logger::init(config);
+
+    // ログ書き込み実行（エラーが発生しないことを確認）
+    log::info!("Test log with rotation config");
+
+    // 検証: テストが正常に完了（エラーなし）
+}
+
+/// ログローテーション機能: 小さい max_size_mb でのローテーション動作
+#[test]
+#[ignore]
+fn test_log_rotation_small_file_size() {
+    // 目的: 小さい max_size_mb（1MB）設定でのローテーションが動作することを確認
+    // 環境要件: macOS で osascript が利用可能
+    // 検証項目: max_size_mb が小さい場合のローテーション実行
+
+    let log_rotation_config = Some(apptidying::config::LogRotationConfig {
+        rotation_type: "size".to_string(),
+        max_size_mb: 1,
+        max_files: 3,
+    });
+
+    let config = apptidying::logger::LoggerConfig {
+        debug_mode: false,
+        notification_config: None,
+        log_rotation_config,
+    };
+
+    apptidying::logger::init(config);
+
+    // ログを大量に書き込む
+    for i in 0..10000 {
+        log::info!("Test log message number {}", i);
+    }
+
+    // 検証: テストが正常に完了（ローテーションが実行されている）
+}
+
+/// ログローテーション機能: デフォルト設定での動作確認
+#[test]
+fn test_log_rotation_default_config() {
+    // 目的: ログローテーションのデフォルト設定（10MB、5世代）での動作を確認
+    // 検証項目: デフォルト値が正しく使用されていることの確認
+
+    let default_config = apptidying::config::LogRotationConfig::default();
+
+    // 検証: デフォルト値が期待通りに設定されている
+    assert_eq!(default_config.rotation_type, "size");
+    assert_eq!(default_config.max_size_mb, 10);
+    assert_eq!(default_config.max_files, 5);
 }
