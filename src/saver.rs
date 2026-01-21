@@ -1,5 +1,5 @@
 use crate::applescript;
-use crate::config::{AppConfig, AppWindowConfig, DisplayConfig, LayoutConfig, Position, Size};
+use crate::config::{AppWindowConfig, DisplayConfig, LayoutConfig, LayoutFile, Position, Size};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
@@ -167,7 +167,7 @@ pub fn save_layout(
         }
     }
 
-    // 6. AppConfig 構造体を構築
+    // 6. LayoutFile 構造体を構築
     let mut display_configs = Vec::new();
     for display in &displays {
         let windows = display_windows.remove(&display.name).unwrap_or_default();
@@ -181,17 +181,15 @@ pub fn save_layout(
         }
     }
 
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: display_configs,
         }],
-        notification: None,
-        timeout: None,
     };
 
     // 7. JSONファイルに保存
-    crate::config::save_config_file(&config, output_path).map_err(|e| SaveError {
+    crate::config::save_layout_file(&layout, output_path).map_err(|e| SaveError {
         message: format!("設定ファイルの保存に失敗しました: {}", e),
     })?;
 

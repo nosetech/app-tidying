@@ -55,8 +55,8 @@
 /// 可能性があります。これはmacOSの座標系とディスプレイ配置によって発生する正常な状態です。
 use apptidying::applescript::{AppInfo, DisplayInfo, WindowInfo};
 use apptidying::config::{
-    get_default_config_path, save_config_file, AppConfig, AppWindowConfig, DisplayConfig,
-    LayoutConfig, Position, Size,
+    get_default_layout_path, save_layout_file, AppWindowConfig, DisplayConfig, LayoutConfig,
+    LayoutFile, Position, Size,
 };
 use apptidying::saver::{save_layout, SaveError, SaveResult};
 use serde_json::json;
@@ -274,25 +274,25 @@ fn test_save_error_error_trait() {
 // get_default_config_path() のテスト
 // =============================================================================
 
-/// デフォルト設定ファイルパスが正しく取得できることを確認
+/// デフォルトレイアウトファイルパスが正しく取得できることを確認
 ///
 /// 検証項目：
 /// - 正常系：デフォルトパスが期待される形式（~/Library/Application Support/...）
 /// - 正常系：パスがホームディレクトリから始まる
 /// - 異常系：ホームディレクトリが取得できない場合はエラーメッセージが返される
 #[test]
-fn test_get_default_config_path() {
-    let result = get_default_config_path();
+fn test_get_default_layout_path() {
+    let result = get_default_layout_path();
 
     match result {
         Ok(path) => {
-            println!("✓ デフォルト設定パス: {}", path.display());
+            println!("✓ デフォルトレイアウトパス: {}", path.display());
 
             // パスが期待される形式であることを確認
             let path_str = path.to_string_lossy();
             assert!(
-                path_str.contains("Library/Application Support/biz.nosetech.apptidying/settings.json"),
-                "パスに 'Library/Application Support/biz.nosetech.apptidying/settings.json' が含まれる必要があります。実際: {}",
+                path_str.contains("Library/Application Support/biz.nosetech.apptidying/layout.json"),
+                "パスに 'Library/Application Support/biz.nosetech.apptidying/layout.json' が含まれる必要があります。実際: {}",
                 path_str
             );
 
@@ -323,10 +323,10 @@ fn test_get_default_config_path() {
 /// 親ディレクトリが存在しない場合、自動的にディレクトリが作成されることを確認
 ///
 /// 検証項目：
-/// - 親ディレクトリが存在しない状態でも save_config_file() が成功する
+/// - 親ディレクトリが存在しない状態でも save_layout_file() が成功する
 /// - 設定ファイルが作成される
 #[test]
-fn test_save_config_file_creates_directory() {
+fn test_save_layout_file_creates_directory() {
     let temp_path = create_temp_config_path("creates_directory");
 
     let parent_dir = temp_path.parent().unwrap();
@@ -335,7 +335,7 @@ fn test_save_config_file_creates_directory() {
     }
 
     // テスト用の設定を作成
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -354,16 +354,14 @@ fn test_save_config_file_creates_directory() {
                 }],
             }],
         }],
-        notification: None,
-        timeout: None,
     };
 
     // 保存を実行
-    let result = save_config_file(&config, &temp_path);
+    let result = save_layout_file(&layout, &temp_path);
 
     assert!(
         result.is_ok(),
-        "save_config_file() が成功する必要があります"
+        "save_layout_file() が成功する必要があります"
     );
 
     // ファイルが作成されたことを確認
@@ -379,13 +377,12 @@ fn test_save_config_file_creates_directory() {
 /// - version が "1.0" として保存される
 /// - layouts が配列として保存される
 /// - 数値指定とパターン指定の両方が正しく保存される
-/// - timeout が正しく保存される
 #[test]
-fn test_save_config_file_writes_json() {
+fn test_save_layout_file_writes_json() {
     let temp_path = create_temp_config_path("writes_json");
 
     // テスト用の設定を作成
-    let config = AppConfig {
+    let layout = LayoutFile {
         version: "1.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
@@ -418,16 +415,14 @@ fn test_save_config_file_writes_json() {
                 ],
             }],
         }],
-        notification: None,
-        timeout: Some(5000),
     };
 
     // 保存を実行
-    let result = save_config_file(&config, &temp_path);
+    let result = save_layout_file(&layout, &temp_path);
 
     assert!(
         result.is_ok(),
-        "save_config_file() が成功する必要があります"
+        "save_layout_file() が成功する必要があります"
     );
 
     // ファイルが作成されたことを確認
@@ -455,18 +450,18 @@ fn test_save_config_file_writes_json() {
         "layouts の長さが 1 である必要があります"
     );
 
-    let layout = &parsed["layouts"][0];
+    let layout_obj = &parsed["layouts"][0];
     assert!(
-        layout["displays"].is_array(),
+        layout_obj["displays"].is_array(),
         "displays は配列である必要があります"
     );
     assert_eq!(
-        layout["displays"].as_array().unwrap().len(),
+        layout_obj["displays"].as_array().unwrap().len(),
         1,
         "displays の長さが 1 である必要があります"
     );
 
-    let display = &layout["displays"][0];
+    let display = &layout_obj["displays"][0];
     assert_eq!(
         display["name"], "Built-in",
         "display name が一致する必要があります"
@@ -525,9 +520,6 @@ fn test_save_config_file_writes_json() {
         "size.height が一致する必要があります"
     );
 
-    // timeout の検証
-    assert_eq!(parsed["timeout"], 5000, "timeout が一致する必要があります");
-
     // クリーンアップ
     cleanup_temp_file(&temp_path);
 }
@@ -545,7 +537,7 @@ fn test_save_config_file_writes_json() {
 #[test]
 #[ignore]
 fn test_save_layout_default_path() {
-    let default_path_result = get_default_config_path();
+    let default_path_result = get_default_layout_path();
     assert!(
         default_path_result.is_ok(),
         "デフォルトパスの取得に失敗しました"
@@ -555,7 +547,7 @@ fn test_save_layout_default_path() {
     let include_own_terminal = false;
 
     println!("\n=== テスト: test_save_layout_default_path ===");
-    println!("デフォルト設定パス: {}", output_path.display());
+    println!("デフォルトレイアウトパス: {}", output_path.display());
 
     let result = save_layout(&output_path, include_own_terminal);
 
@@ -588,7 +580,7 @@ fn test_save_layout_default_path() {
                 "layouts は配列である必要があります"
             );
 
-            println!("✓ 保存された設定ファイルの構造を検証しました");
+            println!("✓ 保存されたレイアウトファイルの構造を検証しました");
         }
         Err(e) => {
             println!("✗ テスト失敗: {}", e);
@@ -857,7 +849,7 @@ fn test_save_layout_saves_correct_structure() {
 /// 実行環境: macOS ローカルのみ（CI環境ではスキップ）
 /// 検証項目：
 /// - save_layout() が成功する
-/// - load_config_file() が成功する
+/// - load_layout_file() が成功する
 /// - 読み込まれた設定の構造が正しい
 ///
 /// 制限事項：
@@ -867,7 +859,7 @@ fn test_save_layout_saves_correct_structure() {
 #[test]
 #[ignore]
 fn test_save_and_load_roundtrip() {
-    use apptidying::config::load_config_file;
+    use apptidying::config::load_layout_file;
 
     let output_path = create_temp_config_path("roundtrip");
     let include_own_terminal = false;
@@ -889,23 +881,23 @@ fn test_save_and_load_roundtrip() {
             );
 
             // 2. 読み込み
-            let load_result = load_config_file(&output_path);
+            let load_result = load_layout_file(&output_path);
 
             match load_result {
-                Ok(config) => {
+                Ok(layout) => {
                     println!("✓ 読み込み成功");
 
                     // 3. 検証
                     assert_eq!(
-                        config.version, "1.0",
+                        layout.version, "1.0",
                         "version が '1.0' である必要があります"
                     );
                     assert!(
-                        !config.layouts.is_empty(),
+                        !layout.layouts.is_empty(),
                         "layouts が空でない必要があります"
                     );
                     assert!(
-                        !config.layouts[0].displays.is_empty(),
+                        !layout.layouts[0].displays.is_empty(),
                         "displays が空でない必要があります"
                     );
 
@@ -917,7 +909,7 @@ fn test_save_and_load_roundtrip() {
                 Err(e) => {
                     println!("✗ 読み込み失敗: {}", e);
                     cleanup_temp_file(&output_path);
-                    panic!("設定ファイルの読み込みに失敗しました");
+                    panic!("レイアウトファイルの読み込みに失敗しました");
                 }
             }
         }
