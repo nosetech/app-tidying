@@ -5,10 +5,11 @@
 use serde_json::{json, Value};
 
 use crate::applescript::osascript::run_osascript;
-use crate::applescript::utils::{escape_applescript_string, parse_single_window, parse_window_list};
+use crate::applescript::utils::{
+    escape_applescript_string, parse_single_window, parse_window_list,
+};
 
 pub use crate::applescript::utils::WindowType;
-
 
 /// ウィンドウ情報
 #[derive(Debug, Clone)]
