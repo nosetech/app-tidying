@@ -178,6 +178,11 @@ apptidying save --own <path/to/layout.json>  # ターミナルウィンドウも
     "info": "notification",
     "warn": "notification",
     "error": "dialog"
+  },
+  "log_rotation": {
+    "rotation_type": "size",
+    "max_size_mb": 10,
+    "max_files": 5
   }
 }
 ```
@@ -190,6 +195,10 @@ apptidying save --own <path/to/layout.json>  # ターミナルウィンドウも
   - `info`: INFO レベルの通知方式（`notification`, `dialog`, `none`）
   - `warn`: WARN レベルの通知方式（`notification`, `dialog`, `none`）
   - `error`: ERROR レベルの通知方式（`notification`, `dialog`, `none`）
+- `log_rotation`: ログローテーション設定（オプション）
+  - `rotation_type`: ローテーション方式（現在は `size` のみサポート）
+  - `max_size_mb`: 最大ファイルサイズ（MB単位、デフォルト: 10）
+  - `max_files`: 保持する世代数（デフォルト: 5）
 
 #### 2. layout.json（ウィンドウレイアウト定義）
 
@@ -293,6 +302,38 @@ apptidying save --own <path/to/layout.json>  # ターミナルウィンドウも
   - ターミナル実行時：標準出力に出力される全メッセージ
   - 非ターミナル実行時：通知センター/ダイアログに表示される全メッセージ
   - タイムスタンプ付き（`YYYY-MM-DD HH:MM:SS`）でログファイルに記録
+
+#### ログローテーション機能
+
+ログファイルのサイズが増大し続けるのを防ぐため、自動的にログファイルをローテーションします。
+
+ログファイルが指定サイズ（デフォルト：10MB）を超えた場合、自動的に以下のようにローテーションされます：
+
+- `apptidying.log` → `apptidying.log.1`
+- `apptidying.log.1` → `apptidying.log.2`
+- ...
+- `apptidying.log.4` → 削除（max_files=5 の場合）
+
+設定は settings.json の `log_rotation` フィールドで指定します：
+
+```json
+{
+  "version": "1.0",
+  "log_rotation": {
+    "rotation_type": "size",
+    "max_size_mb": 10,
+    "max_files": 5
+  }
+}
+```
+
+**フィールド説明**:
+
+- `rotation_type`: ローテーション方式（現在は `size` のみサポート）
+- `max_size_mb`: 最大ファイルサイズ（MB単位、デフォルト: 10）
+- `max_files`: 保持する世代数（デフォルト: 5）
+
+ローテーション設定を省略した場合、デフォルト値が使用されます。
 
 ### 通知のカスタマイズ
 

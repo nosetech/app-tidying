@@ -1,8 +1,8 @@
 use apptidying::applescript::DisplayInfo;
 use apptidying::config::{
-    parse_position_value, parse_size_value, validate_layout, validate_layout_bounds,
-    validate_layout_syntax, AppWindowConfig, DisplayConfig, LayoutConfig, LayoutFile, Position,
-    Size,
+    parse_position_value, parse_settings_from_json, parse_size_value, validate_layout,
+    validate_layout_bounds, validate_layout_syntax, AppWindowConfig, DisplayConfig, LayoutConfig,
+    LayoutFile, LogRotationConfig, Position, Size,
 };
 use serde_json::json;
 
@@ -996,4 +996,155 @@ fn test_validate_layout_syntax_and_bounds() {
     let warnings = result.unwrap();
     assert_eq!(warnings.len(), 1);
     assert!(warnings[0].message.contains("右端"));
+}
+
+// =============================================================================
+// LogRotationConfig Tests
+// =============================================================================
+
+/// LogRotationConfig がデフォルト値で正しく作成できることを確認
+#[test]
+fn test_log_rotation_config_default_values() {
+    // 目的: LogRotationConfig のデフォルト値の検証
+    // 検証項目: rotation_type, max_size_mb, max_files のデフォルト値
+
+    let config = LogRotationConfig::default();
+
+    // 検証: デフォルト値が設定されている
+    assert_eq!(config.rotation_type, "size");
+    assert_eq!(config.max_size_mb, 10);
+    assert_eq!(config.max_files, 5);
+}
+
+/// LogRotationConfig がカスタム値で作成できることを確認
+#[test]
+fn test_log_rotation_config_custom_values() {
+    // 目的: LogRotationConfig のカスタム値での動作を検証
+    // 検証項目: 各フィールドに異なる値を設定できることを確認
+
+    let config = LogRotationConfig {
+        rotation_type: "size".to_string(),
+        max_size_mb: 50,
+        max_files: 10,
+    };
+
+    // 検証: カスタム値が設定されている
+    assert_eq!(config.rotation_type, "size");
+    assert_eq!(config.max_size_mb, 50);
+    assert_eq!(config.max_files, 10);
+}
+
+/// settings.json に log_rotation が含まれる場合のパース
+#[test]
+fn test_parse_settings_with_log_rotation() {
+    // 目的: log_rotation フィールドが含まれる settings.json を正しくパースできることを確認
+    // 検証項目: JSON パース、log_rotation フィールドの抽出
+
+    let json_str = r#"{
+        "version": "1.0",
+        "log_rotation": {
+            "rotation_type": "size",
+            "max_size_mb": 20,
+            "max_files": 7
+        }
+    }"#;
+
+    let result = parse_settings_from_json(json_str);
+
+    // 検証: パースが成功し、log_rotation フィールドが正しく設定されている
+    assert!(result.is_ok());
+    let settings = result.unwrap();
+    assert!(settings.log_rotation.is_some());
+
+    let log_rotation = settings.log_rotation.unwrap();
+    assert_eq!(log_rotation.rotation_type, "size");
+    assert_eq!(log_rotation.max_size_mb, 20);
+    assert_eq!(log_rotation.max_files, 7);
+}
+
+/// log_rotation フィールドが省略された場合、デフォルト値が使用されることを確認
+#[test]
+fn test_parse_settings_without_log_rotation() {
+    // 目的: log_rotation フィールドが省略されても parse_settings_from_json がエラーにならないことを確認
+    // 検証項目: オプショナルフィールドとしての動作
+
+    let json_str = r#"{
+        "version": "1.0"
+    }"#;
+
+    let result = parse_settings_from_json(json_str);
+
+    // 検証: パースが成功し、log_rotation は None
+    assert!(result.is_ok());
+    let settings = result.unwrap();
+    assert!(settings.log_rotation.is_none());
+}
+
+/// 無効な rotation_type がエラーになることを確認
+#[test]
+fn test_validate_settings_with_invalid_rotation_type() {
+    // 目的: 無効な rotation_type 値がバリデーションエラーになることを確認
+    // 検証項目: rotation_type の値チェック
+
+    let json_str = r#"{
+        "version": "1.0",
+        "log_rotation": {
+            "rotation_type": "invalid_type",
+            "max_size_mb": 10,
+            "max_files": 5
+        }
+    }"#;
+
+    let result = parse_settings_from_json(json_str);
+
+    // 検証: バリデーションエラーが返される
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("無効な log_rotation.rotation_type"));
+}
+
+/// max_size_mb が 0 の場合、エラーになることを確認
+#[test]
+fn test_validate_settings_with_invalid_max_size_mb() {
+    // 目的: max_size_mb が 0 以下の場合、バリデーションエラーになることを確認
+    // 検証項目: max_size_mb の最小値チェック
+
+    let json_str = r#"{
+        "version": "1.0",
+        "log_rotation": {
+            "rotation_type": "size",
+            "max_size_mb": 0,
+            "max_files": 5
+        }
+    }"#;
+
+    let result = parse_settings_from_json(json_str);
+
+    // 検証: バリデーションエラーが返される
+    assert!(result.is_err());
+    assert!(result.unwrap_err().message.contains("max_size_mb は1以上"));
+}
+
+/// max_files が 0 の場合、エラーになることを確認
+#[test]
+fn test_validate_settings_with_invalid_max_files() {
+    // 目的: max_files が 0 以下の場合、バリデーションエラーになることを確認
+    // 検証項目: max_files の最小値チェック
+
+    let json_str = r#"{
+        "version": "1.0",
+        "log_rotation": {
+            "rotation_type": "size",
+            "max_size_mb": 10,
+            "max_files": 0
+        }
+    }"#;
+
+    let result = parse_settings_from_json(json_str);
+
+    // 検証: バリデーションエラーが返される
+    assert!(result.is_err());
+    assert!(result.unwrap_err().message.contains("max_files は1以上"));
 }

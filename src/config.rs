@@ -87,6 +87,54 @@ pub struct NotificationConfig {
     pub error: String,
 }
 
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        NotificationConfig {
+            info: default_notification_info(),
+            warn: default_notification_warn(),
+            error: default_notification_error(),
+        }
+    }
+}
+
+fn default_rotation_type() -> String {
+    "size".to_string()
+}
+
+fn default_max_size_mb() -> u64 {
+    10
+}
+
+fn default_max_files() -> u32 {
+    5
+}
+
+/// ログローテーション設定構造体
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LogRotationConfig {
+    /// ローテーション方式（現在は "size" のみサポート）
+    #[serde(default = "default_rotation_type")]
+    pub rotation_type: String,
+
+    /// 最大ファイルサイズ（MB単位）
+    #[serde(default = "default_max_size_mb")]
+    pub max_size_mb: u64,
+
+    /// 保持する世代数
+    #[serde(default = "default_max_files")]
+    pub max_files: u32,
+}
+
+impl Default for LogRotationConfig {
+    fn default() -> Self {
+        LogRotationConfig {
+            rotation_type: default_rotation_type(),
+            max_size_mb: default_max_size_mb(),
+            max_files: default_max_files(),
+        }
+    }
+}
+
 /// settings.json 用構造体
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppSettings {
@@ -95,6 +143,8 @@ pub struct AppSettings {
     pub notification: Option<NotificationConfig>,
     #[serde(default)]
     pub timeout: Option<u64>,
+    #[serde(default)]
+    pub log_rotation: Option<LogRotationConfig>,
 }
 
 /// layout.json 用構造体
@@ -289,6 +339,11 @@ pub fn validate_settings_syntax(settings: &AppSettings) -> Result<(), AppConfigE
         validate_notification_config(notification)?;
     }
 
+    // ログローテーション設定の検証
+    if let Some(ref log_rotation) = settings.log_rotation {
+        validate_log_rotation_config(log_rotation)?;
+    }
+
     Ok(())
 }
 
@@ -453,6 +508,36 @@ fn validate_notification_config(notification: &NotificationConfig) -> Result<(),
                 "無効な notification.error 値: '{}' (notification, dialog または none を指定)",
                 notification.error
             ),
+        });
+    }
+
+    Ok(())
+}
+
+/// ログローテーション設定を検証する
+#[allow(dead_code)]
+fn validate_log_rotation_config(log_rotation: &LogRotationConfig) -> Result<(), AppConfigError> {
+    // rotation_type の検証
+    if log_rotation.rotation_type != "size" {
+        return Err(AppConfigError {
+            message: format!(
+                "無効な log_rotation.rotation_type 値: '{}' (size のみサポート)",
+                log_rotation.rotation_type
+            ),
+        });
+    }
+
+    // max_size_mb の検証（1以上）
+    if log_rotation.max_size_mb < 1 {
+        return Err(AppConfigError {
+            message: "log_rotation.max_size_mb は1以上の値である必要があります".to_string(),
+        });
+    }
+
+    // max_files の検証（1以上）
+    if log_rotation.max_files < 1 {
+        return Err(AppConfigError {
+            message: "log_rotation.max_files は1以上の値である必要があります".to_string(),
         });
     }
 
