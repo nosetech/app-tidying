@@ -18,3 +18,20 @@ chrono = "0.4"
 tempfile = "3.8"
 predicates = "3.0"
 regex = "1.10"
+
+# Lint configuration
+# See: https://rust-lang.github.io/rfcs/3389-manifest-lint.html
+
+[lints.rust]
+# Rust 標準 lint の設定
+# 公開 API（re-exports）は必須なため許可
+unused_imports = "allow"
+# テストでのみ使用される関数/メソッドは許可
+dead_code = "allow"
+
+[lints.clippy]
+# Clippy lint の設定
+# 全般的なチェック（推奨）
+all = "warn"
+# pedantic は詳細度が高いため、必要な場合のみ個別指定で許可
+pedantic = "allow"
