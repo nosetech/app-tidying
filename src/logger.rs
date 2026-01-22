@@ -35,7 +35,7 @@ fn get_log_file_lock() -> &'static Mutex<()> {
 }
 
 fn get_log_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let home = dirs::home_dir().ok_or("Failed to get home directory")?;
+    let home = dirs::home_dir().ok_or("ホームディレクトリの取得に失敗しました")?;
     let log_dir = home.join("Library/Application Support/biz.nosetech.apptidying");
     fs::create_dir_all(&log_dir)?;
     Ok(log_dir.join("apptidying.log"))
@@ -273,12 +273,12 @@ fn show_notification_center(message: &str) {
     match Command::new("osascript").arg("-e").arg(&script).output() {
         Ok(output) if !output.status.success() => {
             log::warn!(
-                "Failed to show notification: {}",
+                "通知の表示に失敗しました: {}",
                 String::from_utf8_lossy(&output.stderr)
             );
         }
         Err(e) => {
-            log::warn!("Failed to execute osascript: {}", e);
+            log::warn!("osascript の実行に失敗しました: {}", e);
         }
         _ => {}
     }
@@ -292,12 +292,12 @@ fn show_dialog(message: &str) {
     match Command::new("osascript").arg("-e").arg(&script).output() {
         Ok(output) if !output.status.success() => {
             log::warn!(
-                "Failed to show dialog: {}",
+                "ダイアログの表示に失敗しました: {}",
                 String::from_utf8_lossy(&output.stderr)
             );
         }
         Err(e) => {
-            log::warn!("Failed to execute osascript: {}", e);
+            log::warn!("osascript の実行に失敗しました: {}", e);
         }
         _ => {}
     }
@@ -314,7 +314,7 @@ pub fn get_notification_config() -> Option<NotificationConfig> {
 
 #[allow(dead_code)]
 pub fn escape_applescript_string_for_test(s: &str) -> String {
-    // This function is for test compatibility, delegates to applescript module
+    // このメソッドはテスト互換性のため、applescript モジュールにデリゲート
     super::applescript::escape_applescript_string(s)
 }
 
@@ -330,10 +330,13 @@ fn show_rotation_error_notification(error_message: &str) {
 
     match Command::new("osascript").arg("-e").arg(&script).output() {
         Ok(output) if !output.status.success() => {
-            eprintln!("Failed to show rotation error notification");
+            eprintln!("ローテーション失敗通知の表示に失敗しました");
         }
         Err(e) => {
-            eprintln!("Failed to execute osascript for rotation error: {}", e);
+            eprintln!(
+                "ローテーション失敗通知の osascript 実行に失敗しました: {}",
+                e
+            );
         }
         _ => {}
     }

@@ -9,26 +9,26 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
 
-    /// Enable verbose/debug output
+    /// 詳細/デバッグ出力を有効化
     #[arg(short, long, global = true)]
     pub verbose: bool,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Restore window layout from a configuration file
+    /// 設定ファイルからウィンドウレイアウトを復元
     #[command(about = "Restore window layout")]
     Load {
-        /// Path to the layout configuration file (defaults to ~/Library/Application Support/biz.nosetech.apptidying/settings.json)
+        /// レイアウト設定ファイルのパス（デフォルト: ~/Library/Application Support/biz.nosetech.apptidying/layout.json）
         path: Option<PathBuf>,
     },
-    /// Save current window layout to a configuration file
+    /// 現在のウィンドウレイアウトを設定ファイルに保存
     #[command(about = "Save current window layout")]
     Save {
-        /// Path to save the layout configuration file (defaults to ~/Library/Application Support/biz.nosetech.apptidying/settings.json)
+        /// 保存先レイアウト設定ファイルのパス（デフォルト: ~/Library/Application Support/biz.nosetech.apptidying/layout.json）
         path: Option<PathBuf>,
 
-        /// Include the terminal window where apptidying is running
+        /// 実行中のターミナルウィンドウも含める
         #[arg(long)]
         own: bool,
     },
