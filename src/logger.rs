@@ -6,6 +6,14 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
+/// ユーザー通知のレベル
+///
+/// `show_notification()` 関数で使用される通知レベルを表します。
+///
+/// # バリアント
+/// * `Info` - 情報通知（デフォルトは通知センター）
+/// * `Warn` - 警告通知（デフォルトは通知センター）
+/// * `Error` - エラー通知（デフォルトはダイアログ）
 #[allow(dead_code)]
 pub enum NotificationLevel {
     Info,
@@ -13,9 +21,15 @@ pub enum NotificationLevel {
     Error,
 }
 
+/// ロガーの設定
+///
+/// ログ出力、通知、ログローテーションの動作を制御する設定を格納します。
 pub struct LoggerConfig {
+    /// デバッグモード（有効時は DEBUG レベルのログを出力）
     pub debug_mode: bool,
+    /// 通知設定（settings.json から読み込まれる）
     pub notification_config: Option<crate::config::NotificationConfig>,
+    /// ログローテーション設定（settings.json から読み込まれる）
     pub log_rotation_config: Option<crate::config::LogRotationConfig>,
 }
 
@@ -303,6 +317,13 @@ fn show_dialog(message: &str) {
     }
 }
 
+/// 現在のロガー設定から通知設定を取得
+///
+/// スレッドローカルストレージ内の通知設定を返します。
+///
+/// # 戻り値
+/// - `Some(NotificationConfig)` - 通知設定が設定されている場合
+/// - `None` - 通知設定が設定されていない場合
 #[allow(dead_code)]
 pub fn get_notification_config() -> Option<NotificationConfig> {
     LOGGER_CONFIG.with(|cfg| {

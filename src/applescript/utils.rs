@@ -302,7 +302,7 @@ pub fn parse_single_window(entry: &str) -> Result<WindowInfo, WindowInfoError> {
 
 /// AppleScript 出力からウィンドウリストをパース
 ///
-/// AppleScript から返されたウィンドウリスト文字列を解析して Vec<WindowInfo> を生成します。
+/// AppleScript から返されたウィンドウリスト文字列を解析して `Vec<WindowInfo>` を生成します。
 ///
 /// # Format
 /// AppleScript はカンマ区切りのウィンドウエントリを返します。各エントリは以下の形式です：

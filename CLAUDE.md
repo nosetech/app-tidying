@@ -707,6 +707,75 @@ cargo test loader -- --ignored --nocapture
 - Accessibility API 権限エラーの処理
 - 異なる macOS バージョンでの動作
 
+## ドキュメンテーションコメント規則
+
+### 対象
+
+- すべての公開API（`pub` で定義された構造体、関数、メソッド、トレイト等）
+
+### 記載方法
+
+Rustの標準的なドキュメンテーションコメント (`///`) を使用します。
+
+- 簡潔な説明を最初の行に記載（「〜する」形で説明）
+- 必要に応じて詳細説明、# Arguments、# Returns、# Examples、# Panics等を記載
+- 日本語で記述（プロジェクトルール準拠）
+- 技術用語（AppleScript、osascript、JSON、macOS等）は英語のまま使用
+
+### 記載例
+
+```rust
+/// 指定されたタイトルのウィンドウを検索する
+///
+/// 与えられたアプリケーション名とウィンドウタイトルからウィンドウを検索します。
+/// 複数マッチした場合は最前面のウィンドウを返します。
+///
+/// # Arguments
+/// * `app_name` - アプリケーション名
+/// * `window_title` - 検索するウィンドウタイトル
+///
+/// # Returns
+/// * `Ok(Some(WindowInfo))` - ウィンドウが見つかった
+/// * `Ok(None)` - ウィンドウが見つからなかった
+/// * `Err(WindowInfoError)` - エラーが発生（アプリが起動していない等）
+pub fn find_window_by_title(app_name: &str, window_title: &str) -> Result<Option<WindowInfo>, WindowInfoError>
+```
+
+```rust
+/// ウィンドウの位置情報
+///
+/// X座標（x）とY座標（y）を指定します。
+/// 値は以下のいずれかの形式で指定できます：
+/// - 文字列: `"left"`, `"right"`, `"top"`, `"bottom"`
+/// - 数値: ピクセル単位の絶対座標
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Position {
+    /// X座標値（`"left"`, `"right"` または 0以上の数値）
+    #[serde(default)]
+    pub x: serde_json::Value,
+    /// Y座標値（`"top"`, `"bottom"` または 0以上の数値）
+    #[serde(default)]
+    pub y: serde_json::Value,
+}
+```
+
+### cargo doc による確認
+
+```bash
+# ドキュメント生成（エラーチェック）
+cargo doc --no-deps
+
+# ドキュメントをブラウザで確認（オプション）
+cargo doc --no-deps --open
+```
+
+ドキュメント生成時にエラー（特に broken links の警告）が出ないことを確認してください。
+
+### ドキュメント生成の管理
+
+- 生成されたドキュメント（`target/doc/`）は git の管理対象外です
+- ドキュメント品質は CI で検証されます（`cargo doc --no-deps` がエラーなく実行されること）
+
 ## Journaling workflow
 
 InkdropのMCPサーバーを使用できる状態の場合、あなた (AI エージェント) は、このプロジェクトで行った作業を、タスクの終了ごとに私の Inkdrop ノートに報告してください。
