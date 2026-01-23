@@ -693,7 +693,7 @@ pub fn validate_layout(
 }
 
 // =============================================================================
-// Helper Functions for Validation
+// 検証用ヘルパー関数
 // =============================================================================
 
 /// サイズ値をピクセル単位で計算（検証用）
@@ -816,11 +816,11 @@ fn calculate_y_for_validation(
 }
 
 // =============================================================================
-// Pattern Calculation Functions
+// パターン計算関数
 // =============================================================================
 
-/// Parse position value to absolute coordinates
-/// Returns (x, y) coordinates
+/// 位置値を絶対座標に変換
+/// (x, y) 座標を返す
 #[allow(dead_code, clippy::too_many_arguments)]
 pub fn parse_position_value(
     value: &serde_json::Value,
@@ -851,7 +851,7 @@ pub fn parse_position_value(
     }
 }
 
-/// Parse x coordinate value
+/// X座標値を変換
 fn parse_x_value(
     value: &serde_json::Value,
     display_width: i32,
@@ -886,7 +886,7 @@ fn parse_x_value(
     }
 }
 
-/// Parse y coordinate value
+/// Y座標値を変換
 fn parse_y_value(
     value: &serde_json::Value,
     display_height: i32,
@@ -921,8 +921,8 @@ fn parse_y_value(
     }
 }
 
-/// Parse size value to absolute dimensions
-/// Returns (width, height) dimensions
+/// サイズ値を絶対サイズに変換
+/// (width, height) サイズを返す
 #[allow(dead_code)]
 pub fn parse_size_value(
     value: &serde_json::Value,
@@ -957,7 +957,7 @@ pub fn parse_size_value(
     }
 }
 
-/// Parse width value
+/// 幅値を変換
 fn parse_width_value(value: &serde_json::Value, display_width: i32) -> Result<i32, AppConfigError> {
     match value {
         serde_json::Value::String(s) => match s.as_str() {
@@ -989,7 +989,7 @@ fn parse_width_value(value: &serde_json::Value, display_width: i32) -> Result<i3
     }
 }
 
-/// Parse height value
+/// 高さ値を変換
 fn parse_height_value(
     value: &serde_json::Value,
     display_height: i32,
