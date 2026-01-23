@@ -5,6 +5,13 @@ use std::path::PathBuf;
 #[allow(dead_code)]
 const SUPPORTED_VERSION: &str = "1.0";
 
+/// X座標の値タイプ
+///
+/// ウィンドウのX座標を指定する際の値の種類を表します。
+///
+/// # バリアント
+/// * `Left` - 左端（X座標 = 0）
+/// * `Right` - 右端（X座標 = ディスプレイ幅 - ウィンドウ幅）
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PositionValue {
@@ -12,6 +19,13 @@ pub enum PositionValue {
     Right,
 }
 
+/// Y座標の値タイプ
+///
+/// ウィンドウのY座標を指定する際の値の種類を表します。
+///
+/// # バリアント
+/// * `Top` - 上端（Y座標 = 25、メニューバーの高さを考慮）
+/// * `Bottom` - 下端（Y座標 = ディスプレイ高さ - ウィンドウ高さ）
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerticalPositionValue {
@@ -19,6 +33,14 @@ pub enum VerticalPositionValue {
     Bottom,
 }
 
+/// ウィンドウのサイズの値タイプ
+///
+/// ウィンドウの幅または高さを指定する際の値の種類を表します。
+///
+/// # バリアント
+/// * `Half` - ディスプレイサイズの1/2
+/// * `Third` - ディスプレイサイズの1/3
+/// * `Max` - ディスプレイサイズの最大（フル）
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SizeValue {
@@ -27,41 +49,76 @@ pub enum SizeValue {
     Max,
 }
 
+/// ウィンドウの位置情報
+///
+/// X座標（x）とY座標（y）を指定します。
+/// 値は以下のいずれかの形式で指定できます：
+/// - 文字列: `"left"`, `"right"`, `"top"`, `"bottom"`
+/// - 数値: ピクセル単位の絶対座標
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Position {
+    /// X座標値（`"left"`, `"right"` または 0以上の数値）
     #[serde(default)]
     pub x: serde_json::Value,
+    /// Y座標値（`"top"`, `"bottom"` または 0以上の数値）
     #[serde(default)]
     pub y: serde_json::Value,
 }
 
+/// ウィンドウのサイズ情報
+///
+/// 幅（width）と高さ（height）を指定します。
+/// 値は以下のいずれかの形式で指定できます：
+/// - 文字列: `"half"`（1/2）, `"third"`（1/3）, `"max"`（フル）
+/// - 数値: ピクセル単位のサイズ
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Size {
+    /// 幅（`"half"`, `"third"`, `"max"` または 1以上の数値）
     #[serde(default)]
     pub width: serde_json::Value,
+    /// 高さ（`"half"`, `"third"`, `"max"` または 1以上の数値）
     #[serde(default)]
     pub height: serde_json::Value,
 }
 
+/// アプリケーションウィンドウの設定
+///
+/// layout.json の各ウィンドウ設定を表す構造体です。
+/// アプリケーション名、ウィンドウタイトル、位置、サイズを指定します。
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppWindowConfig {
+    /// アプリケーション名（macOS での表示名、例: `"Google Chrome"`, `"Terminal"`）
     pub app: String,
+    /// ウィンドウタイトル（複数ウィンドウがある場合に識別用。オプション）
     #[serde(default)]
     pub title: Option<String>,
+    /// ウィンドウの位置（左上座標）。オプション
     #[serde(default)]
     pub position: Option<Position>,
+    /// ウィンドウのサイズ（幅と高さ）。オプション
     #[serde(default)]
     pub size: Option<Size>,
 }
 
+/// ディスプレイの設定
+///
+/// ディスプレイごとのウィンドウ設定をまとめた構造体です。
+/// ディスプレイ名と、そこに配置するウィンドウのリストを指定します。
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DisplayConfig {
+    /// ディスプレイ名（例: `"Built-in"`, `"Enhanced"`, `"External Display"`）
     pub name: String,
+    /// このディスプレイに配置するウィンドウの設定リスト
     pub windows: Vec<AppWindowConfig>,
 }
 
+/// ウィンドウレイアウト設定
+///
+/// 複数のディスプレイにおけるウィンドウ配置をまとめた構造体です。
+/// 各ディスプレイの設定をリストで保持します。
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LayoutConfig {
+    /// ディスプレイの設定リスト
     pub displays: Vec<DisplayConfig>,
 }
 
@@ -77,12 +134,19 @@ fn default_notification_error() -> String {
     "dialog".to_string()
 }
 
+/// 通知設定
+///
+/// アプリケーション実行時の通知方式をレベル別に指定します。
+/// settings.json の `notification` フィールドで設定します。
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NotificationConfig {
+    /// INFO レベル通知方式（`"notification"`, `"dialog"`, `"none"`）
     #[serde(default = "default_notification_info")]
     pub info: String,
+    /// WARN レベル通知方式（`"notification"`, `"dialog"`, `"none"`）
     #[serde(default = "default_notification_warn")]
     pub warn: String,
+    /// ERROR レベル通知方式（`"notification"`, `"dialog"`, `"none"`）
     #[serde(default = "default_notification_error")]
     pub error: String,
 }
@@ -154,8 +218,13 @@ pub struct LayoutFile {
     pub layouts: Vec<LayoutConfig>,
 }
 
+/// 設定ファイル処理のエラー型
+///
+/// JSON パース、ファイルIO、バリデーションエラーなど、
+/// 設定ファイル処理で発生するすべてのエラーを表します。
 #[derive(Debug)]
 pub struct AppConfigError {
+    /// エラーメッセージ
     pub message: String,
 }
 
