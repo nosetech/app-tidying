@@ -2,53 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-#[allow(dead_code)]
-const SUPPORTED_VERSION: &str = "1.0";
-
-/// X座標の値タイプ
-///
-/// ウィンドウのX座標を指定する際の値の種類を表します。
-///
-/// # バリアント
-/// * `Left` - 左端（X座標 = 0）
-/// * `Right` - 右端（X座標 = ディスプレイ幅 - ウィンドウ幅）
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PositionValue {
-    Left,
-    Right,
-}
-
-/// Y座標の値タイプ
-///
-/// ウィンドウのY座標を指定する際の値の種類を表します。
-///
-/// # バリアント
-/// * `Top` - 上端（Y座標 = 25、メニューバーの高さを考慮）
-/// * `Bottom` - 下端（Y座標 = ディスプレイ高さ - ウィンドウ高さ）
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VerticalPositionValue {
-    Top,
-    Bottom,
-}
-
-/// ウィンドウのサイズの値タイプ
-///
-/// ウィンドウの幅または高さを指定する際の値の種類を表します。
-///
-/// # バリアント
-/// * `Half` - ディスプレイサイズの1/2
-/// * `Third` - ディスプレイサイズの1/3
-/// * `Max` - ディスプレイサイズの最大（フル）
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SizeValue {
-    Half,
-    Third,
-    Max,
-}
-
 /// ウィンドウの位置情報
 ///
 /// X座標（x）とY座標（y）を指定します。
@@ -238,7 +191,6 @@ impl std::error::Error for AppConfigError {}
 
 /// デフォルト設定ファイル (settings.json) のパスを取得
 /// macOS の標準に従い、~/Library/Application Support/biz.nosetech.apptidying/settings.json を返す
-#[allow(dead_code)]
 pub fn get_default_settings_path() -> Result<PathBuf, AppConfigError> {
     let home = dirs::home_dir().ok_or_else(|| AppConfigError {
         message: "ホームディレクトリの取得に失敗しました".to_string(),
@@ -248,7 +200,6 @@ pub fn get_default_settings_path() -> Result<PathBuf, AppConfigError> {
 
 /// デフォルトレイアウトファイル (layout.json) のパスを取得
 /// macOS の標準に従い、~/Library/Application Support/biz.nosetech.apptidying/layout.json を返す
-#[allow(dead_code)]
 pub fn get_default_layout_path() -> Result<PathBuf, AppConfigError> {
     let home = dirs::home_dir().ok_or_else(|| AppConfigError {
         message: "ホームディレクトリの取得に失敗しました".to_string(),
@@ -258,7 +209,9 @@ pub fn get_default_layout_path() -> Result<PathBuf, AppConfigError> {
 
 /// 設定ディレクトリを取得
 /// デフォルト設定ファイルパスの親ディレクトリを返す
-#[allow(dead_code)]
+///
+/// 注意: この関数は将来の設定ファイル管理機能用に残されています。
+#[allow(dead_code)] // 将来の拡張用に残す（設定ファイル管理機能）
 pub fn get_config_dir() -> Result<PathBuf, AppConfigError> {
     let default_path = get_default_settings_path()?;
     default_path
@@ -281,7 +234,6 @@ pub struct ValidationWarning {
 }
 
 /// settings.json をパースする
-#[allow(dead_code)]
 pub fn parse_settings_from_json(json_str: &str) -> Result<AppSettings, AppConfigError> {
     let settings: AppSettings = serde_json::from_str(json_str).map_err(|e| AppConfigError {
         message: format!("JSON パースエラー: {}", e),
@@ -292,7 +244,6 @@ pub fn parse_settings_from_json(json_str: &str) -> Result<AppSettings, AppConfig
 }
 
 /// layout.json をパースする
-#[allow(dead_code)]
 pub fn parse_layout_from_json(json_str: &str) -> Result<LayoutFile, AppConfigError> {
     let layout: LayoutFile = serde_json::from_str(json_str).map_err(|e| AppConfigError {
         message: format!("JSON パースエラー: {}", e),
@@ -303,7 +254,6 @@ pub fn parse_layout_from_json(json_str: &str) -> Result<LayoutFile, AppConfigErr
 }
 
 /// settings.json ファイルを読み込む
-#[allow(dead_code)]
 pub fn load_settings_file(path: &PathBuf) -> Result<AppSettings, AppConfigError> {
     let content = fs::read_to_string(path).map_err(|e| AppConfigError {
         message: format!("ファイル読み込みエラー ({}): {}", path.display(), e),
@@ -313,7 +263,6 @@ pub fn load_settings_file(path: &PathBuf) -> Result<AppSettings, AppConfigError>
 }
 
 /// layout.json ファイルを読み込む
-#[allow(dead_code)]
 pub fn load_layout_file(path: &PathBuf) -> Result<LayoutFile, AppConfigError> {
     let content = fs::read_to_string(path).map_err(|e| AppConfigError {
         message: format!("ファイル読み込みエラー ({}): {}", path.display(), e),
@@ -323,21 +272,21 @@ pub fn load_layout_file(path: &PathBuf) -> Result<LayoutFile, AppConfigError> {
 }
 
 /// デフォルト settings.json から設定を読み込む
-#[allow(dead_code)]
 pub fn load_default_settings() -> Result<AppSettings, AppConfigError> {
     let config_path = get_default_settings_path()?;
     load_settings_file(&config_path)
 }
 
 /// デフォルト layout.json からレイアウトを読み込む
-#[allow(dead_code)]
 pub fn load_default_layout() -> Result<LayoutFile, AppConfigError> {
     let layout_path = get_default_layout_path()?;
     load_layout_file(&layout_path)
 }
 
 /// settings.json をファイルに保存する
-#[allow(dead_code)]
+///
+/// 注意: この関数は将来の settings 編集機能用に残されています。
+#[allow(dead_code)] // 将来の拡張用に残す（settings 編集機能）
 pub fn save_settings_file(settings: &AppSettings, path: &PathBuf) -> Result<(), AppConfigError> {
     // 親ディレクトリが存在しない場合は作成
     if let Some(parent) = path.parent() {
@@ -364,7 +313,6 @@ pub fn save_settings_file(settings: &AppSettings, path: &PathBuf) -> Result<(), 
 }
 
 /// layout.json をファイルに保存する
-#[allow(dead_code)]
 pub fn save_layout_file(layout: &LayoutFile, path: &PathBuf) -> Result<(), AppConfigError> {
     // 親ディレクトリが存在しない場合は作成
     if let Some(parent) = path.parent() {
@@ -391,14 +339,13 @@ pub fn save_layout_file(layout: &LayoutFile, path: &PathBuf) -> Result<(), AppCo
 }
 
 /// settings.json の構文チェックを実行する
-#[allow(dead_code)]
 pub fn validate_settings_syntax(settings: &AppSettings) -> Result<(), AppConfigError> {
     // バージョンチェック
-    if settings.version != SUPPORTED_VERSION {
+    if settings.version != "1.0" {
         return Err(AppConfigError {
             message: format!(
-                "サポートされていないバージョン: {}（サポート: {}）",
-                settings.version, SUPPORTED_VERSION
+                "サポートされていないバージョン: {}（サポート: 1.0）",
+                settings.version
             ),
         });
     }
@@ -417,14 +364,13 @@ pub fn validate_settings_syntax(settings: &AppSettings) -> Result<(), AppConfigE
 }
 
 /// layout.json の構文チェックを実行する
-#[allow(dead_code)]
 pub fn validate_layout_syntax(layout: &LayoutFile) -> Result<(), AppConfigError> {
     // バージョンチェック
-    if layout.version != SUPPORTED_VERSION {
+    if layout.version != "1.0" {
         return Err(AppConfigError {
             message: format!(
-                "サポートされていないバージョン: {}（サポート: {}）",
-                layout.version, SUPPORTED_VERSION
+                "サポートされていないバージョン: {}（サポート: 1.0）",
+                layout.version
             ),
         });
     }
@@ -462,7 +408,6 @@ pub fn validate_layout_syntax(layout: &LayoutFile) -> Result<(), AppConfigError>
     Ok(())
 }
 
-#[allow(dead_code)]
 fn validate_window_config(
     window: &AppWindowConfig,
     display_name: &str,
@@ -490,7 +435,6 @@ fn validate_window_config(
     Ok(())
 }
 
-#[allow(dead_code)]
 fn validate_value(
     value: &serde_json::Value,
     field_name: &str,
@@ -535,21 +479,18 @@ fn validate_value(
     Ok(())
 }
 
-#[allow(dead_code)]
 fn validate_position(position: &Position) -> Result<(), AppConfigError> {
     validate_value(&position.x, "x", &["left", "right"], 0)?;
     validate_value(&position.y, "y", &["top", "bottom"], 0)?;
     Ok(())
 }
 
-#[allow(dead_code)]
 fn validate_size(size: &Size) -> Result<(), AppConfigError> {
     validate_value(&size.width, "width", &["half", "third", "max"], 1)?;
     validate_value(&size.height, "height", &["half", "third", "max"], 1)?;
     Ok(())
 }
 
-#[allow(dead_code)]
 fn validate_notification_config(notification: &NotificationConfig) -> Result<(), AppConfigError> {
     let valid_values = ["notification", "dialog", "none"];
 
@@ -584,7 +525,6 @@ fn validate_notification_config(notification: &NotificationConfig) -> Result<(),
 }
 
 /// ログローテーション設定を検証する
-#[allow(dead_code)]
 fn validate_log_rotation_config(log_rotation: &LogRotationConfig) -> Result<(), AppConfigError> {
     // rotation_type の検証
     if log_rotation.rotation_type != "size" {
@@ -615,7 +555,6 @@ fn validate_log_rotation_config(log_rotation: &LogRotationConfig) -> Result<(), 
 
 /// ウィンドウの座標・サイズがディスプレイの境界内に収まっているかを検証
 /// ディスプレイ外の座標や、画面より大きいサイズが設定されている場合は警告を返す
-#[allow(dead_code)]
 fn validate_display_bounds(
     window: &AppWindowConfig,
     display_info: &crate::applescript::DisplayInfo,
@@ -685,7 +624,6 @@ fn validate_display_bounds(
 }
 
 /// ディスプレイ名が実際に接続されているかを検証
-#[allow(dead_code)]
 fn validate_display_exists(
     display_name: &str,
     connected_displays: &[crate::applescript::DisplayInfo],
@@ -697,7 +635,6 @@ fn validate_display_exists(
 
 /// 境界値チェックを実行（ディスプレイ情報が必要）
 /// 警告リストを返す（エラーではなく警告）
-#[allow(dead_code)]
 pub fn validate_layout_bounds(
     layout: &LayoutFile,
     connected_displays: &[crate::applescript::DisplayInfo],
@@ -745,7 +682,6 @@ pub fn validate_layout_bounds(
 
 /// layout.json の構文チェックと境界値チェックの両方を実行
 /// connected_displays が指定されていない場合は構文チェックのみを実行
-#[allow(dead_code)]
 pub fn validate_layout(
     layout: &LayoutFile,
     connected_displays: Option<&[crate::applescript::DisplayInfo]>,
@@ -890,7 +826,7 @@ fn calculate_y_for_validation(
 
 /// 位置値を絶対座標に変換
 /// (x, y) 座標を返す
-#[allow(dead_code, clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 pub fn parse_position_value(
     value: &serde_json::Value,
     display_width: i32,
@@ -992,7 +928,6 @@ fn parse_y_value(
 
 /// サイズ値を絶対サイズに変換
 /// (width, height) サイズを返す
-#[allow(dead_code)]
 pub fn parse_size_value(
     value: &serde_json::Value,
     display_width: i32,

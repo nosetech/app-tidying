@@ -67,51 +67,6 @@ use std::path::PathBuf;
 // テスト用ヘルパー関数
 // =============================================================================
 
-/// テスト用の WindowInfo を生成
-#[allow(dead_code)]
-fn create_test_window_info(
-    title: &str,
-    position: (i32, i32),
-    size: (i32, i32),
-    minimized: bool,
-    visible: bool,
-) -> WindowInfo {
-    WindowInfo {
-        title: title.to_string(),
-        position,
-        size,
-        minimized,
-        visible,
-    }
-}
-
-/// テスト用の DisplayInfo を生成
-#[allow(dead_code)]
-fn create_test_display_info(
-    name: &str,
-    width: i32,
-    height: i32,
-    origin_x: i32,
-    origin_y: i32,
-) -> DisplayInfo {
-    DisplayInfo {
-        name: name.to_string(),
-        width,
-        height,
-        origin_x,
-        origin_y,
-    }
-}
-
-/// テスト用の AppInfo を生成
-#[allow(dead_code)]
-fn create_test_app_info(name: &str, process_id: Option<i32>) -> AppInfo {
-    AppInfo {
-        name: name.to_string(),
-        process_id,
-    }
-}
-
 /// テスト用の一時ディレクトリパスを生成
 fn create_temp_config_path(test_name: &str) -> PathBuf {
     let temp_dir = std::env::temp_dir();

@@ -26,7 +26,9 @@ pub struct WindowInfo {
 
 impl WindowInfo {
     /// JSON オブジェクトに変換
-    #[allow(dead_code)]
+    ///
+    /// 注意: このメソッドは将来のJSON出力機能用に残されています。
+    #[allow(dead_code)] // 将来の拡張用に残す（JSON出力機能）
     pub fn to_json(&self) -> Value {
         json!({
             "title": self.title,
@@ -73,7 +75,9 @@ pub struct WindowResizeResult {
 
 impl WindowResizeResult {
     /// JSON オブジェクトに変換
-    #[allow(dead_code)]
+    ///
+    /// 注意: このメソッドは将来のJSON出力機能用に残されています。
+    #[allow(dead_code)] // 将来の拡張用に残す（JSON出力機能）
     pub fn to_json(&self) -> Value {
         let mut obj = json!({
             "status": self.status,
@@ -216,7 +220,9 @@ end tell
 /// println!("Size: {}x{}", window.size.0, window.size.1);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-#[allow(dead_code)]
+///
+/// 注意: この関数は将来のウィンドウ情報取得API用に残されています。
+#[allow(dead_code)] // 将来の拡張用に残す（ウィンドウ情報取得API）
 pub fn get_window_info(
     app_name: &str,
     window_title: Option<&str>,
