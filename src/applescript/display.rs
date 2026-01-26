@@ -26,7 +26,9 @@ pub struct DisplayInfo {
 
 impl DisplayInfo {
     /// JSON オブジェクトに変換
-    #[allow(dead_code)]
+    ///
+    /// 注意: このメソッドは将来のJSON出力機能用に残されています。
+    #[allow(dead_code)] // 将来の拡張用に残す（JSON出力機能）
     pub fn to_json(&self) -> Value {
         json!({
             "name": self.name,

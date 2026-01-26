@@ -33,8 +33,10 @@ pub fn escape_applescript_string(s: &str) -> String {
 /// ウィンドウの分類タイプ
 ///
 /// ウィンドウが管理対象かシステムUI要素かを分類します。
+///
+/// 注意: この型は将来のウィンドウフィルタリング機能用に残されています。
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
+#[allow(dead_code)] // 将来の拡張用に残す（ウィンドウフィルタリング機能）
 pub enum WindowType {
     /// 通常のアプリケーションウィンドウ（管理対象）
     Regular,
@@ -71,7 +73,9 @@ pub enum WindowType {
 /// assert!(!is_system_app("Google Chrome"));
 /// assert!(!is_system_app("Visual Studio Code"));
 /// ```
-#[allow(dead_code)]
+///
+/// 注意: この関数は将来のウィンドウフィルタリング機能用に残されています。
+#[allow(dead_code)] // 将来の拡張用に残す（ウィンドウフィルタリング機能）
 pub fn is_system_app(app_name: &str) -> bool {
     const SYSTEM_APPS: &[&str] = &[
         "Finder",
@@ -210,7 +214,9 @@ pub fn is_excluded_window(app_name: &str, window_title: &str) -> bool {
 /// let result = classify_window("Dock", "");
 /// assert!(matches!(result, WindowType::System));
 /// ```
-#[allow(dead_code)]
+///
+/// 注意: この関数は将来のウィンドウフィルタリング機能用に残されています。
+#[allow(dead_code)] // 将来の拡張用に残す（ウィンドウフィルタリング機能）
 pub fn classify_window(app_name: &str, window_title: &str) -> WindowType {
     if is_excluded_window(app_name, window_title) {
         WindowType::System

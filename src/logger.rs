@@ -14,7 +14,6 @@ use std::sync::{Mutex, OnceLock};
 /// * `Info` - 情報通知（デフォルトは通知センター）
 /// * `Warn` - 警告通知（デフォルトは通知センター）
 /// * `Error` - エラー通知（デフォルトはダイアログ）
-#[allow(dead_code)]
 pub enum NotificationLevel {
     Info,
     Warn,
@@ -55,7 +54,6 @@ fn get_log_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(log_dir.join("apptidying.log"))
 }
 
-#[allow(dead_code)]
 fn is_running_in_terminal() -> bool {
     std::env::var("TERM").is_ok()
 }
@@ -162,7 +160,6 @@ fn get_timestamp_string() -> String {
     Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
-#[allow(dead_code)]
 pub fn init(config: LoggerConfig) {
     let filter_level = if config.debug_mode {
         LevelFilter::Debug
@@ -198,7 +195,6 @@ pub fn init(config: LoggerConfig) {
         .ok();
 }
 
-#[allow(dead_code)]
 pub fn init_simple() {
     let config = LoggerConfig {
         debug_mode: false,
@@ -208,7 +204,6 @@ pub fn init_simple() {
     init(config);
 }
 
-#[allow(dead_code)]
 pub fn show_notification(level: NotificationLevel, message: &str) {
     let notification_type = match level {
         NotificationLevel::Info => "INFO",
@@ -231,7 +226,6 @@ pub fn show_notification(level: NotificationLevel, message: &str) {
     }
 }
 
-#[allow(dead_code)]
 fn show_os_notification(level: NotificationLevel, message: &str) {
     // LoggerConfig から通知設定を取得
     let notification_method = LOGGER_CONFIG.with(|cfg| {
@@ -324,7 +318,9 @@ fn show_dialog(message: &str) {
 /// # 戻り値
 /// - `Some(NotificationConfig)` - 通知設定が設定されている場合
 /// - `None` - 通知設定が設定されていない場合
-#[allow(dead_code)]
+///
+/// 注意: この関数は将来の通知設定取得API用に残されています。
+#[allow(dead_code)] // 将来の拡張用に残す（通知設定取得API）
 pub fn get_notification_config() -> Option<NotificationConfig> {
     LOGGER_CONFIG.with(|cfg| {
         cfg.borrow()
@@ -333,7 +329,6 @@ pub fn get_notification_config() -> Option<NotificationConfig> {
     })
 }
 
-#[allow(dead_code)]
 pub fn escape_applescript_string_for_test(s: &str) -> String {
     // このメソッドはテスト互換性のため、applescript モジュールにデリゲート
     super::applescript::escape_applescript_string(s)
