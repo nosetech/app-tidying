@@ -257,7 +257,7 @@ fn show_os_notification(level: NotificationLevel, message: &str) {
             show_notification_center(message);
         }
         "dialog" => {
-            show_dialog(message);
+            show_dialog(level, message);
         }
         _ => {
             // デフォルトは設定に応じて
@@ -266,13 +266,21 @@ fn show_os_notification(level: NotificationLevel, message: &str) {
                     show_notification_center(message);
                 }
                 NotificationLevel::Error => {
-                    show_dialog(message);
+                    show_dialog(level, message);
                 }
             }
         }
     }
 }
 
+/// 通知センターに通知を表示する
+///
+/// **アイコン表示について**:
+/// AppleScript の `display notification` ではカスタムアイコンファイル（.icns）の
+/// 直接指定はサポートされていません。通知センターに表示されるアイコンは、
+/// osascript を実行した親プロセス（Script Editor）のアイコンが使用されます。
+///
+/// 将来、アプリケーションバンドル化した際には、バンドルのアイコンが自動的に適用されます。
 fn show_notification_center(message: &str) {
     let script = format!(
         r#"display notification "{}" with title "App Tidying""#,
@@ -292,10 +300,23 @@ fn show_notification_center(message: &str) {
     }
 }
 
-fn show_dialog(message: &str) {
+/// ダイアログを表示する
+///
+/// 通知レベルに応じた標準アイコンを表示します：
+/// - INFO: note（青い情報アイコン）
+/// - WARN: caution（黄色い警告アイコン）
+/// - ERROR: stop（赤いエラーアイコン）
+fn show_dialog(level: NotificationLevel, message: &str) {
+    let icon = match level {
+        NotificationLevel::Info => "note",
+        NotificationLevel::Warn => "caution",
+        NotificationLevel::Error => "stop",
+    };
+
     let script = format!(
-        r#"display dialog "{}" buttons {{"OK"}} default button "OK""#,
-        super::applescript::escape_applescript_string(message)
+        r#"display dialog "{}" buttons {{"OK"}} default button "OK" with icon {}"#,
+        super::applescript::escape_applescript_string(message),
+        icon
     );
     match Command::new("osascript").arg("-e").arg(&script).output() {
         Ok(output) if !output.status.success() => {
