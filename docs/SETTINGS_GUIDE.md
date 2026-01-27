@@ -236,9 +236,17 @@ App Tidying では、2つのJSON設定ファイルを使用します：
 
 **ディスプレイ名の確認方法**:
 
+最も簡単な方法は、`apptidying save` で生成された `layout.json` から確認することです：
+
 ```bash
-# 接続しているディスプレイを確認
-system_profiler SPDisplaysDataType
+apptidying save
+cat ~/Library/Application\ Support/biz.nosetech.apptidying/layout.json
+```
+
+または、以下のコマンドでシステム情報から確認できます：
+
+```bash
+system_profiler SPDisplaysDataType | grep "Display Type"
 ```
 
 #### `windows` (必須)
@@ -398,7 +406,7 @@ App Tidying で `save` コマンドを実行すると、現在のウィンドウ
 {
   "app": "Visual Studio Code",
   "position": { "x": "left", "y": "top" },
-  "size": { "width": "two-third", "height": "max" }
+  "size": { "width": "half", "height": "max" }
 }
 ```
 
@@ -612,7 +620,7 @@ App Tidying で `save` コマンドを実行すると、現在のウィンドウ
 ls ~/Library/Application\ Support/biz.nosetech.apptidying/
 ```
 
-ファイルが見つらない場合は、`apptidying save` を実行して自動生成させてください。
+ファイルが見つからない場合は、`apptidying save` を実行して自動生成させてください。
 
 ### JSON ファイルの妥当性確認
 

@@ -229,9 +229,19 @@ apptidying -V
 
 **A.** 以下をご確認ください：
 
-1. Accessibility API の権限が正しく設定されているか
-2. `apptidying -v load` でデバッグ出力を確認
-3. ログファイルを確認（`~/Library/Application Support/biz.nosetech.apptidying/apptidying.log`）
+1. **Accessibility API の権限**
+   - 「システム設定」→「プライバシーとセキュリティ」→「Accessibility」でターミナルアプリケーションが追加されているか確認
+   - 権限がない場合は、「初回セットアップ」セクションを参照
+
+2. **アプリケーションが起動しているか**
+   - レイアウトに指定されたアプリケーションが起動していることを確認
+
+3. **ウィンドウが最小化されていないか**
+   - 最小化されたウィンドウは操作対象外です
+
+4. **詳細なデバッグ情報を確認**
+   - `apptidying -v load` でデバッグ出力を確認
+   - ログファイルを確認（`~/Library/Application Support/biz.nosetech.apptidying/apptidying.log`）
 
 ### Q. 最小化されたウィンドウはどうなりますか？
 
