@@ -181,6 +181,134 @@ apptidying -h
 apptidying -V
 ```
 
+## メッセージ出力仕様
+
+App Tidying のメッセージ出力方法は、実行コンテキストによって自動的に切り替わります。
+
+### ターミナル実行時
+
+ターミナルから直接実行した場合、すべてのメッセージが**標準出力**に出力されます。
+
+```bash
+apptidying load
+# → メッセージはターミナルに表示
+```
+
+**出力レベル**:
+- `DEBUG`: 詳細な実行情報（`-v` オプション使用時のみ）
+- `INFO`: 一般情報
+- `WARN`: 警告
+- `ERROR`: エラー
+
+### ターミナル以外での実行時
+
+ターミナルなしでアプリケーションが起動された場合、メッセージは**macOS 通知センター**または**ダイアログ**で表示されます。
+
+**表示方法は settings.json で設定可能**:
+
+```json
+{
+  "notification": {
+    "info": "notification",   // INFO → 通知センター表示
+    "warn": "notification",   // WARN → 通知センター表示
+    "error": "dialog"         // ERROR → ダイアログ表示
+  }
+}
+```
+
+**指定可能な値**:
+- `notification`: macOS 通知センターに表示
+- `dialog`: ダイアログボックスで表示
+- `none`: 表示しない（ログファイルには記録される）
+
+### ターミナル以外での実行方法
+
+CLI アプリケーションでありながら、GUI を活用した以下の方法で実行できます：
+
+#### 1. **Automator/Quick Actions**
+
+Finder のファイル/フォルダを右クリックしてアクションを実行：
+
+1. Automator を開き「新規 → Quick Action」を選択
+2. 「シェルスクリプトを実行」アクションを追加
+3. 以下のスクリプトを入力：
+   ```bash
+   /usr/local/bin/apptidying load
+   ```
+4. 保存して Quick Action として登録
+
+#### 2. **ランチャーアプリケーション**
+
+Alfred, LaunchBar などのランチャーアプリから実行：
+
+1. ランチャーアプリで `apptidying` を検索
+2. 実行（通常は Enter キーで実行）
+3. オプション付きで実行可能（例：`apptidying load`）
+
+#### 3. **AppleScript**
+
+AppleScript で呼び出し：
+
+```applescript
+do shell script "/usr/local/bin/apptidying load"
+```
+
+Automator の「AppleScript を実行」アクションで使用できます。
+
+#### 4. **スケジュール実行（cron/launchd）**
+
+定期的に自動実行：
+
+```bash
+# cron 例: 毎日午前 9 時に実行
+0 9 * * * /usr/local/bin/apptidying load
+
+# launchd 例: ログイン時に実行
+# ~/Library/LaunchAgents/com.nosetech.apptidying.plist に設定
+```
+
+#### 5. **キーボードショートカット**
+
+キーボードショートカットで実行：
+
+1. Automator で Quick Action を作成（上記参照）
+2. システム設定 → キーボード → キーボードショートカット → アプリケーション
+3. Quick Action にショートカットを割り当て
+
+#### 6. **RightCheat との連携**
+
+CLAUDE.md で言及されているように、RightCheat と連携して複数パターンのウィンドウ配置を切り替え可能。
+
+### メッセージ例
+
+#### ターミナル実行時
+
+```
+$ apptidying load
+[2026-01-28 08:20:15] INFO: ウィンドウレイアウトを復元しています...
+[2026-01-28 08:20:16] INFO: Google Chrome のウィンドウを移動しました
+[2026-01-28 08:20:16] INFO: Visual Studio Code のウィンドウを移動しました
+[2026-01-28 08:20:16] INFO: ウィンドウレイアウトの復元が完了しました
+```
+
+#### ターミナル以外での実行時
+
+| レベル | 表示先 | 例 |
+|------|------|-----|
+| INFO | 通知センター | 「ウィンドウレイアウトの復元が完了しました」 |
+| WARN | 通知センター | 「一部のウィンドウの操作に失敗しました」 |
+| ERROR | ダイアログ | 「Accessibility API へのアクセス許可がありません」 |
+
+### ログファイル
+
+すべてのメッセージはログファイルに記録されます：
+
+```
+~/Library/Application Support/biz.nosetech.apptidying/apptidying.log
+```
+
+ターミナルに表示されないメッセージについては、ここで確認できます。
+
 ## 設定ファイル
 
 ### settings.json（アプリケーション設定）
