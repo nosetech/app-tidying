@@ -738,6 +738,7 @@ fn calculate_size_for_validation(
 }
 
 /// 座標値をピクセル単位で計算（検証用）
+#[allow(clippy::too_many_arguments)]
 fn calculate_position_for_validation(
     position: &Position,
     size: Option<&Size>,
