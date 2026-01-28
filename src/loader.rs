@@ -251,6 +251,7 @@ fn process_window(
                 .map_err(|e| format!("位置情報のシリアライズに失敗しました: {}", e))?;
             let (x, y) = crate::config::parse_position_value(
                 &position_value,
+                Some(&size_value),
                 display_info.width,
                 display_info.height,
                 width,
@@ -271,6 +272,7 @@ fn process_window(
             .map_err(|e| format!("位置情報のシリアライズに失敗しました: {}", e))?;
         let (x, y) = crate::config::parse_position_value(
             &position_value,
+            None,
             display_info.width,
             display_info.height,
             display_info.width,
