@@ -2,6 +2,13 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+// =============================================================================
+// 定数定義
+// =============================================================================
+
+/// macOS メニューバーの標準高さ（ピクセル）
+const MACOS_MENU_BAR_HEIGHT: i32 = 25;
+
 /// ウィンドウの位置情報
 ///
 /// X座標（x）とY座標（y）を指定します。
@@ -737,18 +744,45 @@ fn calculate_size_for_validation(
     }
 }
 
-/// 座標値をピクセル単位で計算（検証用）
-#[allow(clippy::too_many_arguments)]
-fn calculate_position_for_validation(
-    position: &Position,
-    size: Option<&Size>,
-    display_width: i32,
-    display_height: i32,
-    window_width: i32,
-    window_height: i32,
-) -> Result<(i32, i32), AppConfigError> {
-    // サイズ情報から width/height が "max" かどうかを判定
-    let (width_is_max, height_is_max) = if let Some(size) = size {
+/// JSON値のサイズ情報から width/height が "max" かどうかを判定する
+///
+/// # Arguments
+/// * `size_value` - 判定対象のサイズ情報（JSON値）
+///
+/// # Returns
+/// * `(bool, bool)` - (width_is_max, height_is_max)
+fn is_size_max_from_json(size_value: Option<&serde_json::Value>) -> (bool, bool) {
+    if let Some(size) = size_value {
+        if let Some(obj) = size.as_object() {
+            let width_is_max = obj
+                .get("width")
+                .and_then(|v| v.as_str())
+                .map(|s| s == "max")
+                .unwrap_or(false);
+            let height_is_max = obj
+                .get("height")
+                .and_then(|v| v.as_str())
+                .map(|s| s == "max")
+                .unwrap_or(false);
+            (width_is_max, height_is_max)
+        } else {
+            (false, false)
+        }
+    } else {
+        // サイズ情報が指定されていない場合は、max 判定を行わない
+        (false, false)
+    }
+}
+
+/// Size 構造体のサイズ情報から width/height が "max" かどうかを判定する
+///
+/// # Arguments
+/// * `size` - 判定対象のサイズ情報（Size 構造体）
+///
+/// # Returns
+/// * `(bool, bool)` - (width_is_max, height_is_max)
+fn is_size_max(size: Option<&Size>) -> (bool, bool) {
+    if let Some(size) = size {
         let width_is_max = if let serde_json::Value::String(ref s) = size.width {
             s == "max"
         } else {
@@ -761,8 +795,23 @@ fn calculate_position_for_validation(
         };
         (width_is_max, height_is_max)
     } else {
+        // サイズ情報が指定されていない場合は、max 判定を行わない
         (false, false)
-    };
+    }
+}
+
+/// 座標値をピクセル単位で計算（検証用）
+#[allow(clippy::too_many_arguments)]
+fn calculate_position_for_validation(
+    position: &Position,
+    size: Option<&Size>,
+    display_width: i32,
+    display_height: i32,
+    window_width: i32,
+    window_height: i32,
+) -> Result<(i32, i32), AppConfigError> {
+    // サイズ情報から width/height が "max" かどうかを判定
+    let (width_is_max, height_is_max) = is_size_max(size);
 
     // width が "max" の場合、X座標を 0 に設定
     let x = if width_is_max {
@@ -824,7 +873,7 @@ fn calculate_y_for_validation(
 ) -> Result<i32, AppConfigError> {
     match value {
         serde_json::Value::String(s) => match s.as_str() {
-            "top" => Ok(25), // メニューバーの高さは25pxと想定
+            "top" => Ok(MACOS_MENU_BAR_HEIGHT), // メニューバーの高さ
             "bottom" => Ok(display_height - window_height),
             _ => Err(AppConfigError {
                 message: format!("無効な y 値: '{}'", s),
@@ -868,25 +917,7 @@ pub fn parse_position_value(
     field_name: &str,
 ) -> Result<(i32, i32), AppConfigError> {
     // サイズ情報から width/height が "max" かどうかを判定
-    let (width_is_max, height_is_max) = if let Some(size) = size_value {
-        if let Some(obj) = size.as_object() {
-            let width_is_max = obj
-                .get("width")
-                .and_then(|v| v.as_str())
-                .map(|s| s == "max")
-                .unwrap_or(false);
-            let height_is_max = obj
-                .get("height")
-                .and_then(|v| v.as_str())
-                .map(|s| s == "max")
-                .unwrap_or(false);
-            (width_is_max, height_is_max)
-        } else {
-            (false, false)
-        }
-    } else {
-        (false, false)
-    };
+    let (width_is_max, height_is_max) = is_size_max_from_json(size_value);
 
     match value {
         serde_json::Value::Object(obj) => {
@@ -963,7 +994,7 @@ fn parse_y_value(
 ) -> Result<i32, AppConfigError> {
     match value {
         serde_json::Value::String(s) => match s.as_str() {
-            "top" => Ok(25), // メニューバーの高さは25pxと想定
+            "top" => Ok(MACOS_MENU_BAR_HEIGHT), // メニューバーの高さ
             "bottom" => Ok(display_height - window_height),
             _ => Err(AppConfigError {
                 message: format!("無効な y 値: '{}' (top, bottom を指定)", s),
@@ -1010,9 +1041,11 @@ pub fn parse_size_value(
 
             let width_val = parse_width_value(width, display_width)?;
 
-            // height が "max" の場合、メニューバー高さ (25px) を考慮して計算
+            // height が "max" の場合、メニューバー高さを考慮して計算
             let height_val = match height {
-                serde_json::Value::String(s) if s == "max" => display_height - 25,
+                serde_json::Value::String(s) if s == "max" => {
+                    display_height - MACOS_MENU_BAR_HEIGHT
+                }
                 _ => parse_height_value(height, display_height)?,
             };
 
