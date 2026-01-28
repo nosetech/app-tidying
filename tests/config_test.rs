@@ -17,7 +17,7 @@ fn test_parse_position_left_top() {
         "y": "top"
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 0);
@@ -31,7 +31,7 @@ fn test_parse_position_right_bottom() {
         "y": "bottom"
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 1920 - 800); // display_width - window_width
@@ -45,7 +45,7 @@ fn test_parse_position_left_bottom() {
         "y": "bottom"
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 0);
@@ -59,7 +59,7 @@ fn test_parse_position_right_top() {
         "y": "top"
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 1920 - 800);
@@ -73,7 +73,7 @@ fn test_parse_position_absolute_coordinates() {
         "y": 200
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 100);
@@ -87,7 +87,7 @@ fn test_parse_position_mixed_pattern_and_number() {
         "y": 300
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 0);
@@ -101,7 +101,7 @@ fn test_parse_position_boundary_zero() {
         "y": 0
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 0);
@@ -115,7 +115,7 @@ fn test_parse_position_boundary_max() {
         "y": 1080
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 1920);
@@ -130,7 +130,7 @@ fn test_parse_position_window_larger_than_display() {
         "y": "bottom"
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 2500, 1500, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 2500, 1500, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 1920 - 2500); // 負の値になる
@@ -144,7 +144,7 @@ fn test_parse_position_invalid_x_pattern() {
         "y": "top"
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("無効な x 値"));
@@ -157,7 +157,7 @@ fn test_parse_position_invalid_y_pattern() {
         "y": "middle"
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("無効な y 値"));
@@ -170,7 +170,7 @@ fn test_parse_position_negative_x() {
         "y": 200
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("x が負です"));
@@ -183,7 +183,7 @@ fn test_parse_position_negative_y() {
         "y": -200
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("y が負です"));
@@ -195,7 +195,7 @@ fn test_parse_position_missing_x_field() {
         "y": "top"
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("x フィールドが見つかりません"));
@@ -207,7 +207,7 @@ fn test_parse_position_missing_y_field() {
         "x": "left"
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("y フィールドが見つかりません"));
@@ -217,7 +217,7 @@ fn test_parse_position_missing_y_field() {
 fn test_parse_position_not_object() {
     let position = json!("not an object");
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("オブジェクトである必要があります"));
@@ -230,7 +230,7 @@ fn test_parse_position_x_invalid_type() {
         "y": "top"
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("文字列または数値である必要があります"));
@@ -243,7 +243,7 @@ fn test_parse_position_y_invalid_type() {
         "y": []
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("文字列または数値である必要があります"));
@@ -257,7 +257,7 @@ fn test_parse_position_float_coordinates() {
         "y": 200.7
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("整数である必要があります"));
@@ -306,7 +306,7 @@ fn test_parse_size_max_max() {
     assert!(result.is_ok());
     let (width, height) = result.unwrap();
     assert_eq!(width, 1920);
-    assert_eq!(height, 1080);
+    assert_eq!(height, 1055); // "max" はメニューバー高さ (25px) を考慮
 }
 
 #[test]
@@ -320,7 +320,7 @@ fn test_parse_size_mixed_pattern() {
     assert!(result.is_ok());
     let (width, height) = result.unwrap();
     assert_eq!(width, 1920 / 2);
-    assert_eq!(height, 1080);
+    assert_eq!(height, 1055); // "max" はメニューバー高さ (25px) を考慮
 }
 
 #[test]
@@ -557,7 +557,7 @@ fn test_parse_position_very_large_coordinates() {
         "y": 100000
     });
 
-    let result = parse_position_value(&position, 1920, 1080, 800, 600, "position");
+    let result = parse_position_value(&position, None, 1920, 1080, 800, 600, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 100000);
@@ -586,7 +586,7 @@ fn test_parse_position_small_display() {
         "y": "bottom"
     });
 
-    let result = parse_position_value(&position, 800, 600, 400, 300, "position");
+    let result = parse_position_value(&position, None, 800, 600, 400, 300, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 400);
@@ -615,7 +615,7 @@ fn test_parse_position_4k_display() {
         "y": "bottom"
     });
 
-    let result = parse_position_value(&position, 3840, 2160, 1920, 1080, "position");
+    let result = parse_position_value(&position, None, 3840, 2160, 1920, 1080, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 1920);
@@ -644,7 +644,7 @@ fn test_parse_position_odd_display_dimensions() {
         "y": "bottom"
     });
 
-    let result = parse_position_value(&position, 1921, 1081, 801, 601, "position");
+    let result = parse_position_value(&position, None, 1921, 1081, 801, 601, "position");
     assert!(result.is_ok());
     let (x, y) = result.unwrap();
     assert_eq!(x, 1120);
@@ -1147,4 +1147,135 @@ fn test_validate_settings_with_invalid_max_files() {
     // 検証: バリデーションエラーが返される
     assert!(result.is_err());
     assert!(result.unwrap_err().message.contains("max_files は1以上"));
+}
+
+// =============================================================================
+// Issue #92: height/width: "max" 対応テスト
+// =============================================================================
+
+/// height が "max" の場合、display_height - 25 を返すことを確認
+#[test]
+fn test_parse_size_with_height_max() {
+    // 目的: height が "max" の場合、メニューバー高さ (25px) を考慮した値を返すことを確認
+    // 検証項目: height = "max" の場合、戻り値が display_height - 25 であること
+
+    let size = json!({
+        "width": "half",
+        "height": "max"
+    });
+
+    let result = parse_size_value(&size, 1920, 1080, "size");
+    assert!(result.is_ok());
+    let (width, height) = result.unwrap();
+    assert_eq!(width, 960); // half
+    assert_eq!(height, 1055); // 1080 - 25（メニューバー高さを引く）
+}
+
+/// width が "max" の場合、X座標が 0 になることを確認
+#[test]
+fn test_parse_position_with_width_max() {
+    // 目的: width が "max" の場合、X座標が 0 に設定されることを確認
+    // 検証項目: width が "max" の場合、指定された X 座標（"left"）が無視され、0 が返される
+
+    let position = json!({
+        "x": "left",
+        "y": "top"
+    });
+    let size = json!({
+        "width": "max",
+        "height": "half"
+    });
+
+    let result = parse_position_value(&position, Some(&size), 1920, 1080, 1920, 540, "position");
+    assert!(result.is_ok());
+    let (x, y) = result.unwrap();
+    assert_eq!(x, 0); // width: max の場合、X座標は 0
+    assert_eq!(y, 25); // height: half なので、Y座標は "top" の値
+}
+
+/// height が "max" の場合、Y座標が 0 になることを確認
+#[test]
+fn test_parse_position_with_height_max() {
+    // 目的: height が "max" の場合、Y座標が 0 に設定されることを確認
+    // 検証項目: height が "max" の場合、指定された Y 座標（"top"）が無視され、0 が返される
+
+    let position = json!({
+        "x": "left",
+        "y": "top"
+    });
+    let size = json!({
+        "width": "half",
+        "height": "max"
+    });
+
+    // height="max" なので高さは 1080 - 25 = 1055
+    let result = parse_position_value(&position, Some(&size), 1920, 1080, 960, 1055, "position");
+    assert!(result.is_ok());
+    let (x, y) = result.unwrap();
+    assert_eq!(x, 0); // width: half なので、X座標は "left" の値（0）
+    assert_eq!(y, 0); // height: max の場合、Y座標は 0
+}
+
+/// width/height が両方 "max" の場合、X/Y座標が両方 0 になることを確認
+#[test]
+fn test_parse_position_with_both_max() {
+    // 目的: width と height が両方 "max" の場合、X と Y 座標が両方 0 に設定されることを確認
+    // 検証項目: "max" 指定で座標が無視され、すべて 0 になること
+
+    let position = json!({
+        "x": "right",
+        "y": "bottom"
+    });
+    let size = json!({
+        "width": "max",
+        "height": "max"
+    });
+
+    // height="max" なので高さは 1080 - 25 = 1055
+    let result = parse_position_value(&position, Some(&size), 1920, 1080, 1920, 1055, "position");
+    assert!(result.is_ok());
+    let (x, y) = result.unwrap();
+    assert_eq!(x, 0); // width: max の場合、X座標は 0（"right" を無視）
+    assert_eq!(y, 0); // height: max の場合、Y座標は 0（"bottom" を無視）
+}
+
+/// max 指定で境界値警告が出ないことを確認
+#[test]
+fn test_validate_layout_bounds_with_max_no_warning() {
+    // 目的: "max" 指定でメニューバーを考慮した計算が行われ、境界値警告が出ないことを確認
+    // 検証項目: width="max", height="max" でディスプレイ境界内に収まっていることを確認
+
+    let layout = LayoutFile {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "TestApp".to_string(),
+                    title: None,
+                    position: Some(Position {
+                        x: json!("left"),
+                        y: json!("top"),
+                    }),
+                    size: Some(Size {
+                        width: json!("max"),
+                        height: json!("max"),
+                    }),
+                }],
+            }],
+        }],
+    };
+
+    let connected_displays = vec![DisplayInfo {
+        name: "Built-in".to_string(),
+        width: 1920,
+        height: 1080,
+        origin_x: 0,
+        origin_y: 0,
+    }];
+
+    let result = validate_layout(&layout, Some(&connected_displays));
+    assert!(result.is_ok());
+    let warnings = result.unwrap();
+    assert_eq!(warnings.len(), 0);
 }
