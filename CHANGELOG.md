@@ -57,17 +57,23 @@
 
 ### 対応プラットフォーム
 
-- macOS 10.15 以上
+- **macOS 10.15 以上**（詳細は [README.md](README.md) の「前提条件」を参照）
 
-### ビルド方法
+### ビルド・インストール方法
+
+詳細な手順は [README.md](README.md) のインストールセクションを参照してください。
+
+### クイックスタート
+
+#### ビルド
 
 ```bash
 cargo build --release
 ```
 
-ビルド済みバイナリ: `target/release/apptidying`
+生成されるバイナリ: `target/release/apptidying`
 
-### インストール方法
+#### インストール
 
 ```bash
 # オプション 1: /usr/local/bin にコピー
