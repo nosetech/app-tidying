@@ -1,19 +1,42 @@
 # deny.toml - cargo-deny の設定ファイル
 # 依存関係のセキュリティ脆弱性とライセンスをチェック
 
+[advisories]
+# セキュリティ脆弱性データベース（RustSec Advisory Database）
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
 [licenses]
 # ライセンスのチェック
 # 許可するライセンスのリスト
 allow = [
     "MIT",
     "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
     "Unlicense",
     "MPL-2.0",
     "Unicode-3.0",
 ]
 
+# ライセンス検出の信頼度しきい値（0.0 〜 1.0）
+confidence-threshold = 0.8
+
 [bans]
-# 重複する依存関係やキャレット約版の問題を検出
-# 許可: 依存関係の変動性を許可
+# 重複する依存関係やワイルドカード指定の問題を検出
+# 複数バージョンの依存関係は警告
 multiple-versions = "warn"
+
+# ワイルドカード指定は警告
 wildcards = "warn"
+
+[sources]
+# クレートのソースチェック
+# 不明なレジストリは警告
+unknown-registry = "warn"
+
+# 不明な git リポジトリは警告
+unknown-git = "warn"
+
+# 許可するソースレジストリ（crates.io のみ）
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
