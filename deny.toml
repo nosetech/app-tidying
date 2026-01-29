@@ -1,0 +1,19 @@
+# deny.toml - cargo-deny の設定ファイル
+# 依存関係のセキュリティ脆弱性とライセンスをチェック
+
+[licenses]
+# ライセンスのチェック
+# 許可するライセンスのリスト
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Unlicense",
+    "MPL-2.0",
+    "Unicode-3.0",
+]
+
+[bans]
+# 重複する依存関係やキャレット約版の問題を検出
+# 許可: 依存関係の変動性を許可
+multiple-versions = "warn"
+wildcards = "warn"
