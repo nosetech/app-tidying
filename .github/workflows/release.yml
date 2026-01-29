@@ -1,0 +1,168 @@
+name: Release
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  # ステップ1: コード品質チェック（並列実行）
+  quality:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo for quality checks
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-quality-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-quality-
+
+      - name: Check formatting with rustfmt
+        run: cargo fmt -- --check
+
+      - name: Run clippy linter (all targets, all features - fail on warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  # ステップ2: テスト実行
+  test:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo for tests
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-test-
+            ${{ runner.os }}-quality-
+
+      - name: Run tests
+        run: cargo test
+
+  # ステップ3: リリースビルド（quality と test 完了後）
+  release-build:
+    runs-on: macos-latest
+    needs: [quality, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo for release build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-release-
+            ${{ runner.os }}-test-
+
+      - name: Build release binary
+        run: cargo build --release
+
+      # バイナリをアーティファクトとして保存
+      - name: Upload release binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: apptidying-macos-${{ github.sha }}
+          path: target/release/apptidying
+          retention-days: 30
+
+      # バイナリ情報の出力（デバッグ用）
+      - name: Show binary info
+        run: |
+          echo "Binary size:"
+          ls -lh target/release/apptidying
+          echo "Binary hash (SHA256):"
+          shasum -a 256 target/release/apptidying
+
+  # ステップ4: セキュリティ＆ドキュメント（quality と test 完了後、並列実行）
+  security-and-docs:
+    runs-on: macos-latest
+    needs: [quality, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # キャッシュを先に復元
+      - name: Cache cargo for security and docs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-security-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-security-
+            ${{ runner.os }}-test-
+
+      # キャッシュが存在しない場合のみインストール
+      - name: Install cargo-deny
+        run: |
+          if ! command -v cargo-deny &> /dev/null; then
+            echo "cargo-deny not found, installing..."
+            cargo install cargo-deny --locked
+          else
+            echo "cargo-deny already installed (from cache)"
+          fi
+
+      - name: Security check with cargo-deny
+        run: cargo deny check
+
+      - name: Generate documentation
+        run: cargo doc --no-deps
+
+  # ステップ5: すべてのチェック完了を確認
+  all-checks:
+    runs-on: macos-latest
+    needs: [quality, test, release-build, security-and-docs]
+    if: always()
+    steps:
+      - name: Check all previous jobs status
+        run: |
+          if [[ "${{ needs.quality.result }}" == "failure" ]] || \
+             [[ "${{ needs.test.result }}" == "failure" ]] || \
+             [[ "${{ needs.release-build.result }}" == "failure" ]] || \
+             [[ "${{ needs.security-and-docs.result }}" == "failure" ]]; then
+            echo "[ERROR] One or more checks failed"
+            exit 1
+          fi
+          echo "[SUCCESS] All checks passed successfully"
