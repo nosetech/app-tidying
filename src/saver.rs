@@ -1,0 +1,497 @@
+use crate::applescript;
+use crate::config::{AppWindowConfig, DisplayConfig, LayoutConfig, LayoutFile, Position, Size};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::process::Command;
+
+/// save機能の実行結果
+#[derive(Debug, Clone)]
+pub struct SaveResult {
+    /// すべて成功したか
+    pub all_success: bool,
+    /// 保存したアプリケーション数
+    pub saved_app_count: usize,
+    /// 保存したウィンドウ数
+    pub saved_window_count: usize,
+    /// スキップしたウィンドウ数（最小化・非表示・システムウィンドウ）
+    pub skipped_window_count: usize,
+    /// 失敗したアプリ名のリスト
+    pub failed_apps: Vec<String>,
+}
+
+/// save機能のエラー型
+#[derive(Debug, Clone)]
+pub struct SaveError {
+    pub message: String,
+}
+
+impl std::fmt::Display for SaveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for SaveError {}
+
+/// 現在のウィンドウレイアウトを保存する
+///
+/// # Arguments
+/// * `output_path` - 保存先のファイルパス
+/// * `include_own_terminal` - ターミナルウィンドウを含めるか（--own オプション）
+///
+/// # Returns
+/// * `Ok(SaveResult)` - 成功または部分成功
+/// * `Err(SaveError)` - 全体失敗（致命的エラー）
+pub fn save_layout(
+    output_path: &PathBuf,
+    include_own_terminal: bool,
+) -> Result<SaveResult, SaveError> {
+    // 1. ディスプレイ情報を取得
+    let displays = applescript::get_all_connected_displays().map_err(|e| SaveError {
+        message: format!("ディスプレイ情報の取得に失敗しました: {}", e),
+    })?;
+
+    if displays.is_empty() {
+        return Err(SaveError {
+            message: "接続されているディスプレイが見つかりません".to_string(),
+        });
+    }
+
+    // 2. 実行中アプリケーション一覧を取得
+    let running_apps = applescript::get_running_applications().map_err(|e| SaveError {
+        message: format!("実行中アプリケーション一覧の取得に失敗しました: {}", e),
+    })?;
+
+    // 3. 実行中のターミナルアプリを特定（ターミナルウィンドウ除外判定用）
+    let own_terminal_app = if include_own_terminal {
+        None
+    } else {
+        get_own_terminal_app()
+    };
+
+    // 4. 各アプリケーションのウィンドウ情報を収集
+    let mut display_windows: HashMap<String, Vec<AppWindowConfig>> = HashMap::new();
+    let mut saved_app_count = 0;
+    let mut saved_window_count = 0;
+    let mut skipped_window_count = 0;
+    let mut failed_apps = Vec::new();
+
+    for app in &running_apps {
+        // ウィンドウ情報を取得
+        let windows = match applescript::get_all_windows(&app.name) {
+            Ok(windows) => windows,
+            Err(e) => {
+                log::debug!("アプリ '{}' のウィンドウ取得に失敗: {}", app.name, e);
+                failed_apps.push(app.name.clone());
+                continue;
+            }
+        };
+
+        if windows.is_empty() {
+            continue;
+        }
+
+        // ウィンドウをフィルタリングして、ディスプレイ別に分類
+        let mut app_saved_count = 0;
+        for window in windows {
+            // ウィンドウを保存対象に含めるか判定
+            if !should_include_window(&window, &app.name, &own_terminal_app) {
+                skipped_window_count += 1;
+                continue;
+            }
+
+            // ウィンドウが属するディスプレイを判定
+            let display = match find_display_for_window(&window, &displays) {
+                Some(d) => d,
+                None => {
+                    log::warn!(
+                        "ウィンドウ '{}' (アプリ: {}) はディスプレイ範囲外です",
+                        window.title,
+                        app.name
+                    );
+                    skipped_window_count += 1;
+                    continue;
+                }
+            };
+
+            // AppWindowConfig を構築
+            // ウィンドウの位置をディスプレイ相対座標に変換（負の値を避けるため）
+            let relative_x = window.position.0 - display.origin_x;
+            let relative_y = window.position.1 - display.origin_y;
+
+            let window_config = AppWindowConfig {
+                app: app.name.clone(),
+                title: Some(window.title.clone()),
+                position: Some(Position {
+                    x: serde_json::json!(relative_x),
+                    y: serde_json::json!(relative_y),
+                }),
+                size: Some(Size {
+                    width: serde_json::json!(window.size.0),
+                    height: serde_json::json!(window.size.1),
+                }),
+            };
+
+            // ディスプレイごとにウィンドウを分類
+            display_windows
+                .entry(display.name.clone())
+                .or_default()
+                .push(window_config);
+
+            saved_window_count += 1;
+            app_saved_count += 1;
+        }
+
+        if app_saved_count > 0 {
+            saved_app_count += 1;
+        }
+    }
+
+    // 5. 保存すべきウィンドウが存在するか確認
+    if saved_window_count == 0 {
+        if running_apps.is_empty() {
+            return Err(SaveError {
+                message: "実行中のアプリケーションが見つかりませんでした。アプリケーションを起動してから再度お試しください".to_string(),
+            });
+        } else if skipped_window_count > 0 {
+            return Err(SaveError {
+                message: format!(
+                    "保存可能なウィンドウが見つかりませんでした。{}個のウィンドウがスキップされました（最小化、非表示、システムウィンドウなど）",
+                    skipped_window_count
+                ),
+            });
+        } else {
+            return Err(SaveError {
+                message: "保存すべきウィンドウが見つかりませんでした。アプリケーションを起動してから再度お試しください".to_string(),
+            });
+        }
+    }
+
+    // 6. LayoutFile 構造体を構築
+    let mut display_configs = Vec::new();
+    for display in &displays {
+        let windows = display_windows.remove(&display.name).unwrap_or_default();
+
+        // ディスプレイに保存対象ウィンドウがある場合のみ含める
+        if !windows.is_empty() {
+            display_configs.push(DisplayConfig {
+                name: display.name.clone(),
+                windows,
+            });
+        }
+    }
+
+    let layout = LayoutFile {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: display_configs,
+        }],
+    };
+
+    // 7. JSONファイルに保存
+    crate::config::save_layout_file(&layout, output_path).map_err(|e| SaveError {
+        message: format!("設定ファイルの保存に失敗しました: {}", e),
+    })?;
+
+    log::info!(
+        "ウィンドウレイアウトを保存しました: {} (アプリ: {}, ウィンドウ: {})",
+        output_path.display(),
+        saved_app_count,
+        saved_window_count
+    );
+
+    Ok(SaveResult {
+        all_success: failed_apps.is_empty(),
+        saved_app_count,
+        saved_window_count,
+        skipped_window_count,
+        failed_apps,
+    })
+}
+
+/// ウィンドウを保存対象に含めるべきか判定
+fn should_include_window(
+    window: &applescript::WindowInfo,
+    app_name: &str,
+    own_terminal_app: &Option<String>,
+) -> bool {
+    // 1. 最小化されたウィンドウを除外
+    if window.minimized {
+        log::debug!(
+            "ウィンドウ '{}' は最小化されているためスキップ",
+            window.title
+        );
+        return false;
+    }
+
+    // 2. 非表示ウィンドウを除外
+    if !window.visible {
+        log::debug!("ウィンドウ '{}' は非表示のためスキップ", window.title);
+        return false;
+    }
+
+    // 3. システムウィンドウを除外
+    if applescript::is_excluded_window(app_name, &window.title) {
+        log::debug!(
+            "ウィンドウ '{}' はシステムウィンドウのためスキップ",
+            window.title
+        );
+        return false;
+    }
+
+    // 4. --own オプションが無効の場合、実行中のターミナルアプリのウィンドウを除外
+    if let Some(terminal_app) = own_terminal_app {
+        if app_name == terminal_app {
+            log::debug!(
+                "ウィンドウ '{}' は実行中のターミナル '{}' のためスキップ (--own なし)",
+                window.title,
+                terminal_app
+            );
+            return false;
+        }
+    }
+
+    true
+}
+
+/// ウィンドウが属するディスプレイを判定
+///
+/// ウィンドウの位置座標から、どのディスプレイに属するかを判定します。
+/// ウィンドウの中心座標がディスプレイの範囲内にあるかで判断します。
+///
+/// # 注意
+/// ウィンドウが複数ディスプレイにまたがる場合、中心座標で判定するため、
+/// 意図したディスプレイと異なる可能性があります。その場合はDEBUGログで警告します。
+fn find_display_for_window(
+    window: &applescript::WindowInfo,
+    displays: &[applescript::DisplayInfo],
+) -> Option<applescript::DisplayInfo> {
+    // ウィンドウの中心座標を計算
+    let center_x = window.position.0 + window.size.0 / 2;
+    let center_y = window.position.1 + window.size.1 / 2;
+
+    // 中心座標が含まれるディスプレイを検索
+    for display in displays {
+        let display_right = display.origin_x + display.width;
+        let display_bottom = display.origin_y + display.height;
+
+        if center_x >= display.origin_x
+            && center_x < display_right
+            && center_y >= display.origin_y
+            && center_y < display_bottom
+        {
+            // ウィンドウが複数ディスプレイにまたがるケースを検出
+            let window_right = window.position.0 + window.size.0;
+            let window_bottom = window.position.1 + window.size.1;
+
+            let spans_multiple = window.position.0 < display.origin_x
+                || window_right > display_right
+                || window.position.1 < display.origin_y
+                || window_bottom > display_bottom;
+
+            if spans_multiple {
+                log::debug!(
+                    "ウィンドウ '{}' は複数ディスプレイにまたがっています。中心座標のディスプレイ '{}' に保存します。",
+                    window.title,
+                    display.name
+                );
+            }
+
+            return Some(display.clone());
+        }
+    }
+
+    None
+}
+
+/// 実行中のターミナルアプリケーションを特定する
+///
+/// 優先順位：
+/// 1. TERM_PROGRAM 環境変数から判定（tmux以外の場合）
+/// 2. TERM_PROGRAM=tmux の場合、ターミナル固有の環境変数をチェック
+/// 3. 親プロセスツリーから判定（フォールバック）
+fn get_own_terminal_app() -> Option<String> {
+    // 方法1: TERM_PROGRAM 環境変数から判定
+    if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
+        log::debug!("TERM_PROGRAM: {}", term_program);
+
+        // tmux以外の場合はそのまま使用
+        if term_program != "tmux" {
+            if let Some(app) = convert_term_program_to_app_name(&term_program) {
+                log::debug!("TERM_PROGRAM から特定: {}", app);
+                return Some(app);
+            }
+        } else {
+            // TERM_PROGRAM=tmux の場合、ターミナル固有の環境変数をチェック
+            log::debug!("tmux環境を検出。ターミナル固有の環境変数をチェック中");
+            if let Some(app) = detect_terminal_from_env_vars() {
+                log::debug!("ターミナル固有の環境変数から特定: {}", app);
+                return Some(app);
+            }
+        }
+    }
+
+    // 方法2: 環境変数から判定失敗時、ターミナル固有の環境変数をチェック
+    log::debug!("TERM_PROGRAM が設定されていないため、ターミナル固有の環境変数をチェック");
+    if let Some(app) = detect_terminal_from_env_vars() {
+        log::debug!("ターミナル固有の環境変数から特定: {}", app);
+        return Some(app);
+    }
+
+    // 方法3: 親プロセスツリーから判定（フォールバック）
+    log::debug!("環境変数からの判定失敗。プロセスツリーから検索します");
+    detect_terminal_from_process_tree()
+}
+
+/// ターミナル固有の環境変数から、ターミナルアプリを特定する
+fn detect_terminal_from_env_vars() -> Option<String> {
+    // ghostty
+    if std::env::var("GHOSTTY_BIN_DIR").is_ok()
+        || std::env::var("__CFBundleIdentifier")
+            .map(|v| v.contains("ghostty"))
+            .unwrap_or(false)
+    {
+        log::debug!("ghostty の環境変数を検出");
+        return Some("ghostty".to_string());
+    }
+
+    // iTerm2
+    if std::env::var("ITERM_SESSION_ID").is_ok() || std::env::var("ITERM_PROFILE").is_ok() {
+        log::debug!("iTerm2 の環境変数を検出");
+        return Some("iTerm2".to_string());
+    }
+
+    // kitty
+    if std::env::var("KITTY_WINDOW_ID").is_ok() || std::env::var("KITTY_LISTEN_ON").is_ok() {
+        log::debug!("kitty の環境変数を検出");
+        return Some("kitty".to_string());
+    }
+
+    // WezTerm
+    if std::env::var("WEZTERM_PANE").is_ok() || std::env::var("WEZTERM_EXECUTABLE").is_ok() {
+        log::debug!("WezTerm の環境変数を検出");
+        return Some("WezTerm".to_string());
+    }
+
+    None
+}
+
+/// 親プロセスツリーから、ターミナルアプリを特定する
+fn detect_terminal_from_process_tree() -> Option<String> {
+    let pid = std::process::id();
+    log::debug!("app-tidying PID: {}", pid);
+
+    // 親プロセスをたどってターミナルアプリを探す（最大10階層）
+    let mut current_pid = pid;
+    for level in 0..10 {
+        // 親プロセスIDを取得
+        let parent_pid = match get_parent_pid(current_pid) {
+            Some(ppid) => ppid,
+            None => {
+                log::debug!(
+                    "階層 {}: 親プロセスID取得失敗 (PID: {})",
+                    level,
+                    current_pid
+                );
+                break;
+            }
+        };
+
+        // 親プロセスの名前を取得
+        let process_name = match get_process_name(parent_pid) {
+            Some(name) => name,
+            None => {
+                log::debug!("階層 {}: プロセス名取得失敗 (PID: {})", level, parent_pid);
+                break;
+            }
+        };
+
+        log::debug!("階層 {}: {} (PID: {})", level, process_name, parent_pid);
+
+        // ターミナルアプリかを判定
+        if is_terminal_app(&process_name) {
+            log::debug!(
+                "プロセスツリーからターミナルアプリを特定: {} (PID: {})",
+                process_name,
+                parent_pid
+            );
+            return Some(process_name);
+        }
+
+        current_pid = parent_pid;
+    }
+
+    log::debug!("ターミナルアプリを特定できませんでした。ターミナル以外から実行されている可能性があります。");
+    None
+}
+
+/// 指定されたプロセスの親プロセスIDを取得する
+fn get_parent_pid(pid: u32) -> Option<u32> {
+    let output = Command::new("ps")
+        .arg("-o")
+        .arg("ppid=")
+        .arg("-p")
+        .arg(pid.to_string())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let ppid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    ppid_str.parse::<u32>().ok()
+}
+
+/// 指定されたプロセスIDのプロセス名を取得する
+fn get_process_name(pid: u32) -> Option<String> {
+    let output = Command::new("ps")
+        .arg("-o")
+        .arg("comm=")
+        .arg("-p")
+        .arg(pid.to_string())
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if name.is_empty() {
+        return None;
+    }
+
+    Some(name)
+}
+
+/// アプリケーション名がターミナルアプリケーションかを判定する
+fn is_terminal_app(app_name: &str) -> bool {
+    const TERMINAL_APP_NAMES: &[&str] = &[
+        "Terminal",
+        "iTerm2",
+        "iTerm",
+        "ghostty",
+        "Alacritty",
+        "kitty",
+        "WezTerm",
+        "alacritty",
+        "wezterm",
+    ];
+
+    TERMINAL_APP_NAMES.contains(&app_name)
+}
+
+/// TERM_PROGRAM 環境変数の値をアプリケーション名に変換する
+fn convert_term_program_to_app_name(term_program: &str) -> Option<String> {
+    match term_program {
+        "Apple_Terminal" => Some("Terminal".to_string()),
+        "iTerm.app" => Some("iTerm2".to_string()),
+        "iTerm2" => Some("iTerm2".to_string()),
+        "ghostty" => Some("ghostty".to_string()),
+        "WezTerm" => Some("WezTerm".to_string()),
+        "kitty" => Some("kitty".to_string()),
+        "Alacritty" => Some("Alacritty".to_string()),
+        _ => None,
+    }
+}

@@ -1,0 +1,21 @@
+# rustfmt configuration
+# See: https://rust-lang.github.io/rustfmt/
+# Note: Only stable configuration options are used (compatible with stable Rust)
+
+# Edition
+edition = "2021"
+
+# Line length
+max_width = 100
+
+# Indentation style (stable options)
+hard_tabs = false
+tab_spaces = 4
+
+# Import statement handling
+reorder_imports = true
+# Note: rustfmt does NOT remove unused imports
+# Unused import removal is handled by clippy or cargo fix
+
+# Other formatting options (stable)
+match_block_trailing_comma = false

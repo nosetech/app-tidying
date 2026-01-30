@@ -1,0 +1,174 @@
+mod applescript;
+mod cli;
+mod config;
+mod loader;
+mod logger;
+mod saver;
+
+use clap::Parser;
+
+use cli::{Cli, Commands};
+use logger::LoggerConfig;
+
+fn main() {
+    let args = Cli::parse();
+
+    // settings.json から設定を読み込む
+    let settings_result = config::load_default_settings();
+    let notification_config = settings_result
+        .as_ref()
+        .ok()
+        .and_then(|s| s.notification.clone());
+    let log_rotation_config = settings_result
+        .as_ref()
+        .ok()
+        .and_then(|s| s.log_rotation.clone());
+
+    let logger_config = LoggerConfig {
+        debug_mode: args.verbose,
+        notification_config,
+        log_rotation_config,
+    };
+
+    logger::init(logger_config);
+
+    log::info!("App Tidying started");
+    log::debug!("Command: {:?}", args.command);
+
+    match args.command {
+        Commands::Load { path } => {
+            // 1. settings.json をロード（エラー時はデフォルト値を使用）
+            let timeout = if let Ok(settings) = &settings_result {
+                log::debug!("デフォルト settings.json を読み込みました");
+                settings.timeout.unwrap_or(3000)
+            } else {
+                log::debug!("デフォルト settings.json が見つかりません。デフォルト設定（3000ms）を使用します");
+                3000
+            };
+
+            // 2. layout.json をロード
+            let layout = if let Some(path) = path {
+                log::info!("Loading layout from: {}", path.display());
+                match config::load_layout_file(&path) {
+                    Ok(layout_file) => layout_file,
+                    Err(e) => {
+                        log::error!("レイアウトファイルの読み込みに失敗しました: {}", e);
+                        logger::show_notification(
+                            logger::NotificationLevel::Error,
+                            &format!("レイアウトファイルの読み込みに失敗しました: {}", e),
+                        );
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                log::info!("Loading layout from default configuration");
+                match config::load_default_layout() {
+                    Ok(layout_file) => layout_file,
+                    Err(e) => {
+                        log::error!(
+                            "デフォルトレイアウトファイルの読み込みに失敗しました: {}",
+                            e
+                        );
+                        logger::show_notification(
+                            logger::NotificationLevel::Error,
+                            &format!(
+                                "デフォルトレイアウトファイルの読み込みに失敗しました: {}",
+                                e
+                            ),
+                        );
+                        std::process::exit(1);
+                    }
+                }
+            };
+
+            // 3. load処理の実行
+            match loader::load_layout(&layout, timeout) {
+                Ok(result) => {
+                    // 成功時の処理
+                    if result.all_success {
+                        log::info!("ウィンドウレイアウトを正常に復元しました");
+                        logger::show_notification(
+                            logger::NotificationLevel::Info,
+                            "ウィンドウレイアウトを正常に復元しました",
+                        );
+                    } else {
+                        // 部分失敗
+                        let message = format!(
+                            "一部のウィンドウ配置に失敗しました（成功: {}, 失敗: {}）",
+                            result.success_count, result.failure_count
+                        );
+                        log::warn!("{}", message);
+                        logger::show_notification(logger::NotificationLevel::Warn, &message);
+                    }
+                }
+                Err(e) => {
+                    // 全体失敗
+                    log::error!("ウィンドウレイアウトの復元に失敗しました: {}", e);
+                    logger::show_notification(
+                        logger::NotificationLevel::Error,
+                        &format!("ウィンドウレイアウトの復元に失敗しました: {}", e),
+                    );
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::Save { path, own } => {
+            // 1. 保存先パスを決定
+            let output_path = if let Some(path) = path {
+                log::info!("レイアウトを保存します: {}", path.display());
+                path
+            } else {
+                log::info!("デフォルトレイアウトファイルにレイアウトを保存します");
+                match config::get_default_layout_path() {
+                    Ok(default_path) => default_path,
+                    Err(e) => {
+                        log::error!("デフォルトレイアウトパスの取得に失敗しました: {}", e);
+                        logger::show_notification(
+                            logger::NotificationLevel::Error,
+                            &format!("デフォルトレイアウトパスの取得に失敗しました: {}", e),
+                        );
+                        std::process::exit(1);
+                    }
+                }
+            };
+
+            if own {
+                log::info!("ターミナルウィンドウを含めて保存します");
+            }
+
+            // 2. save処理の実行
+            match saver::save_layout(&output_path, own) {
+                Ok(result) => {
+                    // 成功時の処理
+                    if result.all_success {
+                        let message = format!(
+                            "ウィンドウレイアウトを保存しました（アプリ: {}, ウィンドウ: {}）",
+                            result.saved_app_count, result.saved_window_count
+                        );
+                        log::info!("{}", message);
+                        logger::show_notification(logger::NotificationLevel::Info, &message);
+                    } else {
+                        // 部分失敗
+                        let message = format!(
+                            "一部のウィンドウ情報取得に失敗しました（保存: {}, スキップ: {}, 失敗アプリ: {}）",
+                            result.saved_window_count,
+                            result.skipped_window_count,
+                            result.failed_apps.join(", ")
+                        );
+                        log::warn!("{}", message);
+                        logger::show_notification(logger::NotificationLevel::Warn, &message);
+                    }
+                }
+                Err(e) => {
+                    // 全体失敗
+                    log::error!("ウィンドウレイアウトの保存に失敗しました: {}", e);
+                    logger::show_notification(
+                        logger::NotificationLevel::Error,
+                        &format!("ウィンドウレイアウトの保存に失敗しました: {}", e),
+                    );
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+}

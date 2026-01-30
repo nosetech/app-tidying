@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting with rustfmt
+        run: cargo fmt -- --check
+
+      - name: Run clippy linter (general checks - fail on warnings)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Check code complexity (cognitive_complexity)
+        id: complexity_check
+        run: |
+          cargo clippy --all-targets -- -W clippy::cognitive_complexity -W clippy::too_many_arguments 2>&1 | tee /tmp/clippy_output.txt
+          exit 0
+        continue-on-error: false
+
+      - name: Parse and post complexity warnings as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('/tmp/clippy_output.txt', 'utf-8');
+            const lines = output.split('\n');
+
+            // Extract complexity-related warnings
+            const complexityWarnings = lines.filter(line =>
+              (line.includes('warning: ') || line.includes('error: ')) &&
+              (line.includes('cognitive_complexity') || line.includes('too_many_arguments'))
+            );
+
+            if (complexityWarnings.length > 0) {
+              // Build detailed comment with context
+              let commentBody = '## ⚠️ Code Complexity Warnings\n\n';
+              commentBody += 'The following code complexity issues were detected:\n\n';
+              commentBody += '```\n' + complexityWarnings.join('\n') + '\n```\n\n';
+              commentBody += '### Guidelines\n';
+              commentBody += '- **cognitive_complexity**: Keep function logic simple (threshold: 15)\n';
+              commentBody += '- **too_many_arguments**: Limit function parameters (threshold: 5)\n\n';
+              commentBody += 'Please consider refactoring to improve code maintainability.';
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: commentBody
+              });
+            }
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Build project
+        run: cargo build
