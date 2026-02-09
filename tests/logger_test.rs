@@ -8,6 +8,9 @@ use std::sync::Mutex;
 // テスト間での環境変数の競合を防ぐためのロック
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+// テスト間でのログファイルアクセスの競合を防ぐためのロック
+static LOG_FILE_LOCK: Mutex<()> = Mutex::new(());
+
 // =============================================================================
 // NotificationConfig テスト
 // =============================================================================
@@ -1799,6 +1802,649 @@ fn test_log_rotation_default_config() {
     assert_eq!(default_config.rotation_type, "size");
     assert_eq!(default_config.max_size_mb, 10);
     assert_eq!(default_config.max_files, 5);
+}
+
+// =============================================================================
+// create_dialog_message() テスト
+// =============================================================================
+
+/// create_dialog_message() 関数のテスト
+/// 目的: NotificationLevel に応じて適切なダイアログメッセージが生成されることを確認
+/// ブラックボックス技法: 同値分割（Info/Warn/Error の3つのクラス）
+
+#[test]
+fn test_create_dialog_message_info_level() {
+    // 目的: INFO レベルではメッセージがそのまま返されることを確認
+    // 検証項目: create_dialog_message で INFO レベルの場合、ログファイルパス参照が追加されないこと
+
+    let message = "This is an info message";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Info, message);
+
+    // INFO レベルではメッセージはそのまま（ログファイル参照なし）
+    assert_eq!(result, message);
+    assert!(!result.contains("詳細はログファイルを参照してください"));
+}
+
+#[test]
+fn test_create_dialog_message_warn_level() {
+    // 目的: WARN レベルではメッセージがそのまま返されることを確認
+    // 検証項目: create_dialog_message で WARN レベルの場合、ログファイルパス参照が追加されないこと
+
+    let message = "This is a warning message";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Warn, message);
+
+    // WARN レベルではメッセージはそのまま（ログファイル参照なし）
+    assert_eq!(result, message);
+    assert!(!result.contains("詳細はログファイルを参照してください"));
+}
+
+#[test]
+fn test_create_dialog_message_error_level() {
+    // 目的: ERROR レベルではログファイルパス参照が追加されることを確認
+    // 検証項目: create_dialog_message で ERROR レベルの場合、メッセージにログファイルパスが含まれること
+
+    let message = "This is an error message";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Error, message);
+
+    // ERROR レベルではログファイルパスへの参照が追加される
+    assert!(result.contains(message)); // 元のメッセージが含まれる
+    assert!(result.contains("詳細はログファイルを参照してください"));
+    assert!(result.contains("Library/Application Support/biz.nosetech.apptidying/apptidying.log"));
+}
+
+#[test]
+fn test_create_dialog_message_error_level_structure() {
+    // 目的: ERROR レベルのメッセージ構造が正しいことを確認
+    // 検証項目: メッセージ、改行、ヘッダー、ログパスの順序が正しいこと
+
+    let message = "Critical error occurred";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Error, message);
+
+    // 構造検証: "<メッセージ>\n\n詳細はログファイルを参照してください:\n<ログパス>"
+    let parts: Vec<&str> = result.split("\n\n").collect();
+    assert_eq!(parts.len(), 2); // メッセージ部分とログ参照部分に分かれる
+    assert_eq!(parts[0], message);
+    assert!(parts[1].starts_with("詳細はログファイルを参照してください:"));
+}
+
+#[test]
+fn test_create_dialog_message_empty_message_info() {
+    // 目的: 空のメッセージでも正しく処理されることを確認（境界値テスト）
+    // 検証項目: INFO レベルで空のメッセージを渡した場合、空文字列が返されること
+
+    let message = "";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Info, message);
+
+    assert_eq!(result, "");
+}
+
+#[test]
+fn test_create_dialog_message_empty_message_error() {
+    // 目的: 空のメッセージでもエラーレベルではログパスが追加されることを確認（境界値テスト）
+    // 検証項目: ERROR レベルで空のメッセージを渡した場合でもログファイルパスが含まれること
+
+    let message = "";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Error, message);
+
+    // 空のメッセージでもログファイルパス参照は追加される
+    assert!(result.contains("詳細はログファイルを参照してください"));
+    assert!(result.contains("apptidying.log"));
+}
+
+#[test]
+fn test_create_dialog_message_very_long_message_info() {
+    // 目的: 非常に長いメッセージでも正しく処理されることを確認（境界値テスト）
+    // 検証項目: INFO レベルで長いメッセージを渡した場合、そのまま返されること
+
+    let long_message = "A".repeat(5000);
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Info, &long_message);
+
+    assert_eq!(result, long_message);
+    assert_eq!(result.len(), 5000);
+}
+
+#[test]
+fn test_create_dialog_message_very_long_message_error() {
+    // 目的: 非常に長いメッセージでもエラーレベルではログパスが追加されることを確認（境界値テスト）
+    // 検証項目: ERROR レベルで長いメッセージを渡した場合、メッセージ+ログパスが含まれること
+
+    let long_message = "B".repeat(5000);
+    let result =
+        apptidying::logger::create_dialog_message(&NotificationLevel::Error, &long_message);
+
+    assert!(result.contains(&long_message)); // 元のメッセージが含まれる
+    assert!(result.contains("詳細はログファイルを参照してください"));
+    assert!(result.len() > 5000); // ログパス情報が追加されているため、5000文字より長い
+}
+
+#[test]
+fn test_create_dialog_message_special_characters_info() {
+    // 目的: 特殊文字を含むメッセージが正しく処理されることを確認
+    // 検証項目: INFO レベルで特殊文字を含むメッセージを渡した場合、そのまま返されること
+
+    let message = "Error: \"file not found\"\nPath: C:\\test\\file.txt";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Info, message);
+
+    assert_eq!(result, message);
+    assert!(result.contains("\"")); // ダブルクォート
+    assert!(result.contains("\\")); // バックスラッシュ
+    assert!(result.contains("\n")); // 改行
+}
+
+#[test]
+fn test_create_dialog_message_special_characters_error() {
+    // 目的: 特殊文字を含むメッセージがエラーレベルで正しく処理されることを確認
+    // 検証項目: ERROR レベルで特殊文字を含むメッセージを渡した場合、メッセージとログパスが含まれること
+
+    let message = "Critical error: \"connection lost\"\nRetry: \\\\server\\path";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Error, message);
+
+    assert!(result.contains(message)); // 元のメッセージが含まれる（特殊文字も維持）
+    assert!(result.contains("詳細はログファイルを参照してください"));
+}
+
+#[test]
+fn test_create_dialog_message_unicode_info() {
+    // 目的: Unicode文字を含むメッセージが正しく処理されることを確認
+    // 検証項目: INFO レベルで日本語や絵文字を含むメッセージを渡した場合、そのまま返されること
+
+    let message = "日本語メッセージのテスト 🚀 絵文字も含む";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Info, message);
+
+    assert_eq!(result, message);
+    assert!(result.contains("日本語"));
+    assert!(result.contains("🚀"));
+}
+
+#[test]
+fn test_create_dialog_message_unicode_error() {
+    // 目的: Unicode文字を含むメッセージがエラーレベルで正しく処理されることを確認
+    // 検証項目: ERROR レベルで日本語や絵文字を含むメッセージを渡した場合、メッセージとログパスが含まれること
+
+    let message = "重大なエラーが発生しました ⚠️";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Error, message);
+
+    assert!(result.contains(message)); // 元のメッセージが含まれる
+    assert!(result.contains("詳細はログファイルを参照してください"));
+    assert!(result.contains("⚠️"));
+}
+
+#[test]
+fn test_create_dialog_message_multiline_info() {
+    // 目的: 複数行のメッセージが正しく処理されることを確認
+    // 検証項目: INFO レベルで改行を含むメッセージを渡した場合、そのまま返されること
+
+    let message = "Line 1\nLine 2\nLine 3";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Info, message);
+
+    assert_eq!(result, message);
+    let lines: Vec<&str> = result.lines().collect();
+    assert_eq!(lines.len(), 3);
+}
+
+#[test]
+fn test_create_dialog_message_multiline_error() {
+    // 目的: 複数行のメッセージがエラーレベルで正しく処理されることを確認
+    // 検証項目: ERROR レベルで改行を含むメッセージを渡した場合、メッセージとログパスが含まれること
+
+    let message = "Error occurred:\nReason 1\nReason 2";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Error, message);
+
+    assert!(result.contains("Error occurred:"));
+    assert!(result.contains("Reason 1"));
+    assert!(result.contains("Reason 2"));
+    assert!(result.contains("詳細はログファイルを参照してください"));
+}
+
+#[test]
+fn test_create_dialog_message_single_char_info() {
+    // 目的: 1文字のメッセージが正しく処理されることを確認（境界値テスト）
+    // 検証項目: INFO レベルで1文字のメッセージを渡した場合、そのまま返されること
+
+    let message = "A";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Info, message);
+
+    assert_eq!(result, "A");
+    assert_eq!(result.len(), 1);
+}
+
+#[test]
+fn test_create_dialog_message_single_char_error() {
+    // 目的: 1文字のメッセージでもエラーレベルではログパスが追加されることを確認（境界値テスト）
+    // 検証項目: ERROR レベルで1文字のメッセージを渡した場合、ログパスが追加されること
+
+    let message = "E";
+    let result = apptidying::logger::create_dialog_message(&NotificationLevel::Error, message);
+
+    assert!(result.contains("E"));
+    assert!(result.contains("詳細はログファイルを参照してください"));
+    assert!(result.len() > 1); // ログパス情報が追加されているため、1文字より長い
+}
+
+// =============================================================================
+// read_recent_logs() テスト
+// =============================================================================
+
+/// read_recent_logs() 関数のテスト
+/// 目的: ログファイルから直近のログを正しく読み込めることを確認
+/// ブラックボックス技法: 境界値分析（0行、1行、複数行、ファイルなし）
+
+#[test]
+fn test_read_recent_logs_file_not_exists() {
+    // 目的: ログファイルが存在しない場合の処理を確認
+    // 検証項目: ファイルが存在しない場合に Ok(String::new()) が返されること
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルを削除（テスト環境を初期化）
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path); // 存在しなくてもエラー無視
+    }
+
+    let result = apptidying::logger::read_recent_logs(5);
+
+    // ファイルが存在しない場合は空文字列が返される
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), "");
+}
+
+#[test]
+fn test_read_recent_logs_empty_file() {
+    // 目的: 空のログファイルが存在する場合の処理を確認（境界値テスト）
+    // 検証項目: 空ファイルの場合に空文字列が返されること
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ（既存のログを削除）
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 空のログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        let _ = file.write_all(b""); // 空の内容を書き込む
+    }
+
+    let result = apptidying::logger::read_recent_logs(5);
+
+    // 空のファイルなので空文字列が返される
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), "");
+}
+
+#[test]
+fn test_read_recent_logs_single_line() {
+    // 目的: 1行のログが存在する場合の処理を確認（境界値テスト）
+    // 検証項目: 1行のログが正しく読み込まれること
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 1行のログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        writeln!(file, "[2024-01-01 10:00:00] [INFO] Test log line 1").unwrap();
+    }
+
+    let result = apptidying::logger::read_recent_logs(5);
+
+    // 1行のログが返される
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+    assert_eq!(logs, "[2024-01-01 10:00:00] [INFO] Test log line 1");
+}
+
+#[test]
+fn test_read_recent_logs_multiple_lines_less_than_requested() {
+    // 目的: 要求行数より少ないログが存在する場合の処理を確認
+    // 検証項目: 実際の行数分のログが返されること
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 3行のログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        writeln!(file, "[2024-01-01 10:00:00] [INFO] Line 1").unwrap();
+        writeln!(file, "[2024-01-01 10:00:01] [INFO] Line 2").unwrap();
+        writeln!(file, "[2024-01-01 10:00:02] [INFO] Line 3").unwrap();
+    }
+
+    // 5行要求するが、実際は3行のみ
+    let result = apptidying::logger::read_recent_logs(5);
+
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+    let lines: Vec<&str> = logs.lines().collect();
+    assert_eq!(lines.len(), 3); // 3行のみ返される
+    assert!(logs.contains("Line 1"));
+    assert!(logs.contains("Line 2"));
+    assert!(logs.contains("Line 3"));
+}
+
+#[test]
+fn test_read_recent_logs_multiple_lines_exact_requested() {
+    // 目的: 要求行数と同じ数のログが存在する場合の処理を確認（境界値テスト）
+    // 検証項目: 要求した行数分のログが返されること
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 5行のログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        for i in 1..=5 {
+            writeln!(file, "[2024-01-01 10:00:0{}] [INFO] Line {}", i, i).unwrap();
+        }
+    }
+
+    // ちょうど5行要求
+    let result = apptidying::logger::read_recent_logs(5);
+
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+    let lines: Vec<&str> = logs.lines().collect();
+    assert_eq!(lines.len(), 5); // 5行返される
+    assert!(logs.contains("Line 1"));
+    assert!(logs.contains("Line 5"));
+}
+
+#[test]
+fn test_read_recent_logs_multiple_lines_more_than_requested() {
+    // 目的: 要求行数より多いログが存在する場合の処理を確認
+    // 検証項目: 最後のN行のみが返されること（古いログは除外）
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 10行のログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        for i in 1..=10 {
+            writeln!(file, "[2024-01-01 10:00:{:02}] [INFO] Line {}", i, i).unwrap();
+        }
+    }
+
+    // 5行のみ要求
+    let result = apptidying::logger::read_recent_logs(5);
+
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+    let lines: Vec<&str> = logs.lines().collect();
+    assert_eq!(lines.len(), 5); // 5行のみ返される
+
+    // 最後の5行（Line 6 〜 Line 10）が返されることを確認
+    // Note: "Line 1" という文字列は "Line 10" にも含まれるため、
+    //       より厳密なチェックを行う必要がある
+    assert!(!logs.contains("[INFO] Line 1\n")); // 古いログは除外（Line 1のみ）
+    assert!(!logs.contains("[INFO] Line 5\n")); // Line 5も除外
+    assert!(logs.contains("[INFO] Line 6")); // 最後の5行の先頭
+    assert!(logs.contains("[INFO] Line 10")); // 最後の5行の末尾
+    assert!(logs.contains("[INFO] Line 7")); // Line 7も含まれる
+}
+
+#[test]
+fn test_read_recent_logs_zero_lines() {
+    // 目的: 0行要求した場合の処理を確認（境界値テスト）
+    // 検証項目: 0行要求した場合に空文字列が返されること
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 複数行のログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        writeln!(file, "[2024-01-01 10:00:00] [INFO] Line 1").unwrap();
+        writeln!(file, "[2024-01-01 10:00:01] [INFO] Line 2").unwrap();
+    }
+
+    // 0行要求
+    let result = apptidying::logger::read_recent_logs(0);
+
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+    assert_eq!(logs, ""); // 0行なので空文字列
+}
+
+#[test]
+fn test_read_recent_logs_single_line_requested() {
+    // 目的: 1行のみ要求した場合の処理を確認（境界値テスト）
+    // 検証項目: 最後の1行のみが返されること
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 5行のログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        for i in 1..=5 {
+            writeln!(file, "[2024-01-01 10:00:0{}] [INFO] Line {}", i, i).unwrap();
+        }
+    }
+
+    // 1行のみ要求
+    let result = apptidying::logger::read_recent_logs(1);
+
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+    let lines: Vec<&str> = logs.lines().collect();
+    assert_eq!(lines.len(), 1); // 1行のみ返される
+    assert_eq!(logs, "[2024-01-01 10:00:05] [INFO] Line 5"); // 最後の1行
+}
+
+#[test]
+fn test_read_recent_logs_very_large_lines_requested() {
+    // 目的: 非常に多くの行数を要求した場合の処理を確認（境界値テスト）
+    // 検証項目: ファイルのすべての行が返されること
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 3行のログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        for i in 1..=3 {
+            writeln!(file, "[2024-01-01 10:00:0{}] [INFO] Line {}", i, i).unwrap();
+        }
+    }
+
+    // 10000行要求（実際は3行しかない）
+    let result = apptidying::logger::read_recent_logs(10000);
+
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+    let lines: Vec<&str> = logs.lines().collect();
+    assert_eq!(lines.len(), 3); // 実際の行数分のみ返される
+}
+
+#[test]
+fn test_read_recent_logs_special_characters() {
+    // 目的: 特殊文字を含むログが正しく読み込まれることを確認
+    // 検証項目: ダブルクォート、バックスラッシュが正しく保持されること
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 特殊文字を含むログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        writeln!(
+            file,
+            r#"[2024-01-01 10:00:00] [INFO] Error: "file not found""#
+        )
+        .unwrap();
+        writeln!(file, r"[2024-01-01 10:00:01] [WARN] Path: C:\test\file.txt").unwrap();
+    }
+
+    let result = apptidying::logger::read_recent_logs(5);
+
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+    assert!(logs.contains(r#""file not found""#)); // ダブルクォート
+    assert!(logs.contains(r"C:\test\file.txt")); // バックスラッシュ
+}
+
+#[test]
+fn test_read_recent_logs_unicode_characters() {
+    // 目的: Unicode文字を含むログが正しく読み込まれることを確認
+    // 検証項目: 日本語や絵文字が正しく保持されること
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // Unicode文字を含むログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        writeln!(file, "[2024-01-01 10:00:00] [INFO] 日本語メッセージ").unwrap();
+        writeln!(file, "[2024-01-01 10:00:01] [INFO] 絵文字テスト 🚀").unwrap();
+    }
+
+    let result = apptidying::logger::read_recent_logs(5);
+
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+    assert!(logs.contains("日本語メッセージ"));
+    assert!(logs.contains("🚀"));
+}
+
+#[test]
+fn test_read_recent_logs_very_long_lines() {
+    // 目的: 非常に長い行を含むログが正しく読み込まれることを確認（境界値テスト）
+    // 検証項目: 長い行が正しく読み込まれること
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 非常に長い行を含むログファイルを作成
+    let long_message = "A".repeat(5000);
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        writeln!(file, "[2024-01-01 10:00:00] [INFO] {}", long_message).unwrap();
+    }
+
+    let result = apptidying::logger::read_recent_logs(5);
+
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+    assert!(logs.contains(&long_message)); // 長いメッセージが含まれる
+    assert!(logs.len() > 5000); // タイムスタンプ部分も含めて5000文字より長い
+}
+
+#[test]
+fn test_read_recent_logs_empty_lines() {
+    // 目的: 空行を含むログファイルの処理を確認
+    // 検証項目: 空行が正しく処理されること（ファイル内容は保持されるが、lines()は空要素をスキップ）
+
+    use std::io::Write;
+
+    // ログファイルアクセスをロック
+    let _lock = LOG_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    // ログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
+
+    // 空行を含むログファイルを作成
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let mut file = fs::File::create(&path).unwrap();
+        writeln!(file, "[2024-01-01 10:00:00] [INFO] Line 1").unwrap();
+        writeln!(file).unwrap(); // 空行
+        writeln!(file, "[2024-01-01 10:00:02] [INFO] Line 3").unwrap();
+    }
+
+    let result = apptidying::logger::read_recent_logs(5);
+
+    assert!(result.is_ok());
+    let logs = result.unwrap();
+
+    // ファイル内容には3行（空行を含む）が含まれているが、
+    // lines()イテレータは空行を独立した要素として扱う
+    // そのため、3行として扱われる（空行も1行としてカウント）
+    let lines: Vec<&str> = logs.lines().collect();
+
+    // 実際には、空行は lines() によって空文字列として扱われるため、
+    // "Line 1", "", "Line 3" の3つの要素になる
+    // しかし、空文字列は filter などで除外されない限り含まれる
+    assert_eq!(lines.len(), 3);
+    assert_eq!(lines[0], "[2024-01-01 10:00:00] [INFO] Line 1");
+    assert_eq!(lines[1], ""); // 空行
+    assert_eq!(lines[2], "[2024-01-01 10:00:02] [INFO] Line 3");
 }
 
 // =============================================================================
