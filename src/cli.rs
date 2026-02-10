@@ -12,6 +12,10 @@ pub struct Cli {
     /// 詳細/デバッグ出力を有効化
     #[arg(short, long, global = true)]
     pub verbose: bool,
+
+    /// 標準出力・標準エラー出力を抑制（ログファイルのみに出力）
+    #[arg(long, global = true)]
+    pub silent: bool,
 }
 
 #[derive(Subcommand, Debug)]

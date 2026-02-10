@@ -174,11 +174,31 @@ apptidying save --own /path/to/layout.json
 # デバッグ出力を有効化
 apptidying -v load
 
+# 標準出力を抑制（ターミナル実行時）
+apptidying --silent load
+
 # ヘルプを表示
 apptidying -h
 
 # バージョンを表示
 apptidying -V
+```
+
+#### `--silent` オプション
+
+標準出力・標準エラー出力を抑制し、ログファイルのみに出力します。Automator や Launchd など、ターミナル以外の環境で実行する場合に便利です。
+
+**動作**:
+- **ターミナル実行時**: 標準出力を抑制（ログファイルには記録）
+- **ターミナル以外の実行時**（Automator等）: ダイアログは表示（ログファイルにも記録）
+
+**使用例**:
+```bash
+# ターミナルでメッセージを表示しない
+apptidying --silent load
+
+# Automator の「シェルスクリプトを実行」で使用
+/usr/local/bin/apptidying load --silent
 ```
 
 ## メッセージ出力仕様

@@ -26,6 +26,8 @@ pub enum NotificationLevel {
 pub struct LoggerConfig {
     /// デバッグモード（有効時は DEBUG レベルのログを出力）
     pub debug_mode: bool,
+    /// サイレントモード（有効時は標準出力・標準エラーへの出力を抑制）
+    pub silent_mode: bool,
     /// 通知設定（settings.json から読み込まれる）
     pub notification_config: Option<crate::config::NotificationConfig>,
     /// ログローテーション設定（settings.json から読み込まれる）
@@ -210,6 +212,7 @@ pub fn init(config: LoggerConfig) {
     LOGGER_CONFIG.with(|cfg| {
         *cfg.borrow_mut() = Some(LoggerConfig {
             debug_mode: config.debug_mode,
+            silent_mode: config.silent_mode,
             notification_config: config.notification_config.clone(),
             log_rotation_config: config.log_rotation_config.clone(),
         });
@@ -237,6 +240,7 @@ pub fn init(config: LoggerConfig) {
 pub fn init_simple() {
     let config = LoggerConfig {
         debug_mode: false,
+        silent_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
     };
@@ -257,10 +261,19 @@ pub fn show_notification(level: NotificationLevel, message: &str) {
     let _ = append_to_log_file(&log_message);
 
     if is_running_in_terminal() {
-        // ターミナル実行時は標準出力のみ
-        println!("{}", output_message);
+        // ターミナル実行時は標準出力に出力（サイレントモードで抑制可能）
+        let silent_mode = LOGGER_CONFIG.with(|cfg| {
+            cfg.borrow()
+                .as_ref()
+                .map(|c| c.silent_mode)
+                .unwrap_or(false)
+        });
+
+        if !silent_mode {
+            println!("{}", output_message);
+        }
     } else {
-        // ターミナル外実行時は通知を表示
+        // ターミナル外実行時は通知を表示（サイレントモードでも表示）
         show_os_notification(level, message);
     }
 }

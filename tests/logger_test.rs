@@ -163,6 +163,7 @@ fn test_notification_config_very_long_strings() {
 fn test_logger_config_debug_false_notification_some() {
     // debug_mode=false, notification_config=Some のパターン
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -176,6 +177,7 @@ fn test_logger_config_debug_false_notification_some() {
 fn test_logger_config_debug_true_notification_some() {
     // debug_mode=true, notification_config=Some のパターン
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: true,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -189,6 +191,7 @@ fn test_logger_config_debug_true_notification_some() {
 fn test_logger_config_debug_false_notification_none() {
     // debug_mode=false, notification_config=None のパターン
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: None,
         log_rotation_config: None,
@@ -202,6 +205,7 @@ fn test_logger_config_debug_false_notification_none() {
 fn test_logger_config_debug_true_notification_none() {
     // debug_mode=true, notification_config=None のパターン
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: true,
         notification_config: None,
         log_rotation_config: None,
@@ -221,6 +225,7 @@ fn test_logger_config_with_custom_notification() {
     };
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(custom_notification),
         log_rotation_config: None,
@@ -277,6 +282,7 @@ fn test_init_simple() {
 fn test_init_stores_config_with_default_notification() {
     // デフォルト通知設定が正しく保存されることを確認
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -297,6 +303,7 @@ fn test_init_stores_config_with_default_notification() {
 fn test_init_stores_config_with_custom_notification() {
     // カスタム通知設定が正しく保存されることを確認
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: true,
         notification_config: Some(NotificationConfig {
             info: "none".to_string(),
@@ -321,6 +328,7 @@ fn test_init_stores_config_with_custom_notification() {
 fn test_init_stores_config_without_notification() {
     // 通知設定なしで初期化した場合、None が保存されることを確認
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: None,
         log_rotation_config: None,
@@ -336,6 +344,7 @@ fn test_init_stores_config_without_notification() {
 fn test_init_with_debug_mode_enabled() {
     // debug_mode=true で初期化されることを確認
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: true,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -349,6 +358,7 @@ fn test_init_with_debug_mode_enabled() {
 fn test_init_with_debug_mode_disabled() {
     // debug_mode=false で初期化されることを確認
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -362,6 +372,7 @@ fn test_init_with_debug_mode_disabled() {
 fn test_init_overwrite_previous_config() {
     // 前の設定を上書きできることを確認
     let config1 = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig {
             info: "notification".to_string(),
@@ -373,6 +384,7 @@ fn test_init_overwrite_previous_config() {
     init(config1);
 
     let config2 = LoggerConfig {
+        silent_mode: false,
         debug_mode: true,
         notification_config: Some(NotificationConfig {
             info: "none".to_string(),
@@ -613,6 +625,7 @@ fn test_show_notification_info_terminal() {
     std::env::set_var("TERM", "xterm");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -632,6 +645,7 @@ fn test_show_notification_warn_terminal() {
     std::env::set_var("TERM", "xterm");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -650,6 +664,7 @@ fn test_show_notification_error_terminal() {
     std::env::set_var("TERM", "xterm");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -668,6 +683,7 @@ fn test_show_notification_with_special_characters_terminal() {
     std::env::set_var("TERM", "xterm");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -689,6 +705,7 @@ fn test_show_notification_empty_message_terminal() {
     std::env::set_var("TERM", "xterm");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -707,6 +724,7 @@ fn test_show_notification_very_long_message_terminal() {
     std::env::set_var("TERM", "xterm");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -726,6 +744,7 @@ fn test_show_notification_unicode_message_terminal() {
     std::env::set_var("TERM", "xterm");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -752,6 +771,7 @@ fn test_show_notification_info_non_terminal() {
     std::env::remove_var("TERM");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -771,6 +791,7 @@ fn test_show_notification_warn_non_terminal() {
     std::env::remove_var("TERM");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -789,6 +810,7 @@ fn test_show_notification_error_non_terminal() {
     std::env::remove_var("TERM");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -807,6 +829,7 @@ fn test_show_notification_with_custom_notification_config_info_none() {
     std::env::remove_var("TERM");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig {
             info: "none".to_string(),
@@ -830,6 +853,7 @@ fn test_show_notification_with_custom_notification_config_warn_dialog() {
     std::env::remove_var("TERM");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig {
             info: "notification".to_string(),
@@ -853,6 +877,7 @@ fn test_show_notification_with_custom_notification_config_error_notification() {
     std::env::remove_var("TERM");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig {
             info: "notification".to_string(),
@@ -876,6 +901,7 @@ fn test_show_notification_without_notification_config() {
     std::env::remove_var("TERM");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: None,
         log_rotation_config: None,
@@ -894,6 +920,7 @@ fn test_show_notification_without_notification_config() {
 fn test_get_notification_config_after_init_with_config() {
     // 設定ありで初期化後、get_notification_config で取得できることを確認
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig {
             info: "dialog".to_string(),
@@ -917,6 +944,7 @@ fn test_get_notification_config_after_init_with_config() {
 fn test_get_notification_config_after_init_without_config() {
     // 設定なしで初期化後、get_notification_config が None を返すことを確認
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: None,
         log_rotation_config: None,
@@ -931,6 +959,7 @@ fn test_get_notification_config_after_init_without_config() {
 fn test_get_notification_config_after_multiple_inits() {
     // 複数回初期化後、最新の設定が取得できることを確認
     let config1 = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig {
             info: "notification".to_string(),
@@ -942,6 +971,7 @@ fn test_get_notification_config_after_multiple_inits() {
     init(config1);
 
     let config2 = LoggerConfig {
+        silent_mode: false,
         debug_mode: true,
         notification_config: Some(NotificationConfig {
             info: "none".to_string(),
@@ -1018,6 +1048,7 @@ fn test_integration_full_workflow_terminal() {
 
     // 1. カスタム設定で初期化
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: true,
         notification_config: Some(NotificationConfig {
             info: "notification".to_string(),
@@ -1083,6 +1114,7 @@ fn test_integration_config_update_workflow() {
 
     // 1. 初回設定
     let config1 = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
@@ -1094,6 +1126,7 @@ fn test_integration_config_update_workflow() {
 
     // 2. 設定更新
     let config2 = LoggerConfig {
+        silent_mode: false,
         debug_mode: true,
         notification_config: Some(NotificationConfig {
             info: "none".to_string(),
@@ -1722,6 +1755,7 @@ fn test_log_rotation_without_config() {
 
     let config = apptidying::logger::LoggerConfig {
         debug_mode: false,
+        silent_mode: false,
         notification_config: None,
         log_rotation_config: None,
     };
@@ -1748,6 +1782,7 @@ fn test_log_rotation_with_config() {
 
     let config = apptidying::logger::LoggerConfig {
         debug_mode: false,
+        silent_mode: false,
         notification_config: None,
         log_rotation_config,
     };
@@ -1776,6 +1811,7 @@ fn test_log_rotation_small_file_size() {
 
     let config = apptidying::logger::LoggerConfig {
         debug_mode: false,
+        silent_mode: false,
         notification_config: None,
         log_rotation_config,
     };
@@ -2104,6 +2140,11 @@ fn test_read_recent_logs_single_line() {
     assert!(result.is_ok());
     let logs = result.unwrap();
     assert_eq!(logs, "[2024-01-01 10:00:00] [INFO] Test log line 1");
+
+    // テスト後にログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
 }
 
 #[test]
@@ -2139,6 +2180,11 @@ fn test_read_recent_logs_multiple_lines_less_than_requested() {
     assert!(logs.contains("Line 1"));
     assert!(logs.contains("Line 2"));
     assert!(logs.contains("Line 3"));
+
+    // テスト後にログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
 }
 
 #[test]
@@ -2173,6 +2219,11 @@ fn test_read_recent_logs_multiple_lines_exact_requested() {
     assert_eq!(lines.len(), 5); // 5行返される
     assert!(logs.contains("Line 1"));
     assert!(logs.contains("Line 5"));
+
+    // テスト後にログファイルをクリーンアップ
+    if let Ok(path) = apptidying::logger::get_log_file_path() {
+        let _ = fs::remove_file(&path);
+    }
 }
 
 #[test]
@@ -2520,6 +2571,7 @@ fn test_dialog_display_info_icon() {
     std::env::remove_var("TERM");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig {
             info: "dialog".to_string(),
@@ -2548,6 +2600,7 @@ fn test_dialog_display_warn_icon() {
     std::env::remove_var("TERM");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig {
             info: "dialog".to_string(),
@@ -2576,6 +2629,7 @@ fn test_dialog_display_error_icon() {
     std::env::remove_var("TERM");
 
     let config = LoggerConfig {
+        silent_mode: false,
         debug_mode: false,
         notification_config: Some(NotificationConfig {
             info: "dialog".to_string(),
