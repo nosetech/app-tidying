@@ -151,6 +151,10 @@ apptidying save --own <path/to/layout.json>  # ターミナルウィンドウも
 ### グローバルオプション
 
 - `-v, --verbose`: デバッグ出力有効化
+- `--silent`: 標準出力・標準エラー出力を抑制（ログファイルのみに出力）
+  - **ターミナル実行時**: 標準出力への出力を抑制（ログファイルには記録）
+  - **ターミナル外実行時**（Automator等）: ダイアログは表示（ログファイルにも記録）
+  - **用途**: Automator や Launchd 等で実行する場合に、余計なダイアログ表示を抑制
 - `-h, --help`: ヘルプ表示
 - `-V, --version`: バージョン表示
 
@@ -644,6 +648,14 @@ cargo test logger -- --nocapture
 # 特定の#[ignore]テストのみ実行
 cargo test test_show_notification_info_non_terminal -- --ignored --nocapture
 ```
+
+#### テスト直列実行（ローカル開発推奨）
+
+```bash
+cargo test -- --test-threads=1
+```
+
+テストを1つずつ順序に実行します。複数のテストが共有リソース（ログファイル等）にアクセスする場合、並列実行による干渉を避けられるため、ローカル開発環境での検証に推奨されます。
 
 ### テストカバレッジ
 

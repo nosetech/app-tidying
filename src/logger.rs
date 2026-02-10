@@ -26,6 +26,8 @@ pub enum NotificationLevel {
 pub struct LoggerConfig {
     /// デバッグモード（有効時は DEBUG レベルのログを出力）
     pub debug_mode: bool,
+    /// サイレントモード（有効時は標準出力・標準エラーへの出力を抑制）
+    pub silent_mode: bool,
     /// 通知設定（settings.json から読み込まれる）
     pub notification_config: Option<crate::config::NotificationConfig>,
     /// ログローテーション設定（settings.json から読み込まれる）
@@ -47,7 +49,7 @@ fn get_log_file_lock() -> &'static Mutex<()> {
     LOG_FILE_LOCK.get_or_init(|| Mutex::new(()))
 }
 
-fn get_log_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub fn get_log_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let home = dirs::home_dir().ok_or("ホームディレクトリの取得に失敗しました")?;
     let log_dir = home.join("Library/Application Support/biz.nosetech.apptidying");
     fs::create_dir_all(&log_dir)?;
@@ -56,6 +58,45 @@ fn get_log_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
 
 fn is_running_in_terminal() -> bool {
     std::env::var("TERM").is_ok()
+}
+
+/// ログファイルから直近のログを読み込む
+///
+/// ログファイルの最後のN行を読み込み、文字列として返します。
+///
+/// # Arguments
+/// * `lines` - 取得する最大行数（デフォルト: 5）
+///
+/// # Returns
+/// * `Ok(String)` - ログ内容（複数行を改行で結合）
+/// * `Err(Box<dyn std::error::Error>)` - ファイル読み込みエラーなど
+///
+/// # 使用状況
+/// 現在この関数は内部で使用されていませんが、将来的にエラーダイアログに
+/// ログの直近内容を表示する機能拡張のために実装されています。
+///
+/// 注: テスト用に公開（将来的な機能拡張で使用する可能性があるため pub として残す）
+#[allow(dead_code)]
+pub fn read_recent_logs(lines: usize) -> Result<String, Box<dyn std::error::Error>> {
+    let path = get_log_file_path()?;
+
+    // ファイルが存在しない場合はスキップ
+    if !path.exists() {
+        return Ok(String::new());
+    }
+
+    let content = fs::read_to_string(&path)?;
+    let log_lines: Vec<&str> = content.lines().collect();
+
+    // 最後のN行を取得
+    let start_idx = if log_lines.len() > lines {
+        log_lines.len() - lines
+    } else {
+        0
+    };
+
+    let recent_logs = log_lines[start_idx..].join("\n");
+    Ok(recent_logs)
 }
 
 /// ログローテーションが必要かどうかを判定する
@@ -171,6 +212,7 @@ pub fn init(config: LoggerConfig) {
     LOGGER_CONFIG.with(|cfg| {
         *cfg.borrow_mut() = Some(LoggerConfig {
             debug_mode: config.debug_mode,
+            silent_mode: config.silent_mode,
             notification_config: config.notification_config.clone(),
             log_rotation_config: config.log_rotation_config.clone(),
         });
@@ -198,6 +240,7 @@ pub fn init(config: LoggerConfig) {
 pub fn init_simple() {
     let config = LoggerConfig {
         debug_mode: false,
+        silent_mode: false,
         notification_config: Some(NotificationConfig::default()),
         log_rotation_config: None,
     };
@@ -218,10 +261,19 @@ pub fn show_notification(level: NotificationLevel, message: &str) {
     let _ = append_to_log_file(&log_message);
 
     if is_running_in_terminal() {
-        // ターミナル実行時は標準出力のみ
-        println!("{}", output_message);
+        // ターミナル実行時は標準出力に出力（サイレントモードで抑制可能）
+        let silent_mode = LOGGER_CONFIG.with(|cfg| {
+            cfg.borrow()
+                .as_ref()
+                .map(|c| c.silent_mode)
+                .unwrap_or(false)
+        });
+
+        if !silent_mode {
+            println!("{}", output_message);
+        }
     } else {
-        // ターミナル外実行時は通知を表示
+        // ターミナル外実行時は通知を表示（サイレントモードでも表示）
         show_os_notification(level, message);
     }
 }
@@ -300,6 +352,31 @@ fn show_notification_center(message: &str) {
     }
 }
 
+/// ダイアログ表示用のメッセージを作成する
+///
+/// エラーレベルの場合、ログファイルへの参照を含めたメッセージを生成します。
+/// その他のレベルではメッセージをそのまま返します。
+///
+/// 注: テスト用に公開（将来的な機能拡張で使用する可能性があるため pub として残す）
+pub fn create_dialog_message(level: &NotificationLevel, message: &str) -> String {
+    match level {
+        NotificationLevel::Error => {
+            // ログファイルパスを取得
+            let log_file_path = match get_log_file_path() {
+                Ok(path) => path.display().to_string(),
+                Err(_) => "~/Library/Application Support/biz.nosetech.apptidying/apptidying.log"
+                    .to_string(),
+            };
+
+            format!(
+                "{}\n\n詳細はログファイルを参照してください:\n{}",
+                message, log_file_path
+            )
+        }
+        _ => message.to_string(),
+    }
+}
+
 /// ダイアログを表示する
 ///
 /// 通知レベルに応じた標準アイコンを表示します：
@@ -313,9 +390,12 @@ fn show_dialog(level: NotificationLevel, message: &str) {
         NotificationLevel::Error => "stop",
     };
 
+    // ダイアログ表示用のメッセージを作成
+    let dialog_message = create_dialog_message(&level, message);
+
     let script = format!(
         r#"display dialog "{}" buttons {{"OK"}} default button "OK" with icon {}"#,
-        super::applescript::escape_applescript_string(message),
+        super::applescript::escape_applescript_string(&dialog_message),
         icon
     );
     match Command::new("osascript").arg("-e").arg(&script).output() {

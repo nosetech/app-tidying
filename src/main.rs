@@ -26,6 +26,7 @@ fn main() {
 
     let logger_config = LoggerConfig {
         debug_mode: args.verbose,
+        silent_mode: args.silent,
         notification_config,
         log_rotation_config,
     };
