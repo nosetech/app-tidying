@@ -94,11 +94,25 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
             Ok(info) => info,
             Err(e) => {
                 log::warn!(
-                    "ディスプレイ '{}' が接続されていません: {}。スキップします。",
+                    "ディスプレイ '{}' が接続されていません: {}",
                     display_config.name,
                     e
                 );
-                continue;
+
+                // フォールバック: 接続されているディスプレイの最初のものを使用
+                if let Some(fallback_display) = connected_displays.first() {
+                    log::info!(
+                        "ディスプレイ '{}' を使用して起動します（フォールバック）",
+                        fallback_display.name
+                    );
+                    fallback_display.clone()
+                } else {
+                    // ディスプレイが一つも接続されていない（致命的エラー）
+                    log::error!("接続されているディスプレイが見つかりません");
+                    return Err(LoadError {
+                        message: "接続されているディスプレイが見つかりません".to_string(),
+                    });
+                }
             }
         };
 
