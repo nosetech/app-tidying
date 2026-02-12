@@ -92,7 +92,7 @@ pub fn get_all_connected_displays() -> Result<Vec<DisplayInfo>, DisplayError> {
 - **AppleScript/JXA（macOS固有処理）**
   - `osascript` コマンドで実行
   - アプリケーション起動
-  - ウィンドウ情報の取得（位置、サイズ、タイトル）
+  - ウィンドウ情報の取得（位置、サイズ）
   - ウィンドウの移動・リサイズ
   - ディスプレイ情報の取得
 
@@ -219,7 +219,6 @@ apptidying save --own <path/to/layout.json>  # ターミナルウィンドウも
           "windows": [
             {
               "app": "Google Chrome",
-              "title": "Development",
               "position": { "x": 0, "y": 0 },
               "size": { "width": 1440, "height": 900 }
             }
