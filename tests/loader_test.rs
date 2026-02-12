@@ -71,7 +71,7 @@ fn create_test_config_single_window() -> LayoutFile {
     }
 }
 
-/// テスト用の複数ウィンドウ設定を作成
+/// テスト用の複数アプリ設定を作成
 fn create_test_config_multiple_windows() -> LayoutFile {
     let display_name = get_first_connected_display_name();
     LayoutFile {
@@ -328,7 +328,7 @@ fn test_load_layout_single_window_success() {
 #[test]
 #[ignore] // osascript 実行に依存するため、CI環境ではスキップ
 fn test_load_layout_multiple_windows_success() {
-    // 複数ウィンドウの成功パターン
+    // 複数アプリの配置成功パターン
     let config = create_test_config_multiple_windows();
     let timeout_ms = 3000;
 
