@@ -1,8 +1,8 @@
 use apptidying::applescript::{
     escape_applescript_string, get_all_connected_displays, get_all_windows, get_display_info,
-    get_running_applications, get_window_info, launch_or_activate_app, parse_single_window,
-    parse_window_list, resize_window, AppInfo, AppLaunchError, AppLaunchResult, DisplayInfo,
-    RunningAppsError, WindowInfo, WindowInfoError,
+    get_running_applications, launch_or_activate_app, parse_single_window, parse_window_list,
+    resize_window, AppInfo, AppLaunchError, AppLaunchResult, DisplayInfo, RunningAppsError,
+    WindowInfo, WindowInfoError,
 };
 
 // =============================================================================
@@ -1579,7 +1579,7 @@ fn test_resize_window_finder() {
     assert!(launch_result.is_ok());
 
     // ウィンドウをリサイズ
-    let result = resize_window("Finder", None, Some((100, 100)), Some((800, 600)));
+    let result = resize_window("Finder", Some((100, 100)), Some((800, 600)));
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1595,7 +1595,7 @@ fn test_resize_window_position_only() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((200, 200)), None);
+    let result = resize_window("Finder", Some((200, 200)), None);
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1610,7 +1610,7 @@ fn test_resize_window_size_only() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, None, Some((900, 700)));
+    let result = resize_window("Finder", None, Some((900, 700)));
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1620,32 +1620,9 @@ fn test_resize_window_size_only() {
 
 #[test]
 #[ignore]
-fn test_resize_window_with_title() {
-    // ウィンドウタイトルを指定してリサイズ
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    // Finder のウィンドウタイトルは通常フォルダ名
-    // "Desktop" や "Documents" などを含む可能性がある
-    let result = resize_window("Finder", Some(""), Some((300, 300)), Some((700, 500)));
-
-    // タイトルが見つからない場合は最初のウィンドウを使用
-    // エラーが返される可能性もある
-    if let Ok(resize_result) = result {
-        assert_eq!(resize_result.status, "success");
-    }
-}
-
-#[test]
-#[ignore]
 fn test_resize_window_nonexistent_app() {
     // 存在しないアプリケーションでテスト
-    let result = resize_window(
-        "NonExistentApp123456",
-        None,
-        Some((100, 100)),
-        Some((800, 600)),
-    );
+    let result = resize_window("NonExistentApp123456", Some((100, 100)), Some((800, 600)));
 
     // エラーが返されることを期待
     assert!(result.is_err());
@@ -1658,7 +1635,7 @@ fn test_resize_window_boundary_zero_position() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((0, 0)), Some((800, 600)));
+    let result = resize_window("Finder", Some((0, 0)), Some((800, 600)));
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1672,7 +1649,7 @@ fn test_resize_window_boundary_small_size() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((100, 100)), Some((200, 150)));
+    let result = resize_window("Finder", Some((100, 100)), Some((200, 150)));
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1687,7 +1664,7 @@ fn test_resize_window_boundary_large_size() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((0, 0)), Some((5000, 3000)));
+    let result = resize_window("Finder", Some((0, 0)), Some((5000, 3000)));
 
     // macOS がサイズを制限する可能性があるが、コマンド自体は成功する可能性がある
     if let Ok(resize_result) = result {
@@ -1702,7 +1679,7 @@ fn test_resize_window_negative_position() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((-100, -100)), Some((800, 600)));
+    let result = resize_window("Finder", Some((-100, -100)), Some((800, 600)));
 
     // macOS は負の座標を許可する可能性がある（マルチディスプレイ環境）
     // エラーになるかもしれないし、成功するかもしれない
@@ -1718,7 +1695,6 @@ fn test_resize_window_special_chars_in_app_name() {
     // 特殊文字を含むアプリケーション名
     let result = resize_window(
         "App\"With\\Special\nChars",
-        None,
         Some((100, 100)),
         Some((800, 600)),
     );
@@ -1729,32 +1705,12 @@ fn test_resize_window_special_chars_in_app_name() {
 
 #[test]
 #[ignore]
-fn test_resize_window_special_chars_in_title() {
-    // 特殊文字を含むウィンドウタイトル
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    let result = resize_window(
-        "Finder",
-        Some("Title\"With\\Special\nChars"),
-        Some((100, 100)),
-        Some((800, 600)),
-    );
-
-    // タイトルが見つからない場合はエラー
-    // または最初のウィンドウを使用する可能性もある
-    // ここでは結果のみを確認
-    let _ = result;
-}
-
-#[test]
-#[ignore]
 fn test_resize_window_to_json() {
     // JSON 変換のテスト
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((150, 150)), Some((850, 650)));
+    let result = resize_window("Finder", Some((150, 150)), Some((850, 650)));
 
     if let Ok(resize_result) = result {
         let json = resize_result.to_json();
@@ -1772,7 +1728,7 @@ fn test_resize_window_to_json() {
 #[ignore]
 fn test_resize_window_unicode_app_name() {
     // Unicode を含むアプリケーション名
-    let result = resize_window("日本語アプリ", None, Some((100, 100)), Some((800, 600)));
+    let result = resize_window("日本語アプリ", Some((100, 100)), Some((800, 600)));
 
     // 存在しないアプリケーションなのでエラーが返される
     assert!(result.is_err());
@@ -1780,27 +1736,9 @@ fn test_resize_window_unicode_app_name() {
 
 #[test]
 #[ignore]
-fn test_resize_window_unicode_title() {
-    // Unicode を含むウィンドウタイトル
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    let result = resize_window(
-        "Finder",
-        Some("日本語タイトル"),
-        Some((100, 100)),
-        Some((800, 600)),
-    );
-
-    // タイトルが見つからない場合は最初のウィンドウまたはエラー
-    let _ = result;
-}
-
-#[test]
-#[ignore]
 fn test_resize_window_empty_app_name() {
     // 空文字列のアプリケーション名（境界値テスト）
-    let result = resize_window("", None, Some((100, 100)), Some((800, 600)));
+    let result = resize_window("", Some((100, 100)), Some((800, 600)));
 
     // エラーが返されることを期待
     assert!(result.is_err());
@@ -1813,7 +1751,7 @@ fn test_resize_window_calculator() {
     let launch_result = launch_or_activate_app("Calculator", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Calculator", None, Some((400, 400)), Some((300, 400)));
+    let result = resize_window("Calculator", Some((400, 400)), Some((300, 400)));
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1828,15 +1766,15 @@ fn test_resize_window_multiple_operations() {
     assert!(launch_result.is_ok());
 
     // 1回目のリサイズ
-    let result1 = resize_window("Finder", None, Some((100, 100)), Some((800, 600)));
+    let result1 = resize_window("Finder", Some((100, 100)), Some((800, 600)));
     assert!(result1.is_ok());
 
     // 2回目のリサイズ
-    let result2 = resize_window("Finder", None, Some((200, 200)), Some((900, 700)));
+    let result2 = resize_window("Finder", Some((200, 200)), Some((900, 700)));
     assert!(result2.is_ok());
 
     // 3回目のリサイズ
-    let result3 = resize_window("Finder", None, Some((300, 300)), Some((1000, 800)));
+    let result3 = resize_window("Finder", Some((300, 300)), Some((1000, 800)));
     assert!(result3.is_ok());
 }
 
@@ -2258,679 +2196,6 @@ fn test_window_info_error_unicode_message() {
 }
 
 // =============================================================================
-// get_window_info() Integration Tests (osascript required)
-// =============================================================================
-
-#[test]
-#[ignore]
-fn test_get_window_info_finder() {
-    // Finder ウィンドウの情報を取得
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    let result = get_window_info("Finder", None);
-
-    if let Err(e) = &result {
-        eprintln!("Error: {:?}", e);
-    }
-    assert!(result.is_ok());
-    let window_info = result.unwrap();
-
-    // タイトルが空でないことを確認
-    assert!(!window_info.title.is_empty());
-
-    // 位置とサイズが適切な範囲内であることを確認
-    // 注: 実際の値はディスプレイサイズに依存
-    assert!(window_info.size.0 > 0);
-    assert!(window_info.size.1 > 0);
-
-    // visible は true のはず
-    assert!(window_info.visible);
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_calculator() {
-    // Calculator ウィンドウの情報を取得
-    let launch_result = launch_or_activate_app("Calculator", 3000);
-    assert!(launch_result.is_ok());
-
-    let result = get_window_info("Calculator", None);
-
-    assert!(result.is_ok());
-    let window_info = result.unwrap();
-    assert!(window_info.size.0 > 0);
-    assert!(window_info.size.1 > 0);
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_with_title() {
-    // ウィンドウタイトルを指定して取得
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    // Finder のウィンドウタイトルは通常フォルダ名
-    // 空文字列でテスト（部分一致のため、すべてのウィンドウにマッチ）
-    let result = get_window_info("Finder", Some(""));
-
-    if let Ok(window_info) = result {
-        assert!(!window_info.title.is_empty());
-    }
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_nonexistent_app() {
-    // 存在しないアプリケーション名でテスト
-    let result = get_window_info("NonExistentApp123456", None);
-
-    // エラーが返されることを期待
-    assert!(result.is_err());
-    let error = result.unwrap_err();
-    assert!(!error.message.is_empty());
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_empty_app_name() {
-    // 空文字列のアプリケーション名（境界値テスト）
-    let result = get_window_info("", None);
-
-    // エラーが返されることを期待
-    assert!(result.is_err());
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_special_chars_in_app_name() {
-    // 特殊文字を含むアプリケーション名
-    let result = get_window_info("App\"With\\Special\nChars", None);
-
-    // 存在しないアプリケーションなのでエラーが返される
-    assert!(result.is_err());
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_unicode_app_name() {
-    // Unicode を含むアプリケーション名
-    let result = get_window_info("日本語アプリ", None);
-
-    // 存在しないアプリケーションなのでエラーが返される
-    assert!(result.is_err());
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_special_chars_in_title() {
-    // 特殊文字を含むウィンドウタイトル
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    let result = get_window_info("Finder", Some("Title\"With\\Special\nChars"));
-
-    // タイトルが見つからない場合はエラー
-    // または部分一致で何かしらのウィンドウが見つかる可能性もある
-    let _ = result;
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_unicode_title() {
-    // Unicode を含むウィンドウタイトル
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    let result = get_window_info("Finder", Some("日本語タイトル"));
-
-    // タイトルが見つからない場合はエラー
-    let _ = result;
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_very_long_app_name() {
-    // 非常に長いアプリケーション名（境界値テスト）
-    let long_name = "VeryLongAppName".to_string() + &"a".repeat(1000);
-    let result = get_window_info(&long_name, None);
-
-    // 存在しないアプリケーションなのでエラーが返される
-    assert!(result.is_err());
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_very_long_title() {
-    // 非常に長いウィンドウタイトル（境界値テスト）
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    let long_title = "VeryLongTitle".to_string() + &"a".repeat(1000);
-    let result = get_window_info("Finder", Some(&long_title));
-
-    // タイトルが見つからない場合はエラー
-    let _ = result;
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_to_json() {
-    // JSON 変換のテスト
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    let result = get_window_info("Finder", None);
-
-    if let Ok(window_info) = result {
-        let json = window_info.to_json();
-
-        // JSON のすべてのフィールドが存在し、適切な型であることを確認
-        assert!(json["title"].is_string());
-        assert!(json["position"]["x"].is_i64());
-        assert!(json["position"]["y"].is_i64());
-        assert!(json["size"]["width"].is_i64());
-        assert!(json["size"]["height"].is_i64());
-        assert!(json["minimized"].is_boolean());
-        assert!(json["visible"].is_boolean());
-    }
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_after_resize() {
-    // ウィンドウをリサイズした後に情報を取得
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    // ウィンドウをリサイズ
-    let resize_result = resize_window("Finder", None, Some((100, 200)), Some((800, 600)));
-    if let Err(e) = &resize_result {
-        eprintln!("resize_window error: {}", e);
-    }
-    assert!(
-        resize_result.is_ok(),
-        "resize_window failed: {:?}",
-        resize_result
-    );
-
-    // ウィンドウ情報を取得
-    let info_result = get_window_info("Finder", None);
-    assert!(info_result.is_ok());
-
-    let window_info = info_result.unwrap();
-
-    // リサイズした値と一致することを確認
-    // 注: macOS のウィンドウ制約により、完全に一致しない可能性がある
-    assert_eq!(window_info.position.0, 100);
-    assert_eq!(window_info.position.1, 200);
-    // サイズは完全一致しない可能性があるため、近似値で確認
-    assert!((window_info.size.0 - 800).abs() <= 50);
-    assert!((window_info.size.1 - 600).abs() <= 50);
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_multiple_calls() {
-    // 複数回の呼び出しテスト
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    let result1 = get_window_info("Finder", None);
-    assert!(result1.is_ok());
-
-    let result2 = get_window_info("Finder", None);
-    assert!(result2.is_ok());
-
-    // 同じウィンドウから取得した情報は同じはず
-    let info1 = result1.unwrap();
-    let info2 = result2.unwrap();
-
-    assert_eq!(info1.title, info2.title);
-    assert_eq!(info1.position, info2.position);
-    assert_eq!(info1.size, info2.size);
-}
-
-#[test]
-#[ignore]
-fn test_get_window_info_multiple_apps() {
-    // 複数のアプリケーションから情報を取得
-    let apps = vec!["Finder", "Calculator"];
-
-    for app in apps {
-        let launch_result = launch_or_activate_app(app, 3000);
-        assert!(launch_result.is_ok());
-
-        let result = get_window_info(app, None);
-        assert!(result.is_ok());
-
-        let window_info = result.unwrap();
-        assert!(!window_info.title.is_empty());
-        assert!(window_info.size.0 > 0);
-        assert!(window_info.size.1 > 0);
-    }
-}
-
-// =============================================================================
-// AppInfo テスト（Issue #58: 実行中アプリケーション）
-// =============================================================================
-
-#[test]
-fn test_appinfo_to_json_with_process_id() {
-    let app = AppInfo {
-        name: "Safari".to_string(),
-        process_id: Some(12345),
-    };
-
-    let json = app.to_json();
-    assert_eq!(json["name"], "Safari");
-    assert_eq!(json["process_id"], 12345);
-}
-
-#[test]
-fn test_appinfo_to_json_without_process_id() {
-    let app = AppInfo {
-        name: "Finder".to_string(),
-        process_id: None,
-    };
-
-    let json = app.to_json();
-    assert_eq!(json["name"], "Finder");
-    // process_id が None の場合、フィールドは含まれない
-    assert!(json.get("process_id").is_none());
-}
-
-#[test]
-fn test_appinfo_clone() {
-    let app = AppInfo {
-        name: "Chrome".to_string(),
-        process_id: Some(9999),
-    };
-
-    let cloned = app.clone();
-    assert_eq!(cloned.name, "Chrome");
-    assert_eq!(cloned.process_id, Some(9999));
-}
-
-// =============================================================================
-// RunningAppsError Tests
-// =============================================================================
-
-#[test]
-fn test_running_apps_error_display() {
-    let error = RunningAppsError {
-        message: "Test error message".to_string(),
-    };
-
-    assert_eq!(format!("{}", error), "Test error message");
-}
-
-#[test]
-fn test_running_apps_error_debug() {
-    let error = RunningAppsError {
-        message: "Debug test".to_string(),
-    };
-
-    let debug_str = format!("{:?}", error);
-    assert!(debug_str.contains("RunningAppsError"));
-    assert!(debug_str.contains("Debug test"));
-}
-
-// =============================================================================
-// get_running_applications() Tests - Unit Tests (Mock-based)
-// =============================================================================
-
-#[test]
-fn test_parse_running_apps_output_with_process_ids() {
-    // Simulate parsing logic without actually running osascript
-    // AppleScript returns comma-separated values
-    let simulated_output = "Safari|12345, Finder|67890, Chrome|11111";
-
-    let mut apps = Vec::new();
-    let entries: Vec<&str> = simulated_output.split(',').collect();
-
-    for entry in entries {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            continue;
-        }
-
-        if let Some(pipe_pos) = entry.rfind('|') {
-            let app_name = entry[..pipe_pos].to_string();
-            let pid_str = &entry[pipe_pos + 1..];
-
-            let process_id = if pid_str.is_empty() {
-                None
-            } else {
-                pid_str.parse::<i32>().ok()
-            };
-
-            apps.push(AppInfo {
-                name: app_name,
-                process_id,
-            });
-        }
-    }
-
-    assert_eq!(apps.len(), 3);
-    assert_eq!(apps[0].name, "Safari");
-    assert_eq!(apps[0].process_id, Some(12345));
-    assert_eq!(apps[1].name, "Finder");
-    assert_eq!(apps[1].process_id, Some(67890));
-    assert_eq!(apps[2].name, "Chrome");
-    assert_eq!(apps[2].process_id, Some(11111));
-}
-
-#[test]
-fn test_parse_running_apps_output_without_process_ids() {
-    // Test apps without process IDs
-    let simulated_output = "SystemUIServer|, ControlCenter|";
-
-    let mut apps = Vec::new();
-    let entries: Vec<&str> = simulated_output.split(',').collect();
-
-    for entry in entries {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            continue;
-        }
-
-        if let Some(pipe_pos) = entry.rfind('|') {
-            let app_name = entry[..pipe_pos].to_string();
-            let pid_str = &entry[pipe_pos + 1..];
-
-            let process_id = if pid_str.is_empty() {
-                None
-            } else {
-                pid_str.parse::<i32>().ok()
-            };
-
-            apps.push(AppInfo {
-                name: app_name,
-                process_id,
-            });
-        }
-    }
-
-    assert_eq!(apps.len(), 2);
-    assert_eq!(apps[0].name, "SystemUIServer");
-    assert_eq!(apps[0].process_id, None);
-    assert_eq!(apps[1].name, "ControlCenter");
-    assert_eq!(apps[1].process_id, None);
-}
-
-#[test]
-fn test_parse_running_apps_output_mixed() {
-    // Test mixed apps (some with PID, some without)
-    let simulated_output = "Safari|12345, SystemUIServer|, Finder|67890, ControlCenter|";
-
-    let mut apps = Vec::new();
-    let entries: Vec<&str> = simulated_output.split(',').collect();
-
-    for entry in entries {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            continue;
-        }
-
-        if let Some(pipe_pos) = entry.rfind('|') {
-            let app_name = entry[..pipe_pos].to_string();
-            let pid_str = &entry[pipe_pos + 1..];
-
-            let process_id = if pid_str.is_empty() {
-                None
-            } else {
-                pid_str.parse::<i32>().ok()
-            };
-
-            apps.push(AppInfo {
-                name: app_name,
-                process_id,
-            });
-        }
-    }
-
-    assert_eq!(apps.len(), 4);
-    assert_eq!(apps[0].name, "Safari");
-    assert_eq!(apps[0].process_id, Some(12345));
-    assert_eq!(apps[1].name, "SystemUIServer");
-    assert_eq!(apps[1].process_id, None);
-    assert_eq!(apps[2].name, "Finder");
-    assert_eq!(apps[2].process_id, Some(67890));
-    assert_eq!(apps[3].name, "ControlCenter");
-    assert_eq!(apps[3].process_id, None);
-}
-
-#[test]
-fn test_parse_running_apps_single_app() {
-    // Test single application
-    let simulated_output = "Safari|12345";
-
-    let mut apps = Vec::new();
-    let entries: Vec<&str> = simulated_output.split(',').collect();
-
-    for entry in entries {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            continue;
-        }
-
-        if let Some(pipe_pos) = entry.rfind('|') {
-            let app_name = entry[..pipe_pos].to_string();
-            let pid_str = &entry[pipe_pos + 1..];
-
-            let process_id = if pid_str.is_empty() {
-                None
-            } else {
-                pid_str.parse::<i32>().ok()
-            };
-
-            apps.push(AppInfo {
-                name: app_name,
-                process_id,
-            });
-        }
-    }
-
-    assert_eq!(apps.len(), 1);
-    assert_eq!(apps[0].name, "Safari");
-    assert_eq!(apps[0].process_id, Some(12345));
-}
-
-#[test]
-fn test_parse_running_apps_with_invalid_process_id() {
-    // Test handling of invalid process IDs
-    let simulated_output = "Safari|abc, Finder|67890, Chrome|xyz";
-
-    let mut apps = Vec::new();
-    let entries: Vec<&str> = simulated_output.split(',').collect();
-
-    for entry in entries {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            continue;
-        }
-
-        if let Some(pipe_pos) = entry.rfind('|') {
-            let app_name = entry[..pipe_pos].to_string();
-            let pid_str = &entry[pipe_pos + 1..];
-
-            let process_id = if pid_str.is_empty() {
-                None
-            } else {
-                pid_str.parse::<i32>().ok()
-            };
-
-            apps.push(AppInfo {
-                name: app_name,
-                process_id,
-            });
-        }
-    }
-
-    assert_eq!(apps.len(), 3);
-    assert_eq!(apps[0].name, "Safari");
-    assert_eq!(apps[0].process_id, None); // Invalid PID becomes None
-    assert_eq!(apps[1].name, "Finder");
-    assert_eq!(apps[1].process_id, Some(67890));
-    assert_eq!(apps[2].name, "Chrome");
-    assert_eq!(apps[2].process_id, None); // Invalid PID becomes None
-}
-
-#[test]
-fn test_parse_running_apps_app_name_with_special_chars() {
-    // Test app names with special characters
-    let simulated_output = "Google Chrome|12345, Microsoft Excel|67890, App-Name.v2|11111";
-
-    let mut apps = Vec::new();
-    let entries: Vec<&str> = simulated_output.split(',').collect();
-
-    for entry in entries {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            continue;
-        }
-
-        if let Some(pipe_pos) = entry.rfind('|') {
-            let app_name = entry[..pipe_pos].to_string();
-            let pid_str = &entry[pipe_pos + 1..];
-
-            let process_id = if pid_str.is_empty() {
-                None
-            } else {
-                pid_str.parse::<i32>().ok()
-            };
-
-            apps.push(AppInfo {
-                name: app_name,
-                process_id,
-            });
-        }
-    }
-
-    assert_eq!(apps.len(), 3);
-    assert_eq!(apps[0].name, "Google Chrome");
-    assert_eq!(apps[0].process_id, Some(12345));
-    assert_eq!(apps[1].name, "Microsoft Excel");
-    assert_eq!(apps[1].process_id, Some(67890));
-    assert_eq!(apps[2].name, "App-Name.v2");
-    assert_eq!(apps[2].process_id, Some(11111));
-}
-
-#[test]
-fn test_parse_running_apps_large_number_of_apps() {
-    // Test handling of many applications
-    let mut simulated_output = String::new();
-    for i in 1..=100 {
-        if i > 1 {
-            simulated_output.push_str(", ");
-        }
-        simulated_output.push_str(&format!("App{}|{}", i, 1000 + i));
-    }
-
-    let mut apps = Vec::new();
-    let entries: Vec<&str> = simulated_output.split(',').collect();
-
-    for entry in entries {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            continue;
-        }
-
-        if let Some(pipe_pos) = entry.rfind('|') {
-            let app_name = entry[..pipe_pos].to_string();
-            let pid_str = &entry[pipe_pos + 1..];
-
-            let process_id = if pid_str.is_empty() {
-                None
-            } else {
-                pid_str.parse::<i32>().ok()
-            };
-
-            apps.push(AppInfo {
-                name: app_name,
-                process_id,
-            });
-        }
-    }
-
-    assert_eq!(apps.len(), 100);
-    assert_eq!(apps[0].name, "App1");
-    assert_eq!(apps[0].process_id, Some(1001));
-    assert_eq!(apps[99].name, "App100");
-    assert_eq!(apps[99].process_id, Some(1100));
-}
-
-// =============================================================================
-// get_running_applications() Integration Tests (osascript execution)
-// =============================================================================
-
-/// Integration test: Verify get_running_applications returns non-empty list
-/// This test requires macOS environment and osascript to be available
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定
-fn test_get_running_applications_success() {
-    let result = get_running_applications();
-
-    assert!(result.is_ok(), "get_running_applications should succeed");
-
-    let apps = result.unwrap();
-    assert!(
-        !apps.is_empty(),
-        "Should have at least one running application"
-    );
-
-    // Verify each app has a name
-    for app in &apps {
-        assert!(!app.name.is_empty(), "App name should not be empty");
-    }
-
-    // Verify at least one app has a process ID (most apps should)
-    let has_pid = apps.iter().any(|app| app.process_id.is_some());
-    assert!(has_pid, "At least one app should have a process ID");
-}
-
-/// Integration test: Verify JSON serialization of results
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定
-fn test_get_running_applications_json_output() {
-    let result = get_running_applications();
-    assert!(result.is_ok());
-
-    let apps = result.unwrap();
-
-    for app in &apps {
-        let json = app.to_json();
-        assert!(json.is_object());
-        assert!(json.get("name").is_some());
-        assert!(json["name"].is_string());
-
-        // process_id フィールドは process_id が Some の場合のみ含まれる
-        // フィールドが含まれる場合は数値であることを確認
-        if let Some(pid_value) = json.get("process_id") {
-            assert!(pid_value.is_number());
-        }
-    }
-}
-
-/// Integration test: Verify common system apps are found
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定
-fn test_get_running_applications_finds_system_apps() {
-    let result = get_running_applications();
-    assert!(result.is_ok());
-
-    let apps = result.unwrap();
-    let app_names: Vec<&str> = apps.iter().map(|a| a.name.as_str()).collect();
-
-    // Finder should always be running on macOS
-    assert!(
-        app_names.contains(&"Finder"),
-        "Finder should be in running applications"
-    );
-}
-
-// =============================================================================
 // Get All Windows Tests
 // =============================================================================
 
@@ -3115,223 +2380,6 @@ fn test_get_all_windows_json_serialization() {
 // =============================================================================
 // Find Window by Title Tests
 // =============================================================================
-
-/// Integration test: find_window_by_title でウィンドウが見つかった場合
-///
-/// # テスト概要
-/// Finderで新規ウィンドウを作成し、タイトルでウィンドウを検索する
-///
-/// # テストシナリオ
-/// 1. Finderの既存ウィンドウ数を取得
-/// 2. 新規ウィンドウを作成
-/// 3. ウィンドウ数が増えていることを確認
-/// 4. find_window_by_title で検索
-/// 5. 見つかったウィンドウ情報が正しいことを確認
-///
-/// # 境界値
-/// - ウィンドウタイトルの部分一致検索
-/// - 複数ウィンドウがある場合は最初のウィンドウを返す
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
-fn test_find_window_by_title_found() {
-    use apptidying::applescript::{create_new_window, find_window_by_title, get_all_windows};
-
-    // Arrange: Finderの現在のウィンドウ数を取得
-    let windows_before = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-    let count_before = windows_before.len();
-
-    // Act: 新規ウィンドウを作成
-    let create_result = create_new_window("Finder");
-    assert!(
-        create_result.is_ok(),
-        "新規ウィンドウ作成に失敗: {:?}",
-        create_result.err()
-    );
-
-    // 少し待機（ウィンドウ作成完了を待つ）
-    std::thread::sleep(std::time::Duration::from_millis(500));
-
-    // ウィンドウが増えていることを確認
-    let windows_after = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-    assert!(
-        windows_after.len() > count_before,
-        "新規ウィンドウが作成されていません。before: {}, after: {}",
-        count_before,
-        windows_after.len()
-    );
-
-    // ウィンドウタイトルで検索（Finderは通常「デスクトップ」「Desktop」など）
-    // 空文字列で検索すると、すべてのウィンドウにマッチ（部分一致）
-    let result = find_window_by_title("Finder", "");
-
-    // Assert: ウィンドウが見つかることを確認
-    assert!(
-        result.is_ok(),
-        "find_window_by_title がエラーを返しました: {:?}",
-        result.as_ref().err()
-    );
-    let window_option = result.unwrap();
-    assert!(window_option.is_some(), "ウィンドウが見つかりませんでした");
-
-    let window = window_option.unwrap();
-    assert!(!window.title.is_empty(), "ウィンドウタイトルが空です");
-    assert!(window.size.0 > 0, "ウィンドウ幅が0以下です");
-    assert!(window.size.1 > 0, "ウィンドウ高さが0以下です");
-}
-
-/// Integration test: find_window_by_title でウィンドウが見つからなかった場合
-///
-/// # テスト概要
-/// 存在しないタイトルでウィンドウを検索し、None が返ることを確認
-///
-/// # テストシナリオ
-/// 1. Finderで存在しないタイトルを検索
-/// 2. None が返ることを確認
-///
-/// # 境界値
-/// - 完全に一致しないタイトル
-/// - ランダム文字列を使用して誤マッチを防ぐ
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
-fn test_find_window_by_title_not_found() {
-    use apptidying::applescript::find_window_by_title;
-
-    // Arrange & Act: 存在しないタイトルで検索
-    let result = find_window_by_title("Finder", "NonExistentWindowTitle_XYZ_12345_ABCDE");
-
-    // Assert: None が返ることを確認
-    assert!(
-        result.is_ok(),
-        "find_window_by_title がエラーを返しました: {:?}",
-        result.err()
-    );
-    let window_option = result.unwrap();
-    assert!(
-        window_option.is_none(),
-        "存在しないタイトルでウィンドウが見つかりました: {:?}",
-        window_option
-    );
-}
-
-/// Integration test: find_window_by_title の部分一致検索
-///
-/// # テスト概要
-/// Finderのウィンドウタイトルの一部で検索し、正しくマッチすることを確認
-///
-/// # テストシナリオ
-/// 1. Finderのウィンドウを取得
-/// 2. 最初のウィンドウタイトルの一部で検索
-/// 3. 見つかったウィンドウが同じタイトルであることを確認
-///
-/// # 境界値
-/// - タイトルの先頭部分での検索
-/// - タイトルの中間部分での検索
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
-fn test_find_window_by_title_partial_match() {
-    use apptidying::applescript::{find_window_by_title, get_all_windows};
-
-    // Arrange: Finderのウィンドウを取得
-    let windows = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-
-    if windows.is_empty() {
-        // ウィンドウがない場合は新規作成
-        use apptidying::applescript::create_new_window;
-        create_new_window("Finder").expect("新規ウィンドウ作成に失敗");
-        std::thread::sleep(std::time::Duration::from_millis(500));
-    }
-
-    let windows = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-    assert!(
-        !windows.is_empty(),
-        "テスト実行に必要なウィンドウが存在しません"
-    );
-
-    let first_window_title = &windows[0].title;
-    assert!(!first_window_title.is_empty(), "ウィンドウタイトルが空です");
-
-    // Act: タイトルの最初の1文字で検索（部分一致）
-    // Unicode文字境界を考慮して、chars().next() で最初の文字を取得
-    let first_char = first_window_title.chars().next().unwrap().to_string();
-    let result = find_window_by_title("Finder", &first_char);
-
-    // Assert: ウィンドウが見つかることを確認
-    assert!(
-        result.is_ok(),
-        "find_window_by_title がエラーを返しました: {:?}",
-        result.as_ref().err()
-    );
-    let window_option = result.unwrap();
-    assert!(
-        window_option.is_some(),
-        "部分一致でウィンドウが見つかりませんでした"
-    );
-
-    let found_window = window_option.unwrap();
-    assert!(
-        found_window.title.contains(&first_char),
-        "見つかったウィンドウタイトル「{}」に検索文字列「{}」が含まれていません",
-        found_window.title,
-        first_char
-    );
-}
-
-/// Integration test: 複数ウィンドウがある場合、最初のウィンドウを返す
-///
-/// # テスト概要
-/// 複数のFinderウィンドウを開いた状態で、find_window_by_title が最初のウィンドウを返すことを確認
-///
-/// # テストシナリオ
-/// 1. Finderのウィンドウ数を確認
-/// 2. 2つ以上のウィンドウがあることを確認（なければ作成）
-/// 3. 空文字列で検索（すべてのウィンドウにマッチ）
-/// 4. get_all_windows の最初のウィンドウと一致することを確認
-///
-/// # 境界値
-/// - 複数マッチした場合の動作
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
-fn test_find_window_by_title_multiple_windows() {
-    use apptidying::applescript::{create_new_window, find_window_by_title, get_all_windows};
-
-    // Arrange: 複数ウィンドウを作成
-    let windows_before = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-
-    // 少なくとも2つのウィンドウを確保
-    if windows_before.len() < 2 {
-        for _ in 0..(2 - windows_before.len()) {
-            create_new_window("Finder").expect("新規ウィンドウ作成に失敗");
-            std::thread::sleep(std::time::Duration::from_millis(500));
-        }
-    }
-
-    let all_windows = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-    assert!(
-        all_windows.len() >= 2,
-        "テスト実行に必要な複数ウィンドウが存在しません"
-    );
-
-    // Act: 空文字列で検索（すべてのウィンドウにマッチ）
-    let result = find_window_by_title("Finder", "");
-
-    // Assert: 最初のウィンドウが返ることを確認
-    assert!(result.is_ok(), "find_window_by_title がエラーを返しました");
-    let window_option = result.unwrap();
-    assert!(window_option.is_some(), "ウィンドウが見つかりませんでした");
-
-    let found_window = window_option.unwrap();
-    let first_window = &all_windows[0];
-
-    // タイトルと位置が一致することを確認
-    assert_eq!(
-        found_window.title, first_window.title,
-        "見つかったウィンドウが最初のウィンドウと一致しません"
-    );
-    assert_eq!(
-        found_window.position, first_window.position,
-        "見つかったウィンドウの位置が最初のウィンドウと一致しません"
-    );
-}
 
 // =============================================================================
 // Create New Window Tests

@@ -12,7 +12,6 @@ fn test_parse_valid_layout() {
                         "windows": [
                             {
                                 "app": "Google Chrome",
-                                "title": "Development",
                                 "position": { "x": 0, "y": 25 },
                                 "size": { "width": 1440, "height": 900 }
                             }

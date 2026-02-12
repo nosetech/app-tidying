@@ -199,161 +199,12 @@ end tell
     parse_window_list(&result_str)
 }
 
-/// 特定のウィンドウ情報を取得
-///
-/// 指定されたアプリケーション内で、タイトルで特定のウィンドウ情報を取得します。
-/// window_title が None の場合は最初のウィンドウを取得します。
-///
-/// # Arguments
-/// * `app_name` - アプリケーション名
-/// * `window_title` - ウィンドウタイトル（オプション）
-///
-/// # Returns
-/// * `Ok(WindowInfo)` - ウィンドウ情報
-/// * `Err(WindowInfoError)` - ウィンドウが見つからない等のエラー
-///
-/// # Examples
-/// ```ignore
-/// use apptidying::applescript::get_window_info;
-///
-/// let window = get_window_info("Safari", Some("Development"))?;
-/// println!("Size: {}x{}", window.size.0, window.size.1);
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
-///
-/// 注意: この関数は将来のウィンドウ情報取得API用に残されています。
-#[allow(dead_code)] // 将来の拡張用に残す（ウィンドウ情報取得API）
-pub fn get_window_info(
-    app_name: &str,
-    window_title: Option<&str>,
-) -> Result<WindowInfo, WindowInfoError> {
-    let mut script = format!(
-        r#"
-tell application "System Events"
-    tell process "{}"
-        try
-"#,
-        escape_applescript_string(app_name)
-    );
-
-    // タイトルでウィンドウを選択、またはアプリケーションの最初のウィンドウを使用
-    if let Some(title) = window_title {
-        script.push_str(&format!(
-            r#"
-            set targetWindow to first window whose name contains "{}"
-"#,
-            escape_applescript_string(title)
-        ));
-    } else {
-        script.push_str(
-            r#"
-            set targetWindow to window 1
-"#,
-        );
-    }
-
-    script.push_str(
-        r#"
-            set winPos to position of targetWindow
-            set winSize to size of targetWindow
-            set winTitle to title of targetWindow
-
-            try
-                set winMinimized to miniaturized of targetWindow
-            on error
-                set winMinimized to false
-            end try
-
-            try
-                set winVisible to visible of targetWindow
-            on error
-                set winVisible to true
-            end try
-
-            return winTitle & "|" & (item 1 of winPos) & "," & (item 2 of winPos) & "|" & (item 1 of winSize) & "," & (item 2 of winSize) & "|" & winMinimized & "|" & winVisible
-        on error errMsg
-            return "error: " & errMsg
-        end try
-    end tell
-end tell
-"#,
-    );
-
-    let output = run_osascript(&script).map_err(|e| WindowInfoError { message: e.message })?;
-
-    if !output.status.success() {
-        return Err(WindowInfoError {
-            message: format!(
-                "ウィンドウ情報の取得に失敗しました: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        });
-    }
-
-    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-    if result_str.starts_with("error:") {
-        return Err(WindowInfoError {
-            message: result_str,
-        });
-    }
-
-    // parse_single_window を再利用（一貫性のあるパース）
-    parse_single_window(&result_str)
-}
-
-/// タイトルでウィンドウを検索
-///
-/// 指定されたタイトルを含むウィンドウを検索します。
-/// **複数マッチした場合**は、`get_all_windows()` が返す順序の最初のウィンドウを返します。
-/// （通常は最前面のウィンドウですが、AppleScript の実装に依存します）
-///
-/// # Arguments
-/// * `app_name` - アプリケーション名
-/// * `window_title` - 検索するウィンドウタイトル（部分一致）
-///
-/// # Returns
-/// * `Ok(Some(WindowInfo))` - ウィンドウが見つかった
-/// * `Ok(None)` - ウィンドウが見つからなかった
-/// * `Err(WindowInfoError)` - AppleScript 実行エラー
-///
-/// # Examples
-/// ```ignore
-/// use apptidying::applescript::find_window_by_title;
-///
-/// let result = find_window_by_title("Safari", "Development")?;
-/// if let Some(window) = result {
-///     println!("ウィンドウが見つかりました: {:?}", window);
-/// } else {
-///     println!("ウィンドウが見つかりません");
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
-pub fn find_window_by_title(
-    app_name: &str,
-    window_title: &str,
-) -> Result<Option<WindowInfo>, WindowInfoError> {
-    // すべてのウィンドウを取得
-    let windows = get_all_windows(app_name)?;
-
-    // タイトルで検索（部分一致）
-    for window in windows {
-        if window.title.contains(window_title) {
-            return Ok(Some(window));
-        }
-    }
-
-    // 見つからなかった
-    Ok(None)
-}
-
 /// ウィンドウをリサイズ・移動
 ///
-/// 指定されたウィンドウをリサイズおよび移動します。
+/// 指定されたアプリケーションの最初のウィンドウをリサイズおよび移動します。
 ///
 /// # Arguments
 /// * `app_name` - アプリケーション名
-/// * `window_title` - ウィンドウタイトル（オプション）
 /// * `position` - 新しい位置（x, y）（オプション）
 /// * `size` - 新しいサイズ（幅, 高さ）（オプション）
 ///
@@ -365,13 +216,12 @@ pub fn find_window_by_title(
 /// ```ignore
 /// use apptidying::applescript::resize_window;
 ///
-/// let result = resize_window("Safari", None, Some((0, 0)), Some((1440, 900)))?;
+/// let result = resize_window("Safari", Some((0, 0)), Some((1440, 900)))?;
 /// println!("Resized: {}", result.message);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn resize_window(
     app_name: &str,
-    window_title: Option<&str>,
     position: Option<(i32, i32)>,
     size: Option<(i32, i32)>,
 ) -> Result<WindowResizeResult, WindowResizeError> {
@@ -381,25 +231,10 @@ pub fn resize_window(
 tell application "System Events"
     try
         tell process "{}"
+            set targetWindow to window 1
 "#,
         escape_applescript_string(app_name)
     );
-
-    // タイトルでウィンドウを選択、またはアプリケーションの最初のウィンドウを使用
-    if let Some(title) = window_title {
-        script.push_str(&format!(
-            r#"
-            set targetWindow to first window whose name contains "{}"
-"#,
-            escape_applescript_string(title)
-        ));
-    } else {
-        script.push_str(
-            r#"
-            set targetWindow to window 1
-"#,
-        );
-    }
 
     // 位置を設定（指定されている場合）
     if let Some((x, y)) = position {
