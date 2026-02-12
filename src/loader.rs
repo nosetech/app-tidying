@@ -74,7 +74,7 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
 
     log::info!("レイアウトを適用します");
 
-    // 3. ワーニング対象をHashSetに変換（O(1)検索用）
+    // 4. ワーニング対象をHashSetに変換（O(1)検索用）
     let warning_set: HashSet<(String, String)> = warnings
         .iter()
         .map(|w| (w.display_name.clone(), w.app_name.clone()))
@@ -90,17 +90,32 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
         log::debug!("ディスプレイ '{}' の処理を開始", display_config.name);
 
         // 5.1 ディスプレイ情報を取得
-        let display_info = match applescript::get_display_info(Some(&display_config.name)) {
-            Ok(info) => info,
-            Err(e) => {
-                log::warn!(
-                    "ディスプレイ '{}' が接続されていません: {}。スキップします。",
-                    display_config.name,
-                    e
-                );
-                continue;
-            }
-        };
+        let (display_info, is_fallback) =
+            match applescript::get_display_info(Some(&display_config.name)) {
+                Ok(info) => (info, false),
+                Err(e) => {
+                    log::warn!(
+                        "ディスプレイ '{}' が接続されていません: {}",
+                        display_config.name,
+                        e
+                    );
+
+                    // フォールバック: 接続されているディスプレイの最初のものを使用
+                    if let Some(fallback_display) = connected_displays.first() {
+                        log::info!(
+                            "ディスプレイ '{}' を使用してウィンドウを配置します（フォールバック）",
+                            fallback_display.name
+                        );
+                        (fallback_display.clone(), true)
+                    } else {
+                        // ディスプレイが一つも接続されていない（致命的エラー）
+                        log::error!("接続されているディスプレイが見つかりません");
+                        return Err(LoadError {
+                            message: "接続されているディスプレイが見つかりません".to_string(),
+                        });
+                    }
+                }
+            };
 
         log::debug!(
             "ディスプレイ情報: {} ({}x{})",
@@ -113,9 +128,32 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
         for window_config in &display_config.windows {
             log::debug!("アプリ '{}' の処理を開始", window_config.app);
 
-            // ウィンドウがワーニング対象かチェック（O(1)で検索）
-            let has_warning =
-                warning_set.contains(&(display_config.name.clone(), window_config.app.clone()));
+            // ウィンドウがワーニング対象かチェック
+            // フォールバック時は、フォールバック先のディスプレイに対してサイズ超過をチェック
+            let has_warning = if is_fallback {
+                // フォールバック時：フォールバック先ディスプレイのサイズ超過をチェック
+                if let Some(ref size) = window_config.size {
+                    let size_value =
+                        serde_json::to_value(size).unwrap_or_else(|_| serde_json::json!({}));
+                    match crate::config::parse_size_value(
+                        &size_value,
+                        display_info.width,
+                        display_info.height,
+                        "size",
+                    ) {
+                        Ok((width, height)) => {
+                            // フォールバック先ディスプレイに収まらないか確認
+                            width > display_info.width || height > display_info.height
+                        }
+                        Err(_) => false,
+                    }
+                } else {
+                    false
+                }
+            } else {
+                // 非フォールバック時：元の警告セットをチェック
+                warning_set.contains(&(display_config.name.clone(), window_config.app.clone()))
+            };
 
             if has_warning {
                 log::warn!(
