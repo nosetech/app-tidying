@@ -90,31 +90,32 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
         log::debug!("ディスプレイ '{}' の処理を開始", display_config.name);
 
         // 5.1 ディスプレイ情報を取得
-        let display_info = match applescript::get_display_info(Some(&display_config.name)) {
-            Ok(info) => info,
-            Err(e) => {
-                log::warn!(
-                    "ディスプレイ '{}' が接続されていません: {}",
-                    display_config.name,
-                    e
-                );
-
-                // フォールバック: 接続されているディスプレイの最初のものを使用
-                if let Some(fallback_display) = connected_displays.first() {
-                    log::info!(
-                        "ディスプレイ '{}' を使用して起動します（フォールバック）",
-                        fallback_display.name
+        let (display_info, is_fallback) =
+            match applescript::get_display_info(Some(&display_config.name)) {
+                Ok(info) => (info, false),
+                Err(e) => {
+                    log::warn!(
+                        "ディスプレイ '{}' が接続されていません: {}",
+                        display_config.name,
+                        e
                     );
-                    fallback_display.clone()
-                } else {
-                    // ディスプレイが一つも接続されていない（致命的エラー）
-                    log::error!("接続されているディスプレイが見つかりません");
-                    return Err(LoadError {
-                        message: "接続されているディスプレイが見つかりません".to_string(),
-                    });
+
+                    // フォールバック: 接続されているディスプレイの最初のものを使用
+                    if let Some(fallback_display) = connected_displays.first() {
+                        log::info!(
+                            "ディスプレイ '{}' を使用して起動します（フォールバック）",
+                            fallback_display.name
+                        );
+                        (fallback_display.clone(), true)
+                    } else {
+                        // ディスプレイが一つも接続されていない（致命的エラー）
+                        log::error!("接続されているディスプレイが見つかりません");
+                        return Err(LoadError {
+                            message: "接続されているディスプレイが見つかりません".to_string(),
+                        });
+                    }
                 }
-            }
-        };
+            };
 
         log::debug!(
             "ディスプレイ情報: {} ({}x{})",
@@ -128,8 +129,9 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
             log::debug!("アプリ '{}' の処理を開始", window_config.app);
 
             // ウィンドウがワーニング対象かチェック（O(1)で検索）
-            let has_warning =
-                warning_set.contains(&(display_config.name.clone(), window_config.app.clone()));
+            // フォールバック時は警告をスキップ（フォールバック対象のディスプレイの警告は無視）
+            let has_warning = !is_fallback
+                && warning_set.contains(&(display_config.name.clone(), window_config.app.clone()));
 
             if has_warning {
                 log::warn!(
