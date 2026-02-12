@@ -57,7 +57,6 @@ fn create_test_config_single_window() -> LayoutFile {
                 name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "Safari".to_string(),
-                    title: None,
                     position: Some(Position {
                         x: json!("left"),
                         y: json!("top"),
@@ -83,7 +82,6 @@ fn create_test_config_multiple_windows() -> LayoutFile {
                 windows: vec![
                     AppWindowConfig {
                         app: "Safari".to_string(),
-                        title: None,
                         position: Some(Position {
                             x: json!("left"),
                             y: json!("top"),
@@ -95,7 +93,6 @@ fn create_test_config_multiple_windows() -> LayoutFile {
                     },
                     AppWindowConfig {
                         app: "Finder".to_string(),
-                        title: None,
                         position: Some(Position {
                             x: json!("right"),
                             y: json!("top"),
@@ -128,7 +125,6 @@ fn create_test_config_nonexistent_display() -> LayoutFile {
                 name: "NonExistentDisplay".to_string(),
                 windows: vec![AppWindowConfig {
                     app: "Safari".to_string(),
-                    title: None,
                     position: Some(Position {
                         x: json!("left"),
                         y: json!("top"),
@@ -153,7 +149,6 @@ fn create_test_config_with_title() -> LayoutFile {
                 name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "Safari".to_string(),
-                    title: Some("スタートページ".to_string()),
                     position: Some(Position {
                         x: json!(100),
                         y: json!(200),
@@ -178,7 +173,6 @@ fn create_test_config_position_only() -> LayoutFile {
                 name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "Safari".to_string(),
-                    title: None,
                     position: Some(Position {
                         x: json!(100),
                         y: json!(200),
@@ -200,7 +194,6 @@ fn create_test_config_size_only() -> LayoutFile {
                 name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "Safari".to_string(),
-                    title: None,
                     position: None,
                     size: Some(Size {
                         width: json!(800),
@@ -222,7 +215,6 @@ fn create_test_config_no_position_no_size() -> LayoutFile {
                 name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "Safari".to_string(),
-                    title: None,
                     position: None,
                     size: None,
                 }],
@@ -238,7 +230,6 @@ fn create_test_config_multiple_displays() -> LayoutFile {
         name: display_name,
         windows: vec![AppWindowConfig {
             app: "Safari".to_string(),
-            title: None,
             position: Some(Position {
                 x: json!("left"),
                 y: json!("top"),
@@ -256,7 +247,6 @@ fn create_test_config_multiple_displays() -> LayoutFile {
             name: second_display_name,
             windows: vec![AppWindowConfig {
                 app: "Finder".to_string(),
-                title: None,
                 position: Some(Position {
                     x: json!("right"),
                     y: json!("top"),
@@ -285,7 +275,6 @@ fn create_test_config_with_timeout() -> LayoutFile {
                 name: display_name,
                 windows: vec![AppWindowConfig {
                     app: "Safari".to_string(),
-                    title: None,
                     position: Some(Position {
                         x: json!("left"),
                         y: json!("top"),
@@ -518,7 +507,6 @@ fn test_load_layout_partial_failure() {
     // 無効なアプリを追加
     config.layouts[0].displays[0].windows.push(AppWindowConfig {
         app: "NonExistentApp123456".to_string(),
-        title: None,
         position: Some(Position {
             x: json!("left"),
             y: json!("top"),
@@ -936,7 +924,6 @@ fn test_load_layout_pattern_left_top() {
             println!("3. resize_window() テスト:");
             match applescript::resize_window(
                 "Safari",
-                None,
                 Some((expected_x, expected_y)),
                 Some((expected_width, expected_height)),
             ) {

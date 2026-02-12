@@ -121,7 +121,6 @@ pub fn save_layout(
 
             let window_config = AppWindowConfig {
                 app: app.name.clone(),
-                title: Some(window.title.clone()),
                 position: Some(Position {
                     x: serde_json::json!(relative_x),
                     y: serde_json::json!(relative_y),

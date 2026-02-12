@@ -39,6 +39,6 @@ pub use utils::{
 };
 #[allow(unused_imports)]
 pub use window::{
-    create_new_window, find_window_by_title, get_all_windows, get_window_info, resize_window,
-    WindowInfo, WindowInfoError, WindowResizeError, WindowResizeResult,
+    create_new_window, get_all_windows, get_window_info, resize_window, WindowInfo,
+    WindowInfoError, WindowResizeError, WindowResizeResult,
 };

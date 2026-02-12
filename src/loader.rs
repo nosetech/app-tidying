@@ -204,23 +204,11 @@ fn process_window(
         .map_err(|e| format!("アプリ起動失敗: {}", e))?;
 
     // 2. ウィンドウの存在確認
-    let window_exists = if let Some(ref title) = window_config.title {
-        log::debug!("ウィンドウタイトル '{}' を検索します", title);
-        match applescript::find_window_by_title(&window_config.app, title) {
-            Ok(window_info_opt) => window_info_opt.is_some(),
-            Err(e) => {
-                log::warn!("ウィンドウ検索でエラーが発生しました: {}", e);
-                false
-            }
-        }
-    } else {
-        // タイトル指定なしの場合、全ウィンドウを取得して存在確認
-        match applescript::get_all_windows(&window_config.app) {
-            Ok(windows) => !windows.is_empty(),
-            Err(e) => {
-                log::warn!("ウィンドウ一覧取得でエラーが発生しました: {}", e);
-                false
-            }
+    let window_exists = match applescript::get_all_windows(&window_config.app) {
+        Ok(windows) => !windows.is_empty(),
+        Err(e) => {
+            log::warn!("ウィンドウ一覧取得でエラーが発生しました: {}", e);
+            false
         }
     };
 
@@ -317,7 +305,6 @@ fn process_window(
     // 5. ウィンドウを移動・リサイズ
     applescript::resize_window(
         &window_config.app,
-        window_config.title.as_deref(),
         position_opt,
         size_opt,
     )

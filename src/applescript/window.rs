@@ -302,58 +302,12 @@ end tell
     parse_single_window(&result_str)
 }
 
-/// タイトルでウィンドウを検索
-///
-/// 指定されたタイトルを含むウィンドウを検索します。
-/// **複数マッチした場合**は、`get_all_windows()` が返す順序の最初のウィンドウを返します。
-/// （通常は最前面のウィンドウですが、AppleScript の実装に依存します）
-///
-/// # Arguments
-/// * `app_name` - アプリケーション名
-/// * `window_title` - 検索するウィンドウタイトル（部分一致）
-///
-/// # Returns
-/// * `Ok(Some(WindowInfo))` - ウィンドウが見つかった
-/// * `Ok(None)` - ウィンドウが見つからなかった
-/// * `Err(WindowInfoError)` - AppleScript 実行エラー
-///
-/// # Examples
-/// ```ignore
-/// use apptidying::applescript::find_window_by_title;
-///
-/// let result = find_window_by_title("Safari", "Development")?;
-/// if let Some(window) = result {
-///     println!("ウィンドウが見つかりました: {:?}", window);
-/// } else {
-///     println!("ウィンドウが見つかりません");
-/// }
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
-pub fn find_window_by_title(
-    app_name: &str,
-    window_title: &str,
-) -> Result<Option<WindowInfo>, WindowInfoError> {
-    // すべてのウィンドウを取得
-    let windows = get_all_windows(app_name)?;
-
-    // タイトルで検索（部分一致）
-    for window in windows {
-        if window.title.contains(window_title) {
-            return Ok(Some(window));
-        }
-    }
-
-    // 見つからなかった
-    Ok(None)
-}
-
 /// ウィンドウをリサイズ・移動
 ///
-/// 指定されたウィンドウをリサイズおよび移動します。
+/// 指定されたアプリケーションの最初のウィンドウをリサイズおよび移動します。
 ///
 /// # Arguments
 /// * `app_name` - アプリケーション名
-/// * `window_title` - ウィンドウタイトル（オプション）
 /// * `position` - 新しい位置（x, y）（オプション）
 /// * `size` - 新しいサイズ（幅, 高さ）（オプション）
 ///
@@ -365,13 +319,12 @@ pub fn find_window_by_title(
 /// ```ignore
 /// use apptidying::applescript::resize_window;
 ///
-/// let result = resize_window("Safari", None, Some((0, 0)), Some((1440, 900)))?;
+/// let result = resize_window("Safari", Some((0, 0)), Some((1440, 900)))?;
 /// println!("Resized: {}", result.message);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub fn resize_window(
     app_name: &str,
-    window_title: Option<&str>,
     position: Option<(i32, i32)>,
     size: Option<(i32, i32)>,
 ) -> Result<WindowResizeResult, WindowResizeError> {
@@ -381,25 +334,10 @@ pub fn resize_window(
 tell application "System Events"
     try
         tell process "{}"
+            set targetWindow to window 1
 "#,
         escape_applescript_string(app_name)
     );
-
-    // タイトルでウィンドウを選択、またはアプリケーションの最初のウィンドウを使用
-    if let Some(title) = window_title {
-        script.push_str(&format!(
-            r#"
-            set targetWindow to first window whose name contains "{}"
-"#,
-            escape_applescript_string(title)
-        ));
-    } else {
-        script.push_str(
-            r#"
-            set targetWindow to window 1
-"#,
-        );
-    }
 
     // 位置を設定（指定されている場合）
     if let Some((x, y)) = position {

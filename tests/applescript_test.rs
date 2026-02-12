@@ -1579,7 +1579,7 @@ fn test_resize_window_finder() {
     assert!(launch_result.is_ok());
 
     // ウィンドウをリサイズ
-    let result = resize_window("Finder", None, Some((100, 100)), Some((800, 600)));
+    let result = resize_window("Finder", Some((100, 100)), Some((800, 600)));
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1595,7 +1595,7 @@ fn test_resize_window_position_only() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((200, 200)), None);
+    let result = resize_window("Finder", Some((200, 200)), None);
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1610,7 +1610,7 @@ fn test_resize_window_size_only() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, None, Some((900, 700)));
+    let result = resize_window("Finder", None, Some((900, 700)));
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1620,32 +1620,9 @@ fn test_resize_window_size_only() {
 
 #[test]
 #[ignore]
-fn test_resize_window_with_title() {
-    // ウィンドウタイトルを指定してリサイズ
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    // Finder のウィンドウタイトルは通常フォルダ名
-    // "Desktop" や "Documents" などを含む可能性がある
-    let result = resize_window("Finder", Some(""), Some((300, 300)), Some((700, 500)));
-
-    // タイトルが見つからない場合は最初のウィンドウを使用
-    // エラーが返される可能性もある
-    if let Ok(resize_result) = result {
-        assert_eq!(resize_result.status, "success");
-    }
-}
-
-#[test]
-#[ignore]
 fn test_resize_window_nonexistent_app() {
     // 存在しないアプリケーションでテスト
-    let result = resize_window(
-        "NonExistentApp123456",
-        None,
-        Some((100, 100)),
-        Some((800, 600)),
-    );
+    let result = resize_window("NonExistentApp123456", Some((100, 100)), Some((800, 600)));
 
     // エラーが返されることを期待
     assert!(result.is_err());
@@ -1658,7 +1635,7 @@ fn test_resize_window_boundary_zero_position() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((0, 0)), Some((800, 600)));
+    let result = resize_window("Finder", Some((0, 0)), Some((800, 600)));
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1672,7 +1649,7 @@ fn test_resize_window_boundary_small_size() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((100, 100)), Some((200, 150)));
+    let result = resize_window("Finder", Some((100, 100)), Some((200, 150)));
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1687,7 +1664,7 @@ fn test_resize_window_boundary_large_size() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((0, 0)), Some((5000, 3000)));
+    let result = resize_window("Finder", Some((0, 0)), Some((5000, 3000)));
 
     // macOS がサイズを制限する可能性があるが、コマンド自体は成功する可能性がある
     if let Ok(resize_result) = result {
@@ -1702,7 +1679,7 @@ fn test_resize_window_negative_position() {
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((-100, -100)), Some((800, 600)));
+    let result = resize_window("Finder", Some((-100, -100)), Some((800, 600)));
 
     // macOS は負の座標を許可する可能性がある（マルチディスプレイ環境）
     // エラーになるかもしれないし、成功するかもしれない
@@ -1718,7 +1695,6 @@ fn test_resize_window_special_chars_in_app_name() {
     // 特殊文字を含むアプリケーション名
     let result = resize_window(
         "App\"With\\Special\nChars",
-        None,
         Some((100, 100)),
         Some((800, 600)),
     );
@@ -1729,32 +1705,12 @@ fn test_resize_window_special_chars_in_app_name() {
 
 #[test]
 #[ignore]
-fn test_resize_window_special_chars_in_title() {
-    // 特殊文字を含むウィンドウタイトル
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    let result = resize_window(
-        "Finder",
-        Some("Title\"With\\Special\nChars"),
-        Some((100, 100)),
-        Some((800, 600)),
-    );
-
-    // タイトルが見つからない場合はエラー
-    // または最初のウィンドウを使用する可能性もある
-    // ここでは結果のみを確認
-    let _ = result;
-}
-
-#[test]
-#[ignore]
 fn test_resize_window_to_json() {
     // JSON 変換のテスト
     let launch_result = launch_or_activate_app("Finder", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Finder", None, Some((150, 150)), Some((850, 650)));
+    let result = resize_window("Finder", Some((150, 150)), Some((850, 650)));
 
     if let Ok(resize_result) = result {
         let json = resize_result.to_json();
@@ -1772,7 +1728,7 @@ fn test_resize_window_to_json() {
 #[ignore]
 fn test_resize_window_unicode_app_name() {
     // Unicode を含むアプリケーション名
-    let result = resize_window("日本語アプリ", None, Some((100, 100)), Some((800, 600)));
+    let result = resize_window("日本語アプリ", Some((100, 100)), Some((800, 600)));
 
     // 存在しないアプリケーションなのでエラーが返される
     assert!(result.is_err());
@@ -1780,27 +1736,9 @@ fn test_resize_window_unicode_app_name() {
 
 #[test]
 #[ignore]
-fn test_resize_window_unicode_title() {
-    // Unicode を含むウィンドウタイトル
-    let launch_result = launch_or_activate_app("Finder", 3000);
-    assert!(launch_result.is_ok());
-
-    let result = resize_window(
-        "Finder",
-        Some("日本語タイトル"),
-        Some((100, 100)),
-        Some((800, 600)),
-    );
-
-    // タイトルが見つからない場合は最初のウィンドウまたはエラー
-    let _ = result;
-}
-
-#[test]
-#[ignore]
 fn test_resize_window_empty_app_name() {
     // 空文字列のアプリケーション名（境界値テスト）
-    let result = resize_window("", None, Some((100, 100)), Some((800, 600)));
+    let result = resize_window("", Some((100, 100)), Some((800, 600)));
 
     // エラーが返されることを期待
     assert!(result.is_err());
@@ -1813,7 +1751,7 @@ fn test_resize_window_calculator() {
     let launch_result = launch_or_activate_app("Calculator", 3000);
     assert!(launch_result.is_ok());
 
-    let result = resize_window("Calculator", None, Some((400, 400)), Some((300, 400)));
+    let result = resize_window("Calculator", Some((400, 400)), Some((300, 400)));
 
     assert!(result.is_ok());
     let resize_result = result.unwrap();
@@ -1828,15 +1766,15 @@ fn test_resize_window_multiple_operations() {
     assert!(launch_result.is_ok());
 
     // 1回目のリサイズ
-    let result1 = resize_window("Finder", None, Some((100, 100)), Some((800, 600)));
+    let result1 = resize_window("Finder", Some((100, 100)), Some((800, 600)));
     assert!(result1.is_ok());
 
     // 2回目のリサイズ
-    let result2 = resize_window("Finder", None, Some((200, 200)), Some((900, 700)));
+    let result2 = resize_window("Finder", Some((200, 200)), Some((900, 700)));
     assert!(result2.is_ok());
 
     // 3回目のリサイズ
-    let result3 = resize_window("Finder", None, Some((300, 300)), Some((1000, 800)));
+    let result3 = resize_window("Finder", Some((300, 300)), Some((1000, 800)));
     assert!(result3.is_ok());
 }
 
@@ -2444,7 +2382,7 @@ fn test_get_window_info_after_resize() {
     assert!(launch_result.is_ok());
 
     // ウィンドウをリサイズ
-    let resize_result = resize_window("Finder", None, Some((100, 200)), Some((800, 600)));
+    let resize_result = resize_window("Finder", Some((100, 200)), Some((800, 600)));
     if let Err(e) = &resize_result {
         eprintln!("resize_window error: {}", e);
     }
@@ -3115,223 +3053,6 @@ fn test_get_all_windows_json_serialization() {
 // =============================================================================
 // Find Window by Title Tests
 // =============================================================================
-
-/// Integration test: find_window_by_title でウィンドウが見つかった場合
-///
-/// # テスト概要
-/// Finderで新規ウィンドウを作成し、タイトルでウィンドウを検索する
-///
-/// # テストシナリオ
-/// 1. Finderの既存ウィンドウ数を取得
-/// 2. 新規ウィンドウを作成
-/// 3. ウィンドウ数が増えていることを確認
-/// 4. find_window_by_title で検索
-/// 5. 見つかったウィンドウ情報が正しいことを確認
-///
-/// # 境界値
-/// - ウィンドウタイトルの部分一致検索
-/// - 複数ウィンドウがある場合は最初のウィンドウを返す
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
-fn test_find_window_by_title_found() {
-    use apptidying::applescript::{create_new_window, find_window_by_title, get_all_windows};
-
-    // Arrange: Finderの現在のウィンドウ数を取得
-    let windows_before = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-    let count_before = windows_before.len();
-
-    // Act: 新規ウィンドウを作成
-    let create_result = create_new_window("Finder");
-    assert!(
-        create_result.is_ok(),
-        "新規ウィンドウ作成に失敗: {:?}",
-        create_result.err()
-    );
-
-    // 少し待機（ウィンドウ作成完了を待つ）
-    std::thread::sleep(std::time::Duration::from_millis(500));
-
-    // ウィンドウが増えていることを確認
-    let windows_after = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-    assert!(
-        windows_after.len() > count_before,
-        "新規ウィンドウが作成されていません。before: {}, after: {}",
-        count_before,
-        windows_after.len()
-    );
-
-    // ウィンドウタイトルで検索（Finderは通常「デスクトップ」「Desktop」など）
-    // 空文字列で検索すると、すべてのウィンドウにマッチ（部分一致）
-    let result = find_window_by_title("Finder", "");
-
-    // Assert: ウィンドウが見つかることを確認
-    assert!(
-        result.is_ok(),
-        "find_window_by_title がエラーを返しました: {:?}",
-        result.as_ref().err()
-    );
-    let window_option = result.unwrap();
-    assert!(window_option.is_some(), "ウィンドウが見つかりませんでした");
-
-    let window = window_option.unwrap();
-    assert!(!window.title.is_empty(), "ウィンドウタイトルが空です");
-    assert!(window.size.0 > 0, "ウィンドウ幅が0以下です");
-    assert!(window.size.1 > 0, "ウィンドウ高さが0以下です");
-}
-
-/// Integration test: find_window_by_title でウィンドウが見つからなかった場合
-///
-/// # テスト概要
-/// 存在しないタイトルでウィンドウを検索し、None が返ることを確認
-///
-/// # テストシナリオ
-/// 1. Finderで存在しないタイトルを検索
-/// 2. None が返ることを確認
-///
-/// # 境界値
-/// - 完全に一致しないタイトル
-/// - ランダム文字列を使用して誤マッチを防ぐ
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
-fn test_find_window_by_title_not_found() {
-    use apptidying::applescript::find_window_by_title;
-
-    // Arrange & Act: 存在しないタイトルで検索
-    let result = find_window_by_title("Finder", "NonExistentWindowTitle_XYZ_12345_ABCDE");
-
-    // Assert: None が返ることを確認
-    assert!(
-        result.is_ok(),
-        "find_window_by_title がエラーを返しました: {:?}",
-        result.err()
-    );
-    let window_option = result.unwrap();
-    assert!(
-        window_option.is_none(),
-        "存在しないタイトルでウィンドウが見つかりました: {:?}",
-        window_option
-    );
-}
-
-/// Integration test: find_window_by_title の部分一致検索
-///
-/// # テスト概要
-/// Finderのウィンドウタイトルの一部で検索し、正しくマッチすることを確認
-///
-/// # テストシナリオ
-/// 1. Finderのウィンドウを取得
-/// 2. 最初のウィンドウタイトルの一部で検索
-/// 3. 見つかったウィンドウが同じタイトルであることを確認
-///
-/// # 境界値
-/// - タイトルの先頭部分での検索
-/// - タイトルの中間部分での検索
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
-fn test_find_window_by_title_partial_match() {
-    use apptidying::applescript::{find_window_by_title, get_all_windows};
-
-    // Arrange: Finderのウィンドウを取得
-    let windows = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-
-    if windows.is_empty() {
-        // ウィンドウがない場合は新規作成
-        use apptidying::applescript::create_new_window;
-        create_new_window("Finder").expect("新規ウィンドウ作成に失敗");
-        std::thread::sleep(std::time::Duration::from_millis(500));
-    }
-
-    let windows = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-    assert!(
-        !windows.is_empty(),
-        "テスト実行に必要なウィンドウが存在しません"
-    );
-
-    let first_window_title = &windows[0].title;
-    assert!(!first_window_title.is_empty(), "ウィンドウタイトルが空です");
-
-    // Act: タイトルの最初の1文字で検索（部分一致）
-    // Unicode文字境界を考慮して、chars().next() で最初の文字を取得
-    let first_char = first_window_title.chars().next().unwrap().to_string();
-    let result = find_window_by_title("Finder", &first_char);
-
-    // Assert: ウィンドウが見つかることを確認
-    assert!(
-        result.is_ok(),
-        "find_window_by_title がエラーを返しました: {:?}",
-        result.as_ref().err()
-    );
-    let window_option = result.unwrap();
-    assert!(
-        window_option.is_some(),
-        "部分一致でウィンドウが見つかりませんでした"
-    );
-
-    let found_window = window_option.unwrap();
-    assert!(
-        found_window.title.contains(&first_char),
-        "見つかったウィンドウタイトル「{}」に検索文字列「{}」が含まれていません",
-        found_window.title,
-        first_char
-    );
-}
-
-/// Integration test: 複数ウィンドウがある場合、最初のウィンドウを返す
-///
-/// # テスト概要
-/// 複数のFinderウィンドウを開いた状態で、find_window_by_title が最初のウィンドウを返すことを確認
-///
-/// # テストシナリオ
-/// 1. Finderのウィンドウ数を確認
-/// 2. 2つ以上のウィンドウがあることを確認（なければ作成）
-/// 3. 空文字列で検索（すべてのウィンドウにマッチ）
-/// 4. get_all_windows の最初のウィンドウと一致することを確認
-///
-/// # 境界値
-/// - 複数マッチした場合の動作
-#[test]
-#[ignore] // CI環境でテストできないため#[ignore]を設定（osascript実行が必要）
-fn test_find_window_by_title_multiple_windows() {
-    use apptidying::applescript::{create_new_window, find_window_by_title, get_all_windows};
-
-    // Arrange: 複数ウィンドウを作成
-    let windows_before = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-
-    // 少なくとも2つのウィンドウを確保
-    if windows_before.len() < 2 {
-        for _ in 0..(2 - windows_before.len()) {
-            create_new_window("Finder").expect("新規ウィンドウ作成に失敗");
-            std::thread::sleep(std::time::Duration::from_millis(500));
-        }
-    }
-
-    let all_windows = get_all_windows("Finder").expect("Finderのウィンドウ一覧取得に失敗");
-    assert!(
-        all_windows.len() >= 2,
-        "テスト実行に必要な複数ウィンドウが存在しません"
-    );
-
-    // Act: 空文字列で検索（すべてのウィンドウにマッチ）
-    let result = find_window_by_title("Finder", "");
-
-    // Assert: 最初のウィンドウが返ることを確認
-    assert!(result.is_ok(), "find_window_by_title がエラーを返しました");
-    let window_option = result.unwrap();
-    assert!(window_option.is_some(), "ウィンドウが見つかりませんでした");
-
-    let found_window = window_option.unwrap();
-    let first_window = &all_windows[0];
-
-    // タイトルと位置が一致することを確認
-    assert_eq!(
-        found_window.title, first_window.title,
-        "見つかったウィンドウが最初のウィンドウと一致しません"
-    );
-    assert_eq!(
-        found_window.position, first_window.position,
-        "見つかったウィンドウの位置が最初のウィンドウと一致しません"
-    );
-}
 
 // =============================================================================
 // Create New Window Tests
