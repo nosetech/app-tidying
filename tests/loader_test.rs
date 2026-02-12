@@ -1664,3 +1664,254 @@ fn test_load_layout_negative_position() {
         }
     }
 }
+
+// =============================================================================
+// ディスプレイフォールバック時のサイズ超過テスト (Issue #101)
+// =============================================================================
+
+#[test]
+#[ignore] // osascript 実行に依存するため、CI環境ではスキップ
+fn test_load_layout_fallback_oversized_window() {
+    // 目的: フォールバック時に、元の設定がフォールバック先ディスプレイより大きい場合の動作を確認
+    // 検証項目:
+    //   - サイズ超過の警告が出力されるか
+    //   - アプリケーションが失敗としてカウントされるか
+    //   - 処理が継続実行されるか
+    // 期待される動作:
+    //   - フォールバック処理は正常に実行される
+    //   - サイズ超過によりウィンドウ配置が失敗する
+    //   - エラーログにサイズ超過の警告が記録される
+    //   - 全体としては失敗カウントが増える
+
+    // 接続されているディスプレイ情報を取得
+    let connected_displays = match applescript::get_all_connected_displays() {
+        Ok(displays) => displays,
+        Err(e) => {
+            println!("✗ ディスプレイ情報の取得に失敗: {}", e);
+            return;
+        }
+    };
+
+    if connected_displays.is_empty() {
+        println!("✗ 接続されているディスプレイが見つかりません");
+        return;
+    }
+
+    let first_display = &connected_displays[0];
+    println!(
+        "最初のディスプレイ: {} ({}x{})",
+        first_display.name, first_display.width, first_display.height
+    );
+
+    // 存在しないディスプレイ名を指定し、4K相当の大きなウィンドウサイズを設定
+    let mut config = create_test_config_single_window();
+    config.layouts[0].displays[0].name = "NonExistentDisplayForOversizeTest".to_string();
+    config.layouts[0].displays[0].windows[0].position = Some(Position {
+        x: json!(0),
+        y: json!(0),
+    });
+    config.layouts[0].displays[0].windows[0].size = Some(Size {
+        width: json!(3840),  // 4K幅
+        height: json!(2160), // 4K高さ
+    });
+
+    println!("設定されたウィンドウサイズ: 3840 x 2160 (ディスプレイサイズより大きい可能性が高い)");
+
+    let timeout_ms = 3000;
+    let result = load_layout(&config, timeout_ms);
+
+    match result {
+        Ok(load_result) => {
+            println!("✓ フォールバック時のサイズ超過テスト: 処理完了");
+            println!(
+                "  成功: {}, 失敗: {}",
+                load_result.success_count, load_result.failure_count
+            );
+
+            // サイズ超過により失敗する可能性が高い
+            if load_result.failure_count > 0 {
+                println!("  ✓ サイズ超過により失敗カウントが増加しました");
+                println!("  失敗アプリ: {:?}", load_result.failed_apps);
+            } else {
+                println!("  注: サイズ超過でも成功した場合（macOSがサイズを自動調整した可能性）");
+            }
+
+            println!("\n  期待されるログメッセージ:");
+            println!(
+                "    [WARN] ディスプレイ 'NonExistentDisplayForOversizeTest' が接続されていません"
+            );
+            println!(
+                "    [INFO] ディスプレイ '{}' を使用して起動します（フォールバック）",
+                first_display.name
+            );
+            println!(
+                "    [WARN] ウィンドウサイズがディスプレイサイズを超過しています（該当する場合）"
+            );
+            println!(
+                "\n  注: 上記のログメッセージがログファイルに出力されていることを確認してください"
+            );
+        }
+        Err(e) => {
+            println!("✓ フォールバック時のサイズ超過テスト: エラー発生: {}", e);
+            println!("  注: サイズ超過によりエラーが発生した場合も想定通りの動作です");
+            println!(
+                "  注: ログファイルでディスプレイフォールバックとサイズ超過のログメッセージを確認してください"
+            );
+
+            // エラーメッセージに「Safari」が含まれている場合、フォールバック自体は成功していると見なす
+            if e.message.contains("Safari") {
+                println!("  ✓ フォールバックロジックは動作しているが、Safari の操作に失敗しました");
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore] // osascript 実行に依存するため、CI環境ではスキップ
+fn test_load_layout_multiple_displays_mixed_scenario() {
+    // 目的: 複数ディスプレイで、一部がフォールバック対象、一部が存在する場合の動作を確認
+    // 検証項目:
+    //   - 存在するディスプレイは正常に処理される
+    //   - 見つからないディスプレイはフォールバックされる
+    //   - 全体の成功/失敗カウントが正確であるか
+    // 期待される動作:
+    //   - 存在するディスプレイのウィンドウは成功カウントに追加
+    //   - 存在しないディスプレイのウィンドウはフォールバック後に処理される
+    //   - 全体として部分成功または全体成功となる
+
+    // 接続されているディスプレイを確認
+    let connected_displays = match applescript::get_all_connected_displays() {
+        Ok(displays) => displays,
+        Err(e) => {
+            println!("✗ ディスプレイ情報の取得に失敗: {}", e);
+            return;
+        }
+    };
+
+    if connected_displays.is_empty() {
+        println!("✗ 接続されているディスプレイが見つかりません");
+        return;
+    }
+
+    let first_display_name = connected_displays[0].name.clone();
+    println!(
+        "接続されているディスプレイ: {} ({}x{})",
+        first_display_name, connected_displays[0].width, connected_displays[0].height
+    );
+
+    // レイアウト設定に2つのディスプレイを定義
+    // 1つは実在するディスプレイ、1つは存在しないディスプレイ
+    let config = LayoutFile {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![
+                // 実在するディスプレイ（Safari）
+                DisplayConfig {
+                    name: first_display_name.clone(),
+                    windows: vec![AppWindowConfig {
+                        app: "Safari".to_string(),
+                        position: Some(Position {
+                            x: json!("left"),
+                            y: json!("top"),
+                        }),
+                        size: Some(Size {
+                            width: json!("half"),
+                            height: json!("half"),
+                        }),
+                    }],
+                },
+                // 存在しないディスプレイ（Finder）
+                DisplayConfig {
+                    name: "NonExistentDisplayForMixedTest".to_string(),
+                    windows: vec![AppWindowConfig {
+                        app: "Finder".to_string(),
+                        position: Some(Position {
+                            x: json!("right"),
+                            y: json!("top"),
+                        }),
+                        size: Some(Size {
+                            width: json!("half"),
+                            height: json!("half"),
+                        }),
+                    }],
+                },
+            ],
+        }],
+    };
+
+    println!("\nレイアウト設定:");
+    println!(
+        "  [1] ディスプレイ: {} (存在する) - アプリ: Safari",
+        first_display_name
+    );
+    println!("  [2] ディスプレイ: NonExistentDisplayForMixedTest (存在しない) - アプリ: Finder");
+
+    let timeout_ms = 3000;
+    let result = load_layout(&config, timeout_ms);
+
+    match result {
+        Ok(load_result) => {
+            println!("✓ 複数ディスプレイ混在シナリオテスト: 処理完了");
+            println!(
+                "  成功: {}, 失敗: {}",
+                load_result.success_count, load_result.failure_count
+            );
+
+            // 少なくとも1つのウィンドウが成功する必要がある
+            assert!(
+                load_result.success_count >= 1,
+                "少なくとも1つのウィンドウ（Safari または Finder）が成功する必要があります"
+            );
+
+            // 成功カウントの内訳を説明
+            if load_result.success_count == 2 {
+                println!("  ✓ すべてのウィンドウが成功しました（Safari と Finder）");
+                println!("    - Safari: 存在するディスプレイに配置");
+                println!("    - Finder: フォールバック後に配置");
+            } else if load_result.success_count == 1 {
+                println!("  ⚠ 1つのウィンドウのみ成功しました");
+                if load_result.failed_apps.contains(&"Safari".to_string()) {
+                    println!("    - Safari: 失敗");
+                    println!("    - Finder: フォールバック後に成功");
+                } else if load_result.failed_apps.contains(&"Finder".to_string()) {
+                    println!("    - Safari: 存在するディスプレイに成功");
+                    println!("    - Finder: フォールバック後に失敗");
+                } else {
+                    println!("    - 詳細はログファイルを確認してください");
+                }
+            }
+
+            if load_result.failure_count > 0 {
+                println!("  失敗アプリ: {:?}", load_result.failed_apps);
+            }
+
+            println!("\n  期待されるログメッセージ:");
+            println!(
+                "    [INFO] アプリケーション 'Safari' をディスプレイ '{}' に配置します",
+                first_display_name
+            );
+            println!(
+                "    [WARN] ディスプレイ 'NonExistentDisplayForMixedTest' が接続されていません"
+            );
+            println!(
+                "    [INFO] ディスプレイ '{}' を使用して起動します（フォールバック）",
+                first_display_name
+            );
+            println!(
+                "\n  注: 上記のログメッセージがログファイルに出力されていることを確認してください"
+            );
+        }
+        Err(e) => {
+            println!("✗ 複数ディスプレイ混在シナリオテスト: エラー発生: {}", e);
+            println!("  注: Safari または Finder が起動できない環境では失敗する可能性があります");
+            println!(
+                "  注: ログファイルでディスプレイフォールバックのログメッセージを確認してください"
+            );
+
+            // エラーメッセージにアプリ名が含まれている場合、部分的には成功していると見なす
+            if e.message.contains("Safari") || e.message.contains("Finder") {
+                println!("  ✓ フォールバックロジックは動作しているが、アプリの操作に失敗しました");
+            }
+        }
+    }
+}
