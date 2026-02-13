@@ -117,6 +117,40 @@ pub fn get_all_connected_displays() -> Result<Vec<DisplayInfo>, DisplayError> {
   - ただし、開発環境では Rust ツールチェーンの使用は許可
   - リリースは Rust コンパイル済みバイナリで配布（ユーザーは Rust インストール不要）
 
+### AppleScript のプロセスプロパティについて
+
+#### displayed_name と name プロパティの使い分け
+
+System Events でアプリケーション一覧を取得する際、以下の 2 つのプロパティを使用できます：
+
+| プロパティ | 説明 | 用途 |
+|-----------|------|------|
+| **name** | バイナリ名（実行可能ファイル名） | 内部用途、スクリプト制御 |
+| **displayed_name** | UI表示名（アプリ名） | ユーザー向け情報、layout.json 保存 |
+
+**具体例**:
+```
+RightCheat（アプリケーション）:
+  - name: "app"
+  - displayed_name: "RightCheat"
+
+Ghostty（ターミナルエミュレータ）:
+  - name: "ghostty"
+  - displayed_name: "Ghostty"
+```
+
+**Issue #108 での決定**:
+- `get_running_applications()` では `displayed_name` を使用
+- ユーザーが layout.json で見たときに、実際のアプリケーション名（表示名）が記載される
+- Finder の「ファイル名拡張子を表示」設定による `.app` 拡張子の混在はない
+
+**検証済みのmacOSバージョン**:
+- macOS 26.2 でテスト済み
+
+**注意事項**:
+- 古いmacOS（10.15未満）での `displayed_name` プロパティの利用可能性については未確認
+- 実装上の問題が報告された場合は、`name` プロパティへの変更も検討
+
 ### 将来のマルチプラットフォーム対応
 
 - Windows版の実装を想定
