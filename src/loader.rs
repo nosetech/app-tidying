@@ -1,5 +1,6 @@
 use crate::applescript::{self, DisplayInfo};
 use crate::config::{AppWindowConfig, LayoutFile};
+use rayon::prelude::*;
 use std::collections::HashSet;
 use std::thread;
 use std::time::Duration;
@@ -31,6 +32,17 @@ impl std::fmt::Display for LoadError {
 }
 
 impl std::error::Error for LoadError {}
+
+/// ウィンドウ処理の結果
+#[derive(Debug, Clone)]
+struct WindowProcessResult {
+    /// アプリケーション名
+    app_name: String,
+    /// 処理に成功したか
+    success: bool,
+    /// エラーメッセージ（失敗時）
+    error_message: Option<String>,
+}
 
 /// ウィンドウレイアウトを復元する
 ///
@@ -124,67 +136,88 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
             display_info.height
         );
 
-        // 5.2 各ウィンドウの設定を処理
-        for window_config in &display_config.windows {
-            log::debug!("アプリ '{}' の処理を開始", window_config.app);
+        // 5.2 各ウィンドウの設定を処理（並列処理）
+        let window_results: Vec<WindowProcessResult> = display_config
+            .windows
+            .par_iter()
+            .map(|window_config| {
+                log::debug!("アプリ '{}' の処理を開始", window_config.app);
 
-            // ウィンドウがワーニング対象かチェック
-            // フォールバック時は、フォールバック先のディスプレイに対してサイズ超過をチェック
-            let has_warning = if is_fallback {
-                // フォールバック時：フォールバック先ディスプレイのサイズ超過をチェック
-                if let Some(ref size) = window_config.size {
-                    let size_value =
-                        serde_json::to_value(size).unwrap_or_else(|_| serde_json::json!({}));
-                    match crate::config::parse_size_value(
-                        &size_value,
-                        display_info.width,
-                        display_info.height,
-                        "size",
-                    ) {
-                        Ok((width, height)) => {
-                            // フォールバック先ディスプレイに収まらないか確認
-                            width > display_info.width || height > display_info.height
+                // ウィンドウがワーニング対象かチェック
+                // フォールバック時は、フォールバック先のディスプレイに対してサイズ超過をチェック
+                let has_warning = if is_fallback {
+                    // フォールバック時：フォールバック先ディスプレイのサイズ超過をチェック
+                    if let Some(ref size) = window_config.size {
+                        let size_value =
+                            serde_json::to_value(size).unwrap_or_else(|_| serde_json::json!({}));
+                        match crate::config::parse_size_value(
+                            &size_value,
+                            display_info.width,
+                            display_info.height,
+                            "size",
+                        ) {
+                            Ok((width, height)) => {
+                                // フォールバック先ディスプレイに収まらないか確認
+                                width > display_info.width || height > display_info.height
+                            }
+                            Err(_) => false,
                         }
-                        Err(_) => false,
+                    } else {
+                        false
                     }
                 } else {
-                    false
-                }
-            } else {
-                // 非フォールバック時：元の警告セットをチェック
-                warning_set.contains(&(display_config.name.clone(), window_config.app.clone()))
-            };
+                    // 非フォールバック時：元の警告セットをチェック
+                    warning_set.contains(&(display_config.name.clone(), window_config.app.clone()))
+                };
 
-            if has_warning {
-                log::warn!(
-                    "アプリ '{}' は検証エラーのためスキップされます",
-                    window_config.app
-                );
-                failure_count += 1;
-                if !failed_apps.contains(&window_config.app) {
-                    failed_apps.push(window_config.app.clone());
-                }
-                continue;
-            }
-
-            match process_window(window_config, &display_info, timeout_ms) {
-                Ok(()) => {
-                    log::info!(
-                        "アプリ '{}' のウィンドウ配置に成功しました",
+                if has_warning {
+                    log::warn!(
+                        "アプリ '{}' は検証エラーのためスキップされます",
                         window_config.app
                     );
-                    success_count += 1;
+                    return WindowProcessResult {
+                        app_name: window_config.app.clone(),
+                        success: false,
+                        error_message: Some("検証エラー".to_string()),
+                    };
                 }
-                Err(e) => {
-                    log::warn!(
-                        "アプリ '{}' のウィンドウ配置に失敗しました: {}",
-                        window_config.app,
-                        e
-                    );
-                    failure_count += 1;
-                    if !failed_apps.contains(&window_config.app) {
-                        failed_apps.push(window_config.app.clone());
+
+                match process_window(window_config, &display_info, timeout_ms) {
+                    Ok(()) => {
+                        log::info!(
+                            "アプリ '{}' のウィンドウ配置に成功しました",
+                            window_config.app
+                        );
+                        WindowProcessResult {
+                            app_name: window_config.app.clone(),
+                            success: true,
+                            error_message: None,
+                        }
                     }
+                    Err(e) => {
+                        log::warn!(
+                            "アプリ '{}' のウィンドウ配置に失敗しました: {}",
+                            window_config.app,
+                            e
+                        );
+                        WindowProcessResult {
+                            app_name: window_config.app.clone(),
+                            success: false,
+                            error_message: Some(e),
+                        }
+                    }
+                }
+            })
+            .collect();
+
+        // 並列処理の結果を集約
+        for result in window_results {
+            if result.success {
+                success_count += 1;
+            } else {
+                failure_count += 1;
+                if !failed_apps.contains(&result.app_name) {
+                    failed_apps.push(result.app_name);
                 }
             }
         }
