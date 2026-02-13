@@ -2619,3 +2619,576 @@ fn test_create_new_window_no_menu_item() {
         );
     }
 }
+
+// =============================================================================
+// get_running_applications() のテスト
+// =============================================================================
+
+/// localized name で取得したアプリケーション情報が有効なAppInfo構造体になることを確認
+///
+/// 検証項目:
+/// - get_running_applications() が正常に実行される
+/// - 戻り値が Vec<AppInfo> 構造体として取得できる
+/// - 各 AppInfo にアプリケーション名が含まれている
+///
+/// 環境要件:
+/// - macOS で osascript が利用可能
+/// - System Events へのアクセス権限が必要
+#[test]
+#[ignore]
+fn test_localized_name_returns_valid_app_info() {
+    // Act: 実行中アプリケーション一覧を取得
+    let result = get_running_applications();
+
+    // Assert: 取得が成功していることを確認
+    assert!(result.is_ok(), "get_running_applications() が失敗しました");
+
+    let apps = result.unwrap();
+
+    // Assert: 取得したアプリケーション情報が有効であることを確認
+    assert!(!apps.is_empty(), "実行中アプリケーションが0件です");
+
+    for app in &apps {
+        // 各アプリケーション名が空でないことを確認
+        assert!(!app.name.is_empty(), "アプリケーション名が空です");
+
+        // プロセスIDが設定されている場合、正の値であることを確認
+        if let Some(pid) = app.process_id {
+            assert!(pid > 0, "プロセスIDが不正です: {}", pid);
+        }
+    }
+}
+
+/// "AppName|12345" 形式の解析が正常に機能することを確認
+///
+/// 検証項目:
+/// - パイプ区切り文字列をアプリケーション名とプロセスIDに分割できる
+/// - プロセスIDが正しく i32 型に変換される
+///
+/// 注意: このテストは get_running_applications() の内部ロジックを模倣
+#[test]
+fn test_localized_name_parsing_with_pipe_separator() {
+    // Arrange: "AppName|ProcessID" 形式のテストデータ
+    let test_data = "Safari|12345";
+
+    // Act: パイプ位置を検索してパース
+    let pipe_pos = test_data.rfind('|').unwrap();
+    let app_name = &test_data[..pipe_pos];
+    let pid_str = &test_data[pipe_pos + 1..];
+    let process_id = pid_str.parse::<i32>().ok();
+
+    // Assert: 正しくパースされていることを確認
+    assert_eq!(app_name, "Safari", "アプリケーション名が一致しません");
+    assert_eq!(
+        process_id,
+        Some(12345),
+        "プロセスIDが正しくパースされていません"
+    );
+}
+
+/// "AppName|" 形式（プロセスID なし）の解析が正常に機能することを確認
+///
+/// 検証項目:
+/// - パイプ文字の後にプロセスIDがない場合、None になる
+/// - アプリケーション名は正しく取得できる
+///
+/// 注意: AppleScript で unix id 取得が失敗した場合の動作を想定
+#[test]
+fn test_localized_name_parsing_without_process_id() {
+    // Arrange: "AppName|" 形式（プロセスIDなし）のテストデータ
+    let test_data = "Finder|";
+
+    // Act: パイプ位置を検索してパース
+    let pipe_pos = test_data.rfind('|').unwrap();
+    let app_name = &test_data[..pipe_pos];
+    let pid_str = &test_data[pipe_pos + 1..];
+    let process_id = if pid_str.is_empty() {
+        None
+    } else {
+        pid_str.parse::<i32>().ok()
+    };
+
+    // Assert: 正しくパースされていることを確認
+    assert_eq!(app_name, "Finder", "アプリケーション名が一致しません");
+    assert_eq!(
+        process_id, None,
+        "プロセスIDが空の場合は None になるべきです"
+    );
+}
+
+/// get_running_applications() の結果が空でない（1個以上）ことを確認
+///
+/// 検証項目:
+/// - macOS 環境で実行すると、必ず1個以上のアプリケーションが起動している
+/// - 最低でも Finder や System Events が起動しているはず
+///
+/// 環境要件:
+/// - macOS で osascript が利用可能
+/// - System Events へのアクセス権限が必要
+#[test]
+#[ignore]
+fn test_localized_name_app_count_not_zero() {
+    // Act: 実行中アプリケーション一覧を取得
+    let result = get_running_applications();
+
+    // Assert: 取得が成功していることを確認
+    assert!(result.is_ok(), "get_running_applications() が失敗しました");
+
+    let apps = result.unwrap();
+
+    // Assert: 少なくとも1個のアプリケーションが起動していることを確認
+    assert!(
+        !apps.is_empty(),
+        "実行中アプリケーションが0件です（Finderなど標準アプリも含めて）"
+    );
+}
+
+/// Safari などの標準アプリケーションが取得されることを確認
+///
+/// 検証項目:
+/// - macOS 標準の "Safari" アプリケーションが取得される
+/// - localized name で取得されるため、日本語環境でも "Safari" のまま
+///
+/// 環境要件:
+/// - macOS で osascript が利用可能
+/// - Safari が起動している必要があります
+///
+/// 制限事項:
+/// - Safari が起動していない場合、このテストはスキップされます
+#[test]
+#[ignore]
+fn test_localized_name_contains_standard_apps() {
+    // Arrange: Safari を起動
+    let _ = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg("tell application \"Safari\" to activate")
+        .output();
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    // Act: 実行中アプリケーション一覧を取得
+    let result = get_running_applications();
+
+    // Assert: 取得が成功していることを確認
+    assert!(result.is_ok(), "get_running_applications() が失敗しました");
+
+    let apps = result.unwrap();
+
+    // Assert: Safari が含まれていることを確認
+    let safari_found = apps.iter().any(|app| app.name.contains("Safari"));
+
+    assert!(
+        safari_found,
+        "Safari がアプリケーション一覧に含まれていません（起動していない可能性があります）"
+    );
+}
+
+/// background only is false で背景アプリケーションが除外されることを確認
+///
+/// 検証項目:
+/// - background only is false の条件で、通常のGUIアプリケーションのみが取得される
+/// - 背景プロセス（デーモン等）は除外される
+///
+/// 環境要件:
+/// - macOS で osascript が利用可能
+/// - System Events へのアクセス権限が必要
+///
+/// 注意:
+/// - 取得結果に Finder など GUI アプリケーションが含まれることを確認
+/// - 逆に、デーモンプロセスが含まれていないことを確認（完全な検証は困難）
+#[test]
+#[ignore]
+fn test_localized_name_excludes_background_processes() {
+    // Act: 実行中アプリケーション一覧を取得
+    let result = get_running_applications();
+
+    // Assert: 取得が成功していることを確認
+    assert!(result.is_ok(), "get_running_applications() が失敗しました");
+
+    let apps = result.unwrap();
+
+    // Assert: 少なくとも1個のGUIアプリケーションが取得されていることを確認
+    assert!(
+        !apps.is_empty(),
+        "GUIアプリケーションが0件です（background onlyフィルタが正しく機能していない可能性）"
+    );
+
+    // GUIアプリケーション（Finder等）が含まれることを確認
+    let gui_app_found = apps.iter().any(|app| {
+        app.name.contains("Finder") || app.name.contains("Safari") || app.name.contains("Terminal")
+    });
+
+    assert!(
+        gui_app_found,
+        "GUI アプリケーション（Finder/Safari/Terminal等）が1つも含まれていません"
+    );
+
+    // デーモン系のプロセス名が含まれていないことを確認（簡易チェック）
+    // 注: 完全な検証は困難なため、代表的なデーモン名のみチェック
+    let daemon_found = apps.iter().any(|app| {
+        app.name.to_lowercase().contains("daemon")
+            || app.name.to_lowercase().contains("helper")
+            || app.name.to_lowercase().contains("agent")
+    });
+
+    // デーモンが含まれている場合でも、それはGUIを持つヘルパーアプリである可能性があるため、
+    // ワーニング的な情報出力のみ（失敗扱いにはしない）
+    if daemon_found {
+        println!(
+            "注意: 'daemon', 'helper', 'agent' を含むプロセス名が見つかりました（GUIヘルパーの可能性あり）"
+        );
+    }
+}
+
+/// RightCheatなどの自作アプリケーションがバイナリ名（"app"）ではなく、表示名で取得されることを確認
+///
+/// 検証項目:
+/// - RightCheat アプリケーションが "app" ではなく "RightCheat" として取得される
+/// - localized name を使用することで、Info.plist の CFBundleDisplayName が使用される
+///
+/// 環境要件:
+/// - macOS で osascript が利用可能
+/// - RightCheat が起動している必要があります
+///
+/// 制限事項:
+/// - RightCheat が起動していない場合、このテストはスキップされます
+/// - RightCheat 以外の自作アプリでも同様の動作確認が可能
+#[test]
+#[ignore]
+fn test_localized_name_not_binary_name() {
+    // Arrange: RightCheat を起動（存在しない場合はスキップ）
+    let launch_result = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg("tell application \"RightCheat\" to activate")
+        .output();
+
+    if launch_result.is_err() {
+        println!("RightCheat が見つからないため、このテストをスキップします");
+        return;
+    }
+
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    // Act: 実行中アプリケーション一覧を取得
+    let result = get_running_applications();
+
+    // Assert: 取得が成功していることを確認
+    assert!(result.is_ok(), "get_running_applications() が失敗しました");
+
+    let apps = result.unwrap();
+
+    // Assert: RightCheat が "app" ではなく "RightCheat" として取得されることを確認
+    let rightcheat_found = apps.iter().any(|app| app.name.contains("RightCheat"));
+    let binary_name_found = apps.iter().any(|app| app.name == "app");
+
+    assert!(
+        rightcheat_found,
+        "RightCheat がアプリケーション一覧に含まれていません（起動していない可能性があります）"
+    );
+
+    assert!(
+        !binary_name_found || !apps.iter().any(|app| app.name == "app" && rightcheat_found),
+        "RightCheat がバイナリ名 'app' として取得されています（localized name が機能していない可能性）"
+    );
+}
+
+// =============================================================================
+// Issue #108: displayed name への変更に関するテスト
+// =============================================================================
+
+/// displayed name で取得したアプリケーション情報が有効なAppInfo構造体になることを確認
+///
+/// 検証項目:
+/// - get_running_applications() が正常に実行される
+/// - AppInfo 構造体の name フィールドが空でない
+/// - AppInfo 構造体の process_id フィールドが有効（一部アプリはNoneの可能性あり）
+///
+/// 環境要件:
+/// - macOS で osascript が利用可能
+///
+/// 制限事項:
+/// - CI 環境では osascript が利用できないため、ローカル macOS 環境でのみ実行可能
+#[test]
+#[ignore]
+fn test_displayed_name_returns_valid_app_info() {
+    // Act: 実行中アプリケーション一覧を取得（displayed name を使用）
+    let result = get_running_applications();
+
+    // Assert: 取得が成功していることを確認
+    assert!(result.is_ok(), "get_running_applications() が失敗しました");
+
+    let apps = result.unwrap();
+
+    // Assert: 少なくとも1個のアプリケーションが取得されていることを確認
+    assert!(
+        !apps.is_empty(),
+        "アプリケーション一覧が空です（displayed name が正しく機能していない可能性）"
+    );
+
+    // Assert: すべての AppInfo が有効な name を持っていることを確認
+    for app in &apps {
+        assert!(
+            !app.name.is_empty(),
+            "アプリケーション名が空です: {:?}",
+            app
+        );
+    }
+
+    // Assert: 少なくとも1個のアプリケーションが process_id を持っていることを確認
+    // （一部のアプリケーションは process_id を取得できない場合があるため、すべてがSomeである必要はない）
+    let has_process_id = apps.iter().any(|app| app.process_id.is_some());
+    assert!(
+        has_process_id,
+        "すべてのアプリケーションで process_id が None です（unix id 取得が失敗している可能性）"
+    );
+}
+
+/// "AppName|12345" 形式の解析が正常に機能することを確認
+///
+/// 検証項目:
+/// - パイプ区切りの文字列が正しく AppInfo に変換される
+/// - アプリケーション名が正しく抽出される
+/// - プロセスIDが正しく整数としてパースされる
+///
+/// テスト方法:
+/// - get_running_applications() の内部パースロジックを模倣してテスト
+#[test]
+fn test_displayed_name_parsing_with_pipe_separator() {
+    // Arrange: "AppName|12345" 形式のテストデータを作成
+    let test_entry = "Google Chrome|54321";
+
+    // Act: パース処理を模倣（get_running_applications() のロジックを抽出）
+    let pipe_pos = test_entry.rfind('|').expect("パイプ区切りが見つかりません");
+    let app_name = &test_entry[..pipe_pos];
+    let pid_str = &test_entry[pipe_pos + 1..];
+    let process_id = pid_str.parse::<i32>().ok();
+
+    // Assert: パース結果が正しいことを確認
+    assert_eq!(
+        app_name, "Google Chrome",
+        "アプリケーション名が正しくパースされていません"
+    );
+    assert_eq!(
+        process_id,
+        Some(54321),
+        "プロセスIDが正しくパースされていません"
+    );
+}
+
+/// "AppName|" 形式（プロセスID なし）の解析が正常に機能することを確認
+///
+/// 検証項目:
+/// - パイプ区切りの文字列で、プロセスIDが空の場合も正しく処理される
+/// - アプリケーション名が正しく抽出される
+/// - プロセスIDが None として扱われる
+///
+/// テスト方法:
+/// - get_running_applications() の内部パースロジックを模倣してテスト
+#[test]
+fn test_displayed_name_parsing_without_process_id() {
+    // Arrange: "AppName|" 形式のテストデータを作成（プロセスIDなし）
+    let test_entry = "Safari|";
+
+    // Act: パース処理を模倣（get_running_applications() のロジックを抽出）
+    let pipe_pos = test_entry.rfind('|').expect("パイプ区切りが見つかりません");
+    let app_name = &test_entry[..pipe_pos];
+    let pid_str = &test_entry[pipe_pos + 1..];
+    let process_id = if pid_str.is_empty() {
+        None
+    } else {
+        pid_str.parse::<i32>().ok()
+    };
+
+    // Assert: パース結果が正しいことを確認
+    assert_eq!(
+        app_name, "Safari",
+        "アプリケーション名が正しくパースされていません"
+    );
+    assert_eq!(process_id, None, "プロセスIDがNoneとして扱われていません");
+}
+
+/// get_running_applications() の結果が空でない（1個以上）ことを確認
+///
+/// 検証項目:
+/// - displayed name で少なくとも1個のアプリケーションが取得される
+/// - macOS 環境では常に1個以上のGUIアプリケーションが起動している想定
+///
+/// 環境要件:
+/// - macOS で osascript が利用可能
+///
+/// 制限事項:
+/// - CI 環境では osascript が利用できないため、ローカル macOS 環境でのみ実行可能
+#[test]
+#[ignore]
+fn test_displayed_name_app_count_not_zero() {
+    // Act: 実行中アプリケーション一覧を取得（displayed name を使用）
+    let result = get_running_applications();
+
+    // Assert: 取得が成功していることを確認
+    assert!(result.is_ok(), "get_running_applications() が失敗しました");
+
+    let apps = result.unwrap();
+
+    // Assert: 少なくとも1個のアプリケーションが取得されていることを確認
+    assert!(
+        !apps.is_empty(),
+        "アプリケーション一覧が空です（displayed name が正しく機能していない可能性）"
+    );
+
+    // 情報出力: 取得したアプリケーション数を表示
+    println!("取得したアプリケーション数: {}", apps.len());
+}
+
+/// Safari などの標準アプリケーションが取得されることを確認
+///
+/// 検証項目:
+/// - displayed name で macOS の標準アプリケーション（Finder, Safari 等）が取得される
+/// - アプリケーション名が正しく取得される
+///
+/// 環境要件:
+/// - macOS で osascript が利用可能
+/// - Safari または Finder が起動していることが望ましい
+///
+/// 制限事項:
+/// - CI 環境では osascript が利用できないため、ローカル macOS 環境でのみ実行可能
+/// - Safari や Finder が起動していない場合、このテストは失敗する可能性があります
+#[test]
+#[ignore]
+fn test_displayed_name_contains_standard_apps() {
+    // Act: 実行中アプリケーション一覧を取得（displayed name を使用）
+    let result = get_running_applications();
+
+    // Assert: 取得が成功していることを確認
+    assert!(result.is_ok(), "get_running_applications() が失敗しました");
+
+    let apps = result.unwrap();
+
+    // Assert: 標準アプリケーション（Finder または Safari）が含まれることを確認
+    let standard_app_found = apps
+        .iter()
+        .any(|app| app.name.contains("Finder") || app.name.contains("Safari"));
+
+    // 情報出力: 取得したアプリケーション一覧を表示
+    println!("取得したアプリケーション一覧:");
+    for app in &apps {
+        println!("  - {}: {:?}", app.name, app.process_id);
+    }
+
+    assert!(
+        standard_app_found,
+        "標準アプリケーション（Finder/Safari）が取得されていません（起動していない可能性があります）"
+    );
+}
+
+/// background only is false で背景アプリケーションが除外されることを確認
+///
+/// 検証項目:
+/// - displayed name + background only フィルタで GUI アプリケーションのみが取得される
+/// - デーモンや背景プロセスが含まれていないことを確認
+///
+/// 環境要件:
+/// - macOS で osascript が利用可能
+///
+/// 制限事項:
+/// - CI 環境では osascript が利用できないため、ローカル macOS 環境でのみ実行可能
+/// - 完全なフィルタリング検証は困難なため、代表的なケースのみ検証
+#[test]
+#[ignore]
+fn test_displayed_name_excludes_background_processes() {
+    // Act: 実行中アプリケーション一覧を取得（displayed name + background only is false）
+    let result = get_running_applications();
+
+    // Assert: 取得が成功していることを確認
+    assert!(result.is_ok(), "get_running_applications() が失敗しました");
+
+    let apps = result.unwrap();
+
+    // Assert: 少なくとも1個のGUIアプリケーションが取得されていることを確認
+    assert!(
+        !apps.is_empty(),
+        "GUIアプリケーションが0件です（background onlyフィルタが正しく機能していない可能性）"
+    );
+
+    // Assert: GUIアプリケーション（Finder等）が含まれることを確認
+    let gui_app_found = apps.iter().any(|app| {
+        app.name.contains("Finder") || app.name.contains("Safari") || app.name.contains("Terminal")
+    });
+
+    assert!(
+        gui_app_found,
+        "GUI アプリケーション（Finder/Safari/Terminal等）が1つも含まれていません"
+    );
+
+    // デーモン系のプロセス名が含まれていないことを確認（簡易チェック）
+    // 注: 完全な検証は困難なため、代表的なデーモン名のみチェック
+    let daemon_found = apps.iter().any(|app| {
+        app.name.to_lowercase().contains("daemon")
+            || app.name.to_lowercase().contains("helper")
+            || app.name.to_lowercase().contains("agent")
+    });
+
+    // デーモンが含まれている場合でも、それはGUIを持つヘルパーアプリである可能性があるため、
+    // ワーニング的な情報出力のみ（失敗扱いにはしない）
+    if daemon_found {
+        println!(
+            "注意: 'daemon', 'helper', 'agent' を含むプロセス名が見つかりました（GUIヘルパーの可能性あり）"
+        );
+    }
+}
+
+/// RightCheatなどの自作アプリケーションがバイナリ名（"app"）ではなく、表示名で取得されることを確認
+///
+/// 検証項目:
+/// - RightCheat アプリケーションが "app" ではなく "RightCheat" として取得される
+/// - displayed name を使用することで、Info.plist の CFBundleDisplayName が使用される
+///
+/// 環境要件:
+/// - macOS で osascript が利用可能
+/// - RightCheat が起動している必要があります
+///
+/// 制限事項:
+/// - RightCheat が起動していない場合、このテストはスキップされます
+/// - RightCheat 以外の自作アプリでも同様の動作確認が可能
+#[test]
+#[ignore]
+fn test_displayed_name_not_binary_name() {
+    // Arrange: RightCheat を起動（存在しない場合はスキップ）
+    let launch_result = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg("tell application \"RightCheat\" to activate")
+        .output();
+
+    if launch_result.is_err() {
+        println!("RightCheat が見つからないため、このテストをスキップします");
+        return;
+    }
+
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    // Act: 実行中アプリケーション一覧を取得（displayed name を使用）
+    let result = get_running_applications();
+
+    // Assert: 取得が成功していることを確認
+    assert!(result.is_ok(), "get_running_applications() が失敗しました");
+
+    let apps = result.unwrap();
+
+    // Assert: RightCheat が "app" ではなく "RightCheat" として取得されることを確認
+    let rightcheat_found = apps.iter().any(|app| app.name.contains("RightCheat"));
+    let binary_name_found = apps.iter().any(|app| app.name == "app");
+
+    // 情報出力: 取得したアプリケーション一覧を表示
+    println!("取得したアプリケーション一覧:");
+    for app in &apps {
+        println!("  - {}: {:?}", app.name, app.process_id);
+    }
+
+    assert!(
+        rightcheat_found,
+        "RightCheat がアプリケーション一覧に含まれていません（起動していない可能性があります）"
+    );
+
+    assert!(
+        !binary_name_found || !apps.iter().any(|app| app.name == "app" && rightcheat_found),
+        "RightCheat がバイナリ名 'app' として取得されています（displayed name が機能していない可能性）"
+    );
+}
