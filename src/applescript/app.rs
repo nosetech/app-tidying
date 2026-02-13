@@ -296,7 +296,7 @@ pub fn get_running_applications() -> Result<Vec<AppInfo>, RunningAppsError> {
     let script = r#"
 tell application "System Events"
     set appList to {}
-    set procList to (name of every process whose background only is false)
+    set procList to (localized name of every process whose background only is false)
     repeat with procName in procList
         try
             set procId to unix id of application process procName
