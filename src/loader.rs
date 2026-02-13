@@ -46,6 +46,18 @@ struct WindowProcessResult {
 
 /// ウィンドウレイアウトを復元する
 ///
+/// ディスプレイごとにウィンドウレイアウトを復元します。
+/// ディスプレイ内のウィンドウ処理は rayon を使用して並列処理されます。
+///
+/// # 並列処理について
+///
+/// - **ディスプレイループ**: 順序処理（フォールバック処理のため）
+/// - **ディスプレイ内ウィンドウ**: 並列処理（rayon の `par_iter()`）
+///
+/// ディスプレイ内の複数ウィンドウは並列に処理されますが、
+/// 同一アプリケーションに対する並列操作は AppleScript の競合の可能性があります。
+/// **同一ディスプレイ内に同じアプリケーションを複数指定しないことを推奨します。**
+///
 /// # Arguments
 /// * `layout` - レイアウトファイル (LayoutFile)
 /// * `timeout_ms` - アプリ起動待機時間（ミリ秒）
@@ -53,6 +65,18 @@ struct WindowProcessResult {
 /// # Returns
 /// * `Ok(LoadResult)` - 成功または部分成功
 /// * `Err(LoadError)` - 全体失敗（致命的エラー）
+///
+/// # 例
+///
+/// ```ignore
+/// use apptidying::loader::load_layout;
+/// use apptidying::config::LayoutFile;
+///
+/// let layout = LayoutFile::load("layout.json")?;
+/// let result = load_layout(&layout, 3000)?;  // 3秒待機
+/// println!("成功: {}, 失敗: {}", result.success_count, result.failure_count);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, LoadError> {
     // 1. 接続されているディスプレイ情報を取得
     let connected_displays = applescript::get_all_connected_displays().map_err(|e| LoadError {
@@ -95,7 +119,7 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
     // 4. 成功・失敗カウンタ
     let mut success_count = 0;
     let mut failure_count = 0;
-    let mut failed_apps: Vec<String> = Vec::new();
+    let mut failed_apps_set: HashSet<String> = HashSet::new();
 
     // 5. 各ディスプレイの設定を処理
     for display_config in &layout_config.displays {
@@ -216,14 +240,16 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
                 success_count += 1;
             } else {
                 failure_count += 1;
-                if !failed_apps.contains(&result.app_name) {
-                    failed_apps.push(result.app_name);
-                }
+                failed_apps_set.insert(result.app_name);
             }
         }
     }
 
     // 5. 結果の判定
+    // HashSet を Vec に変換（重複排除済み）
+    let mut failed_apps: Vec<String> = failed_apps_set.into_iter().collect();
+    failed_apps.sort(); // 結果の一貫性のためソート
+
     if failure_count == 0 {
         log::info!(
             "すべてのウィンドウ配置に成功しました（成功: {}）",

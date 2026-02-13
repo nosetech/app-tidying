@@ -2013,10 +2013,10 @@ fn test_parallel_loading_error_aggregation() {
 
 #[test]
 #[ignore] // osascript 実行に依存するため、CI環境ではスキップ
-fn test_parallel_vs_sequential_timing() {
-    // 目的: 並列処理が順序処理より高速であることを確認
-    // 計測: 複数アプリケーションで処理時間を比較
-    // 期待: 並列処理が順序処理の 50% 程度の時間で完了
+fn test_parallel_loading_timing_measurement() {
+    // 目的: 並列処理の実行時間を計測（参考値として記録）
+    // 計測: 複数アプリケーションでの処理時間を記録
+    // 用途: パフォーマンス改善の指標として使用
     // 制限事項: 実際の処理時間は環境に依存するため、参考値として記録
 
     use std::time::Instant;
