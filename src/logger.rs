@@ -231,7 +231,22 @@ pub fn init(config: LoggerConfig) {
             // ログファイルに書き込む
             let _ = append_to_log_file(&log_message);
 
-            writeln!(buf, "{}", log_message)
+            // ターミナル実行時の stdout 出力を制御
+            if is_running_in_terminal() {
+                let silent_mode = LOGGER_CONFIG.with(|cfg| {
+                    cfg.borrow()
+                        .as_ref()
+                        .map(|c| c.silent_mode)
+                        .unwrap_or(false)
+                });
+
+                if !silent_mode {
+                    writeln!(buf, "{}", log_message)?;
+                }
+            }
+            // 非ターミナル実行時は stdout に出力しない（ログファイルのみに記録）
+
+            Ok(())
         })
         .try_init()
         .ok();
