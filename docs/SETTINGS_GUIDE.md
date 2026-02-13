@@ -173,6 +173,7 @@ App Tidying では、2つのJSON設定ファイルを使用します：
           "windows": [
             {
               "app": "Google Chrome",
+              "title": "Development",
               "position": { "x": 0, "y": 0 },
               "size": { "width": 1440, "height": 900 }
             }
@@ -257,6 +258,7 @@ system_profiler SPDisplaysDataType | grep "Display Type"
 ```json
 {
   "app": "Google Chrome",
+  "title": "Development",
   "position": { "x": 0, "y": 0 },
   "size": { "width": 1440, "height": 900 }
 }
@@ -272,6 +274,19 @@ system_profiler SPDisplaysDataType | grep "Display Type"
 **アプリケーション名の確認方法**:
 
 App Tidying で `save` コマンドを実行すると、現在のウィンドウ情報がJSON形式で保存され、正確なアプリケーション名が記録されます。
+
+#### `title` (オプション)
+
+ウィンドウタイトルです。同一アプリケーションで複数ウィンドウを操作する場合に指定します。
+
+- **型**: 文字列
+- **例**: `"Development"`, `"inbox - Gmail"`, `"Untitled Document"`
+
+**注意**:
+
+- 指定されない場合は、そのアプリケーションの最前面のウィンドウが対象になります
+- 複数のウィンドウがマッチした場合は、最前面のウィンドウが選択されます
+- 正確なタイトルマッチが必要です
 
 #### `position` (必須)
 
@@ -437,6 +452,40 @@ App Tidying で `save` コマンドを実行すると、現在のウィンドウ
 }
 ```
 
+### 複数ウィンドウの例
+
+```json
+{
+  "version": "1.0",
+  "layouts": [
+    {
+      "displays": [
+        {
+          "name": "Built-in",
+          "windows": [
+            {
+              "app": "Visual Studio Code",
+              "position": { "x": "left", "y": "top" },
+              "size": { "width": "half", "height": "max" }
+            },
+            {
+              "app": "Safari",
+              "position": { "x": "right", "y": "top" },
+              "size": { "width": "half", "height": "half" }
+            },
+            {
+              "app": "Mail",
+              "position": { "x": "right", "y": "bottom" },
+              "size": { "width": "half", "height": "half" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
 ### 複数ディスプレイの例
 
 ```json
@@ -462,6 +511,37 @@ App Tidying で `save` コマンドを実行すると、現在のウィンドウ
               "app": "Google Chrome",
               "position": { "x": "left", "y": "top" },
               "size": { "width": "max", "height": "max" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 同一アプリの複数ウィンドウの例
+
+```json
+{
+  "version": "1.0",
+  "layouts": [
+    {
+      "displays": [
+        {
+          "name": "Built-in",
+          "windows": [
+            {
+              "app": "Google Chrome",
+              "title": "Work",
+              "position": { "x": "left", "y": "top" },
+              "size": { "width": "half", "height": "max" }
+            },
+            {
+              "app": "Google Chrome",
+              "title": "Personal",
+              "position": { "x": "right", "y": "top" },
+              "size": { "width": "half", "height": "max" }
             }
           ]
         }

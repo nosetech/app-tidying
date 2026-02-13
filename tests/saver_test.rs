@@ -297,6 +297,7 @@ fn test_save_layout_file_creates_directory() {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
                     app: "TestApp".to_string(),
+                    title: None,
                     position: Some(Position {
                         x: json!(0),
                         y: json!(25),
@@ -344,6 +345,7 @@ fn test_save_layout_file_writes_json() {
                 windows: vec![
                     AppWindowConfig {
                         app: "Safari".to_string(),
+                        title: Some("スタートページ".to_string()),
                         position: Some(Position {
                             x: json!(100),
                             y: json!(200),
@@ -355,6 +357,7 @@ fn test_save_layout_file_writes_json() {
                     },
                     AppWindowConfig {
                         app: "Finder".to_string(),
+                        title: None,
                         position: Some(Position {
                             x: json!("left"),
                             y: json!("top"),
@@ -431,6 +434,10 @@ fn test_save_layout_file_writes_json() {
     // 1つ目のウィンドウ（数値指定）
     let window1 = &display["windows"][0];
     assert_eq!(window1["app"], "Safari", "app が一致する必要があります");
+    assert_eq!(
+        window1["title"], "スタートページ",
+        "title が一致する必要があります"
+    );
     assert_eq!(
         window1["position"]["x"], 100,
         "position.x が一致する必要があります"
@@ -721,6 +728,11 @@ fn test_save_layout_saves_correct_structure() {
                         window["app"].is_string(),
                         "app が文字列である必要があります"
                     );
+
+                    // title は Option なので存在確認のみ
+                    if window["title"].is_string() {
+                        println!("  ウィンドウタイトル: {}", window["title"]);
+                    }
 
                     // position の検証
                     if let Some(position) = window.get("position") {

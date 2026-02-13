@@ -683,6 +683,7 @@ fn test_validate_layout_syntax_version_ok() {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
                     app: "Google Chrome".to_string(),
+                    title: None,
                     position: None,
                     size: None,
                 }],
@@ -708,6 +709,7 @@ fn test_validate_layout_syntax_version_ng() {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
                     app: "Google Chrome".to_string(),
+                    title: None,
                     position: None,
                     size: None,
                 }],
@@ -737,6 +739,7 @@ fn test_validate_display_bounds_position_out_of_display() {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
                     app: "Google Chrome".to_string(),
+                    title: None,
                     position: Some(Position {
                         x: json!(1800), // 1800 から始まる
                         y: json!("top"),
@@ -780,13 +783,14 @@ fn test_validate_display_bounds_size_larger_than_display() {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
                     app: "Safari".to_string(),
+                    title: None,
                     position: Some(Position {
                         x: json!("left"),
                         y: json!("top"),
                     }),
                     size: Some(Size {
                         width: json!(800),
-                        height: json!(1500), // 1500 > 1080(ディスプレイ高)
+                        height: json!(1500), // 1500 > 1080（ディスプレイ高）
                     }),
                 }],
             }],
@@ -823,6 +827,7 @@ fn test_validate_display_exists_ok() {
                 name: "External Display".to_string(),
                 windows: vec![AppWindowConfig {
                     app: "Xcode".to_string(),
+                    title: None,
                     position: None,
                     size: None,
                 }],
@@ -867,6 +872,7 @@ fn test_validate_display_exists_ng() {
                 name: "Nonexistent Display".to_string(),
                 windows: vec![AppWindowConfig {
                     app: "Terminal".to_string(),
+                    title: None,
                     position: None,
                     size: None,
                 }],
@@ -907,6 +913,7 @@ fn test_validate_config_bounds_all_warnings() {
                     name: "Built-in".to_string(),
                     windows: vec![AppWindowConfig {
                         app: "Chrome".to_string(),
+                        title: None,
                         position: Some(Position {
                             x: json!(1900),
                             y: json!("top"),
@@ -922,6 +929,7 @@ fn test_validate_config_bounds_all_warnings() {
                     name: "Disconnected".to_string(),
                     windows: vec![AppWindowConfig {
                         app: "Safari".to_string(),
+                        title: None,
                         position: None,
                         size: None,
                     }],
@@ -960,6 +968,7 @@ fn test_validate_layout_syntax_and_bounds() {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
                     app: "App".to_string(),
+                    title: None,
                     position: Some(Position {
                         x: json!(2000),
                         y: json!("top"),
@@ -1243,6 +1252,7 @@ fn test_validate_layout_bounds_with_max_no_warning() {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
                     app: "TestApp".to_string(),
+                    title: None,
                     position: Some(Position {
                         x: json!("left"),
                         y: json!("top"),

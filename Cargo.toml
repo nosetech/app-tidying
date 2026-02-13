@@ -1,6 +1,6 @@
 [package]
 name = "apptidying"
-version = "1.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "macOS application window layout management tool"
 license = "MIT"
@@ -13,7 +13,6 @@ log = "0.4"
 env_logger = "0.11"
 dirs = "5.0"
 chrono = "0.4"
-rayon = "1.8"
 
 [dev-dependencies]
 tempfile = "3.8"

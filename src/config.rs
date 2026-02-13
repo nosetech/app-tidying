@@ -44,11 +44,14 @@ pub struct Size {
 /// アプリケーションウィンドウの設定
 ///
 /// layout.json の各ウィンドウ設定を表す構造体です。
-/// アプリケーション名、位置、サイズを指定します。
+/// アプリケーション名、ウィンドウタイトル、位置、サイズを指定します。
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppWindowConfig {
     /// アプリケーション名（macOS での表示名、例: `"Google Chrome"`, `"Terminal"`）
     pub app: String,
+    /// ウィンドウタイトル（複数ウィンドウがある場合に識別用。オプション）
+    #[serde(default)]
+    pub title: Option<String>,
     /// ウィンドウの位置（左上座標）。オプション
     #[serde(default)]
     pub position: Option<Position>,

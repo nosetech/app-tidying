@@ -77,7 +77,7 @@ jobs:
             }
 
       - name: Run tests
-        run: cargo test -- --test-threads=1
+        run: cargo test
 
       - name: Build project
         run: cargo build
