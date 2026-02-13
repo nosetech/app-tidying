@@ -1,5 +1,6 @@
 use crate::applescript::{self, DisplayInfo};
 use crate::config::{AppWindowConfig, LayoutFile};
+use rayon::prelude::*;
 use std::collections::HashSet;
 use std::thread;
 use std::time::Duration;
@@ -32,7 +33,30 @@ impl std::fmt::Display for LoadError {
 
 impl std::error::Error for LoadError {}
 
+/// ウィンドウ処理の結果
+#[derive(Debug, Clone)]
+struct WindowProcessResult {
+    /// アプリケーション名
+    app_name: String,
+    /// 処理に成功したか
+    success: bool,
+    /// エラーメッセージ（失敗時）
+    error_message: Option<String>,
+}
+
 /// ウィンドウレイアウトを復元する
+///
+/// ディスプレイごとにウィンドウレイアウトを復元します。
+/// ディスプレイ内のウィンドウ処理は rayon を使用して並列処理されます。
+///
+/// # 並列処理について
+///
+/// - **ディスプレイループ**: 順序処理（フォールバック処理のため）
+/// - **ディスプレイ内ウィンドウ**: 並列処理（rayon の `par_iter()`）
+///
+/// ディスプレイ内の複数ウィンドウは並列に処理されますが、
+/// 同一アプリケーションに対する並列操作は AppleScript の競合の可能性があります。
+/// **同一ディスプレイ内に同じアプリケーションを複数指定しないことを推奨します。**
 ///
 /// # Arguments
 /// * `layout` - レイアウトファイル (LayoutFile)
@@ -41,6 +65,18 @@ impl std::error::Error for LoadError {}
 /// # Returns
 /// * `Ok(LoadResult)` - 成功または部分成功
 /// * `Err(LoadError)` - 全体失敗（致命的エラー）
+///
+/// # 例
+///
+/// ```ignore
+/// use apptidying::loader::load_layout;
+/// use apptidying::config::LayoutFile;
+///
+/// let layout = LayoutFile::load("layout.json")?;
+/// let result = load_layout(&layout, 3000)?;  // 3秒待機
+/// println!("成功: {}, 失敗: {}", result.success_count, result.failure_count);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, LoadError> {
     // 1. 接続されているディスプレイ情報を取得
     let connected_displays = applescript::get_all_connected_displays().map_err(|e| LoadError {
@@ -74,7 +110,7 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
 
     log::info!("レイアウトを適用します");
 
-    // 3. ワーニング対象をHashSetに変換（O(1)検索用）
+    // 4. ワーニング対象をHashSetに変換（O(1)検索用）
     let warning_set: HashSet<(String, String)> = warnings
         .iter()
         .map(|w| (w.display_name.clone(), w.app_name.clone()))
@@ -83,24 +119,39 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
     // 4. 成功・失敗カウンタ
     let mut success_count = 0;
     let mut failure_count = 0;
-    let mut failed_apps: Vec<String> = Vec::new();
+    let mut failed_apps_set: HashSet<String> = HashSet::new();
 
     // 5. 各ディスプレイの設定を処理
     for display_config in &layout_config.displays {
         log::debug!("ディスプレイ '{}' の処理を開始", display_config.name);
 
         // 5.1 ディスプレイ情報を取得
-        let display_info = match applescript::get_display_info(Some(&display_config.name)) {
-            Ok(info) => info,
-            Err(e) => {
-                log::warn!(
-                    "ディスプレイ '{}' が接続されていません: {}。スキップします。",
-                    display_config.name,
-                    e
-                );
-                continue;
-            }
-        };
+        let (display_info, is_fallback) =
+            match applescript::get_display_info(Some(&display_config.name)) {
+                Ok(info) => (info, false),
+                Err(e) => {
+                    log::warn!(
+                        "ディスプレイ '{}' が接続されていません: {}",
+                        display_config.name,
+                        e
+                    );
+
+                    // フォールバック: 接続されているディスプレイの最初のものを使用
+                    if let Some(fallback_display) = connected_displays.first() {
+                        log::info!(
+                            "ディスプレイ '{}' を使用してウィンドウを配置します（フォールバック）",
+                            fallback_display.name
+                        );
+                        (fallback_display.clone(), true)
+                    } else {
+                        // ディスプレイが一つも接続されていない（致命的エラー）
+                        log::error!("接続されているディスプレイが見つかりません");
+                        return Err(LoadError {
+                            message: "接続されているディスプレイが見つかりません".to_string(),
+                        });
+                    }
+                }
+            };
 
         log::debug!(
             "ディスプレイ情報: {} ({}x{})",
@@ -109,50 +160,96 @@ pub fn load_layout(layout: &LayoutFile, timeout_ms: u64) -> Result<LoadResult, L
             display_info.height
         );
 
-        // 5.2 各ウィンドウの設定を処理
-        for window_config in &display_config.windows {
-            log::debug!("アプリ '{}' の処理を開始", window_config.app);
+        // 5.2 各ウィンドウの設定を処理（並列処理）
+        let window_results: Vec<WindowProcessResult> = display_config
+            .windows
+            .par_iter()
+            .map(|window_config| {
+                log::debug!("アプリ '{}' の処理を開始", window_config.app);
 
-            // ウィンドウがワーニング対象かチェック（O(1)で検索）
-            let has_warning =
-                warning_set.contains(&(display_config.name.clone(), window_config.app.clone()));
+                // ウィンドウがワーニング対象かチェック
+                // フォールバック時は、フォールバック先のディスプレイに対してサイズ超過をチェック
+                let has_warning = if is_fallback {
+                    // フォールバック時：フォールバック先ディスプレイのサイズ超過をチェック
+                    if let Some(ref size) = window_config.size {
+                        let size_value =
+                            serde_json::to_value(size).unwrap_or_else(|_| serde_json::json!({}));
+                        match crate::config::parse_size_value(
+                            &size_value,
+                            display_info.width,
+                            display_info.height,
+                            "size",
+                        ) {
+                            Ok((width, height)) => {
+                                // フォールバック先ディスプレイに収まらないか確認
+                                width > display_info.width || height > display_info.height
+                            }
+                            Err(_) => false,
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    // 非フォールバック時：元の警告セットをチェック
+                    warning_set.contains(&(display_config.name.clone(), window_config.app.clone()))
+                };
 
-            if has_warning {
-                log::warn!(
-                    "アプリ '{}' は検証エラーのためスキップされます",
-                    window_config.app
-                );
-                failure_count += 1;
-                if !failed_apps.contains(&window_config.app) {
-                    failed_apps.push(window_config.app.clone());
-                }
-                continue;
-            }
-
-            match process_window(window_config, &display_info, timeout_ms) {
-                Ok(()) => {
-                    log::info!(
-                        "アプリ '{}' のウィンドウ配置に成功しました",
+                if has_warning {
+                    log::warn!(
+                        "アプリ '{}' は検証エラーのためスキップされます",
                         window_config.app
                     );
-                    success_count += 1;
+                    return WindowProcessResult {
+                        app_name: window_config.app.clone(),
+                        success: false,
+                        error_message: Some("検証エラー".to_string()),
+                    };
                 }
-                Err(e) => {
-                    log::warn!(
-                        "アプリ '{}' のウィンドウ配置に失敗しました: {}",
-                        window_config.app,
-                        e
-                    );
-                    failure_count += 1;
-                    if !failed_apps.contains(&window_config.app) {
-                        failed_apps.push(window_config.app.clone());
+
+                match process_window(window_config, &display_info, timeout_ms) {
+                    Ok(()) => {
+                        log::info!(
+                            "アプリ '{}' のウィンドウ配置に成功しました",
+                            window_config.app
+                        );
+                        WindowProcessResult {
+                            app_name: window_config.app.clone(),
+                            success: true,
+                            error_message: None,
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "アプリ '{}' のウィンドウ配置に失敗しました: {}",
+                            window_config.app,
+                            e
+                        );
+                        WindowProcessResult {
+                            app_name: window_config.app.clone(),
+                            success: false,
+                            error_message: Some(e),
+                        }
                     }
                 }
+            })
+            .collect();
+
+        // 並列処理の結果を集約
+        for result in window_results {
+            if result.success {
+                success_count += 1;
+            } else {
+                failure_count += 1;
+                failed_apps_set.insert(result.app_name);
             }
         }
     }
 
     // 5. 結果の判定
+    // HashSet を Vec に変換（重複排除済み）
+    let mut failed_apps: Vec<String> = failed_apps_set.into_iter().collect();
+    failed_apps.sort(); // 結果の一貫性のためソート
+
     if failure_count == 0 {
         log::info!(
             "すべてのウィンドウ配置に成功しました（成功: {}）",
@@ -204,23 +301,11 @@ fn process_window(
         .map_err(|e| format!("アプリ起動失敗: {}", e))?;
 
     // 2. ウィンドウの存在確認
-    let window_exists = if let Some(ref title) = window_config.title {
-        log::debug!("ウィンドウタイトル '{}' を検索します", title);
-        match applescript::find_window_by_title(&window_config.app, title) {
-            Ok(window_info_opt) => window_info_opt.is_some(),
-            Err(e) => {
-                log::warn!("ウィンドウ検索でエラーが発生しました: {}", e);
-                false
-            }
-        }
-    } else {
-        // タイトル指定なしの場合、全ウィンドウを取得して存在確認
-        match applescript::get_all_windows(&window_config.app) {
-            Ok(windows) => !windows.is_empty(),
-            Err(e) => {
-                log::warn!("ウィンドウ一覧取得でエラーが発生しました: {}", e);
-                false
-            }
+    let window_exists = match applescript::get_all_windows(&window_config.app) {
+        Ok(windows) => !windows.is_empty(),
+        Err(e) => {
+            log::warn!("ウィンドウ一覧取得でエラーが発生しました: {}", e);
+            false
         }
     };
 
@@ -317,7 +402,6 @@ fn process_window(
     // 5. ウィンドウを移動・リサイズ
     applescript::resize_window(
         &window_config.app,
-        window_config.title.as_deref(),
         position_opt,
         size_opt,
     )

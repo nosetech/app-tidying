@@ -75,6 +75,8 @@ pub fn save_layout(
     let mut saved_window_count = 0;
     let mut skipped_window_count = 0;
     let mut failed_apps = Vec::new();
+    // アプリケーション名をキーに、各アプリケーションで 1 つだけウィンドウを保存したかを追跡
+    let mut app_window_saved: HashMap<String, bool> = HashMap::new();
 
     for app in &running_apps {
         // ウィンドウ情報を取得
@@ -100,6 +102,17 @@ pub fn save_layout(
                 continue;
             }
 
+            // 同じアプリケーションで既にウィンドウを保存済みの場合は、残りのウィンドウをスキップ
+            if app_window_saved.contains_key(&app.name) && app_window_saved[&app.name] {
+                log::debug!(
+                    "アプリ '{}' は既にウィンドウを保存済みなため、このウィンドウ '{}' はスキップします",
+                    app.name,
+                    window.title
+                );
+                skipped_window_count += 1;
+                continue;
+            }
+
             // ウィンドウが属するディスプレイを判定
             let display = match find_display_for_window(&window, &displays) {
                 Some(d) => d,
@@ -121,7 +134,6 @@ pub fn save_layout(
 
             let window_config = AppWindowConfig {
                 app: app.name.clone(),
-                title: Some(window.title.clone()),
                 position: Some(Position {
                     x: serde_json::json!(relative_x),
                     y: serde_json::json!(relative_y),
@@ -137,6 +149,9 @@ pub fn save_layout(
                 .entry(display.name.clone())
                 .or_default()
                 .push(window_config);
+
+            // このアプリケーションでウィンドウを保存したことをマーク
+            app_window_saved.insert(app.name.clone(), true);
 
             saved_window_count += 1;
             app_saved_count += 1;

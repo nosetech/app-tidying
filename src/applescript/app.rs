@@ -278,6 +278,23 @@ pub fn launch_or_activate_app(
 ///
 /// macOS で現在実行中のアプリケーション一覧を取得します。
 ///
+/// # 実装の詳細
+///
+/// AppleScript の `displayed name of every process` を使用してアプリケーション名を取得します。
+/// `displayed_name` はバイナリ名ではなく、UI に表示されるアプリケーション名を返します。
+///
+/// **プロパティの選択**:
+/// - `displayed_name`: UI表示名（ユーザー向け）を返す
+///   - 例: RightCheat（バイナリ名は "app"）
+///   - 例: Ghostty（バイナリ名は "ghostty"）
+/// - `name`: バイナリ名（実行可能ファイル名）を返す
+///
+/// Issue #108 で `displayed_name` に変更されました。これにより、saveコマンドで
+/// layout.json に保存されるアプリケーション名が、ユーザーが実際に見たアプリケーション名
+/// と一致するようになります。
+///
+/// `background only is false` 条件でGUIアプリケーションのみを対象とします。
+///
 /// # Returns
 /// * `Ok(Vec<AppInfo>)` - 実行中のアプリケーション一覧
 /// * `Err(RunningAppsError)` - 失敗
@@ -292,11 +309,14 @@ pub fn launch_or_activate_app(
 /// }
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
+///
+/// # 動作検証
+/// - macOS 26.2 で検証済み
 pub fn get_running_applications() -> Result<Vec<AppInfo>, RunningAppsError> {
     let script = r#"
 tell application "System Events"
     set appList to {}
-    set procList to (name of every process whose background only is false)
+    set procList to (displayed name of every process whose background only is false)
     repeat with procName in procList
         try
             set procId to unix id of application process procName

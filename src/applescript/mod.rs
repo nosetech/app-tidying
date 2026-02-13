@@ -8,7 +8,7 @@
 //! このモジュールは以下の公開 API を提供します：
 //!
 //! - アプリケーション操作: `launch_or_activate_app()`, `get_running_applications()`
-//! - ウィンドウ操作: `get_all_windows()`, `find_window_by_title()`, `resize_window()`, `create_new_window()`
+//! - ウィンドウ操作: `get_all_windows()`, `resize_window()`, `create_new_window()`
 //! - ディスプレイ情報: `get_all_connected_displays()`, `get_display_info()`
 //! - ユーティリティ: `escape_applescript_string()`, `parse_window_list()` 他
 //!
@@ -39,6 +39,6 @@ pub use utils::{
 };
 #[allow(unused_imports)]
 pub use window::{
-    create_new_window, find_window_by_title, get_all_windows, get_window_info, resize_window,
-    WindowInfo, WindowInfoError, WindowResizeError, WindowResizeResult,
+    create_new_window, get_all_windows, resize_window, WindowInfo, WindowInfoError,
+    WindowResizeError, WindowResizeResult,
 };

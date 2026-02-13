@@ -46,7 +46,7 @@ GitHub issueを分析して実行してください: issue番号 $ARGUMENTS
    - 問題なければ feature ブランチにコミットする
 
 10. **プルリクエスト作成**
-    - develop ブランチへのプルリクエストを作成する
+    - `gh pr create --base develop` で develop ブランチへのプルリクエストを作成する（base ブランチを明示的に指定）
     - PR の説明に「Closes #issue-number」を記載する
     - **PR 作成完了をコンソールに表示する**
 
