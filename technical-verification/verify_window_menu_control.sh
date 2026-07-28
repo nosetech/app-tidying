@@ -47,6 +47,22 @@ log_test() {
     echo -e "${BLUE}================================${NC}"
 }
 
+# 指定プロセスのウィンドウ1の位置・サイズを取得する
+# 戻り値: 取得成功時は "x, y, width, height" 形式の文字列を標準出力へ返しつつ0を返す
+#         取得失敗時（ウィンドウなし・権限エラー等）は空文字を返しつつ1を返す
+get_window_geometry() {
+    local process_name="$1"
+    local geometry
+    geometry=$(osascript -e "tell application \"System Events\" to tell process \"${process_name}\" to return {position of window 1, size of window 1}" 2>&1)
+
+    if [[ "$geometry" == *"エラー"* || "$geometry" == *"Error"* || -z "$geometry" ]]; then
+        echo "$geometry"
+        return 1
+    fi
+    echo "$geometry"
+    return 0
+}
+
 # テスト1: 「ウインドウ」メニューの存在確認とメニュー項目一覧の取得
 test_window_menu_structure() {
     local app_name="$1"
@@ -82,6 +98,8 @@ tell application "System Events"
       set menuItems to (every menu item of winMenu)
       set itemList to ""
       repeat with mi in menuItems
+        -- 区切り線（セパレータ）は name が missing value になるため、
+        -- try で無視して次の項目へ進む
         try
           set n to (name of mi)
           if n is not missing value then
@@ -122,9 +140,8 @@ test_move_and_resize() {
     fi
 
     local before
-    before=$(osascript -e "tell application \"System Events\" to tell process \"${process_name}\" to return {position of window 1, size of window 1}" 2>&1)
-
-    if [[ "$before" == *"エラー"* || "$before" == *"Error"* || -z "$before" ]]; then
+    before=$(get_window_geometry "${process_name}")
+    if [[ $? -ne 0 ]]; then
         log_warning "${app_name}: ウィンドウが見つからないためスキップします（${before}）"
         return 1
     fi
@@ -196,7 +213,7 @@ APPLESCRIPT
 
     sleep 1
     local after
-    after=$(osascript -e "tell application \"System Events\" to tell process \"${process_name}\" to return {position of window 1, size of window 1}" 2>&1)
+    after=$(get_window_geometry "${process_name}")
     log_info "${app_name} クリック後の位置・サイズ: ${after}"
 
     if [[ "$before" == "$after" ]]; then
@@ -219,7 +236,11 @@ test_move_to_display() {
     fi
 
     local before
-    before=$(osascript -e "tell application \"System Events\" to tell process \"${process_name}\" to return {position of window 1, size of window 1}" 2>&1)
+    before=$(get_window_geometry "${process_name}")
+    if [[ $? -ne 0 ]]; then
+        log_warning "${app_name}: ウィンドウが見つからないためスキップします（${before}）"
+        return 1
+    fi
     log_info "${app_name} クリック前の位置・サイズ: ${before}"
 
     local result
@@ -245,7 +266,8 @@ tell application "System Events"
       end if
 
       -- ディスプレイ名は動的に変わるため「〜に移動」で終わる項目を部分一致検索する
-      -- （「タブを新しいウインドウに移動」等の項目は除外する）
+      -- （「タブを新しいウインドウに移動」等の項目は除外する。今回検証したFinder/Safari/Chrome
+      --   では他に誤検出する項目はなかったが、別アプリで運用する場合は要再検証）
       set moveItem to missing value
       set moveItemName to ""
       repeat with mi in (every menu item of winMenu)
@@ -285,7 +307,7 @@ APPLESCRIPT
 
     sleep 1
     local after
-    after=$(osascript -e "tell application \"System Events\" to tell process \"${process_name}\" to return {position of window 1, size of window 1}" 2>&1)
+    after=$(get_window_geometry "${process_name}")
     log_info "${app_name} クリック後の位置・サイズ: ${after}"
 
     if [[ "$before" == "$after" ]]; then
@@ -303,6 +325,8 @@ main() {
     echo ""
 
     # Finder、Safari、Google Chrome を検証対象とする
+    # "表示名:プロセス名" 形式。今回は両者とも同一値だが、表示名とプロセス名が
+    # 異なるアプリ（CLAUDE.md記載のRightCheat等）にも対応できる構造にしている
     for app_pair in "Finder:Finder" "Safari:Safari" "Google Chrome:Google Chrome"; do
         local app_name="${app_pair%%:*}"
         local process_name="${app_pair##*:}"
