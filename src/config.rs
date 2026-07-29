@@ -1164,18 +1164,32 @@ pub enum TileKeyword {
 }
 
 impl TileKeyword {
-    /// 対応するAppleScriptメニュー項目名（日本語）を返す
+    /// 対応するAppleScriptメニュー項目名（日本語表記）を返す
+    ///
+    /// ログ出力用。実際のメニュー項目探索では、表記揺れに対応するため
+    /// [`menu_item_name_candidates`](Self::menu_item_name_candidates) が返す
+    /// 複数候補を使用する。
     pub fn menu_item_name(&self) -> &'static str {
+        self.menu_item_name_candidates()[0]
+    }
+
+    /// メニュー項目名の候補一覧（日本語表記・英語表記）を返す
+    ///
+    /// macOSの言語設定によりメニュー項目の表記が異なるため、AppleScript側の
+    /// 検索ではこの候補を順に試す。日本語表記を先頭に置く（`menu_item_name()` が
+    /// 先頭要素を返す前提のため）。英語表記はmacOS標準の表記を想定しているが、
+    /// 実機での検証は日本語環境でのみ行っている（Issue #118）。
+    pub fn menu_item_name_candidates(&self) -> &'static [&'static str] {
         match self {
-            TileKeyword::Left => "左",
-            TileKeyword::Right => "右",
-            TileKeyword::Top => "上",
-            TileKeyword::Bottom => "下",
-            TileKeyword::TopLeft => "左上",
-            TileKeyword::TopRight => "右上",
-            TileKeyword::BottomLeft => "左下",
-            TileKeyword::BottomRight => "右下",
-            TileKeyword::FullScreen => "画面全体に表示",
+            TileKeyword::Left => &["左", "Left"],
+            TileKeyword::Right => &["右", "Right"],
+            TileKeyword::Top => &["上", "Top"],
+            TileKeyword::Bottom => &["下", "Bottom"],
+            TileKeyword::TopLeft => &["左上", "Top Left"],
+            TileKeyword::TopRight => &["右上", "Top Right"],
+            TileKeyword::BottomLeft => &["左下", "Bottom Left"],
+            TileKeyword::BottomRight => &["右下", "Bottom Right"],
+            TileKeyword::FullScreen => &["画面全体に表示", "Enter Full Screen"],
         }
     }
 

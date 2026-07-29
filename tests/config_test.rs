@@ -1826,6 +1826,67 @@ fn test_tile_keyword_menu_item_name_all_variants() {
     assert_eq!(TileKeyword::FullScreen.menu_item_name(), "画面全体に表示");
 }
 
+/// menu_item_name_candidates() が全バリアントで日本語表記を先頭要素として返し、
+/// menu_item_name() の戻り値と先頭要素が一致することを確認
+#[test]
+fn test_tile_keyword_menu_item_name_candidates_all_variants() {
+    // 目的: Issue #119 のレビュー対応で追加した多言語候補（日本語/英語）が
+    //       全バリアントで2件（日本語, 英語）返され、先頭が menu_item_name() と
+    //       一致することを確認する
+    let variants = [
+        TileKeyword::Left,
+        TileKeyword::Right,
+        TileKeyword::Top,
+        TileKeyword::Bottom,
+        TileKeyword::TopLeft,
+        TileKeyword::TopRight,
+        TileKeyword::BottomLeft,
+        TileKeyword::BottomRight,
+        TileKeyword::FullScreen,
+    ];
+
+    for keyword in variants {
+        let candidates = keyword.menu_item_name_candidates();
+        assert_eq!(candidates.len(), 2, "候補は日本語・英語の2件であるべき");
+        assert_eq!(
+            candidates[0],
+            keyword.menu_item_name(),
+            "先頭候補は menu_item_name() の戻り値と一致するべき"
+        );
+    }
+}
+
+/// menu_item_name_candidates() の英語表記が期待通りであることを確認
+#[test]
+fn test_tile_keyword_menu_item_name_candidates_english() {
+    // 目的: 英語ロケールのmacOSでもメニュー項目を検索できるよう追加した
+    //       英語表記候補が期待する文字列であることを確認する
+    assert_eq!(TileKeyword::Left.menu_item_name_candidates()[1], "Left");
+    assert_eq!(TileKeyword::Right.menu_item_name_candidates()[1], "Right");
+    assert_eq!(TileKeyword::Top.menu_item_name_candidates()[1], "Top");
+    assert_eq!(TileKeyword::Bottom.menu_item_name_candidates()[1], "Bottom");
+    assert_eq!(
+        TileKeyword::TopLeft.menu_item_name_candidates()[1],
+        "Top Left"
+    );
+    assert_eq!(
+        TileKeyword::TopRight.menu_item_name_candidates()[1],
+        "Top Right"
+    );
+    assert_eq!(
+        TileKeyword::BottomLeft.menu_item_name_candidates()[1],
+        "Bottom Left"
+    );
+    assert_eq!(
+        TileKeyword::BottomRight.menu_item_name_candidates()[1],
+        "Bottom Right"
+    );
+    assert_eq!(
+        TileKeyword::FullScreen.menu_item_name_candidates()[1],
+        "Enter Full Screen"
+    );
+}
+
 /// is_submenu_item() が FullScreen のみ false、他の8バリアントは true を返すことを確認
 #[test]
 fn test_tile_keyword_is_submenu_item_all_variants() {

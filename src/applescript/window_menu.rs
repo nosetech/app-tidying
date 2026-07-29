@@ -7,6 +7,19 @@
 //!
 //! Issue #116（`technical-verification/verify_window_menu_control.sh`）で
 //! 実機検証済みのAppleScriptロジックをRust側に移植したもの。
+//!
+//! # 既知の制約
+//!
+//! - **Finderの不安定な挙動**: Issue #116 の検証で、Finderは「\[ディスプレイ名\]に移動」
+//!   メニュー項目の表示状態が他アプリと異なる不安定な挙動を示すことを確認している。
+//!   本モジュールの関数はFinderを特別扱いしていないため、失敗時は呼び出し側の
+//!   フォールバック処理（直接プロパティ設定）に委ねる。
+//! - **並列実行時の `activate` 競合**: 本モジュールの関数は対象アプリを
+//!   `activate`（前面化）してからメニュー操作を行う。`loader::load_layout()` は
+//!   同一ディスプレイ内の複数ウィンドウを rayon で並列処理するため、異なるアプリを
+//!   対象とする複数スレッドがほぼ同時に `activate` を実行すると、意図しないアプリが
+//!   前面化された状態でメニュー探索が行われ、操作が失敗する可能性がある。この場合も
+//!   呼び出し側のフォールバック処理により最終的な配置の正しさは維持される。
 
 use crate::applescript::osascript::run_osascript;
 use crate::applescript::utils::escape_applescript_string;
@@ -46,12 +59,63 @@ const FIND_WINDOW_MENU_SCRIPT: &str = r#"
       end if
 "#;
 
+/// `name is "A" or name is "B" or ...` 形式のAppleScript条件式を組み立てる
+///
+/// メニュー項目名の表記揺れ（日本語/英語）に対応するため、複数の候補文字列を
+/// OR条件で結合する。
+fn build_name_match_condition(var_name: &str, candidates: &[&str]) -> String {
+    candidates
+        .iter()
+        .map(|c| format!(r#"{} is "{}""#, var_name, escape_applescript_string(c)))
+        .collect::<Vec<_>>()
+        .join(" or ")
+}
+
+/// `osascript` を実行し、`"Success"` / それ以外 の結果を `Result` に変換する
+///
+/// メニュー操作系スクリプトはいずれも成功時に `"Success"` を返す規約になっている。
+fn run_menu_action_script(script: &str, failure_prefix: &str) -> Result<(), WindowMenuError> {
+    let output = run_osascript(script).map_err(|e| WindowMenuError { message: e.message })?;
+
+    if !output.status.success() {
+        return Err(WindowMenuError {
+            message: format!(
+                "{}: {}",
+                failure_prefix,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        });
+    }
+
+    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if result_str == "Success" {
+        Ok(())
+    } else if result_str.is_empty() {
+        Err(WindowMenuError {
+            message: format!(
+                "{}: {}",
+                failure_prefix,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        })
+    } else {
+        Err(WindowMenuError {
+            message: result_str,
+        })
+    }
+}
+
 /// OS標準タイリング機能でウィンドウを配置する
 ///
 /// 「ウインドウ」メニューの「移動とサイズ変更」サブメニュー項目
 /// （左/右/上/下/左上/右上/左下/右下）、または「画面全体に表示」
 /// （`TileKeyword::FullScreen` の場合。こちらはサブメニューを経由しない）を
 /// `System Events` 経由でクリックする。
+///
+/// メニュー項目の有無のみで成否を判定するため、クリック対象のウィンドウが
+/// 実際に存在しない場合でも `Ok(())` を返す可能性がある点に注意（メニュー自体は
+/// ウィンドウが無くてもアクセス可能な場合があるため）。
 ///
 /// # Arguments
 /// * `app_name` - アプリケーション名（例: `"Safari"`, `"Google Chrome"`）
@@ -74,7 +138,7 @@ pub fn tile_window_via_menu(
     tile_keyword: &TileKeyword,
 ) -> Result<(), WindowMenuError> {
     let escaped_app_name = escape_applescript_string(app_name);
-    let escaped_item_name = escape_applescript_string(tile_keyword.menu_item_name());
+    let item_condition = build_name_match_condition("n", tile_keyword.menu_item_name_candidates());
 
     // 「移動とサイズ変更」サブメニュー経由か、「ウインドウ」メニュー直下かで
     // 探索先が異なるため、AppleScript側で分岐する
@@ -98,13 +162,13 @@ pub fn tile_window_via_menu(
       set targetItem to missing value
       repeat with mi in (every menu item of subMenu)
         set n to (name of mi)
-        if n is "{item}" then
+        if {condition} then
           set targetItem to mi
           exit repeat
         end if
       end repeat
 "#,
-            item = escaped_item_name
+            condition = item_condition
         )
     } else {
         format!(
@@ -112,13 +176,13 @@ pub fn tile_window_via_menu(
       set targetItem to missing value
       repeat with mi in (every menu item of winMenu)
         set n to (name of mi)
-        if n is "{item}" then
+        if {condition} then
           set targetItem to mi
           exit repeat
         end if
       end repeat
 "#,
-            item = escaped_item_name
+            condition = item_condition
         )
     };
 
@@ -146,26 +210,10 @@ end tell
         app = escaped_app_name,
         find_menu = FIND_WINDOW_MENU_SCRIPT,
         item_lookup = item_lookup_script,
-        item = escaped_item_name
+        item = escape_applescript_string(tile_keyword.menu_item_name())
     );
 
-    let output = run_osascript(&script).map_err(|e| WindowMenuError { message: e.message })?;
-    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-    if result_str == "Success" {
-        Ok(())
-    } else {
-        Err(WindowMenuError {
-            message: if result_str.is_empty() {
-                format!(
-                    "OS標準タイリング操作に失敗しました: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                )
-            } else {
-                result_str
-            },
-        })
-    }
+    run_menu_action_script(&script, "OS標準タイリング操作に失敗しました")
 }
 
 /// ウィンドウを指定したディスプレイへメニュー操作で移動する
@@ -197,7 +245,19 @@ pub fn move_window_to_display_via_menu(
     display_name: &str,
 ) -> Result<(), WindowMenuError> {
     let escaped_app_name = escape_applescript_string(app_name);
-    let escaped_target_name = escape_applescript_string(&format!("{}に移動", display_name));
+    // ディスプレイ移動メニューの文言は言語設定により異なる
+    // （日本語: 「{ディスプレイ名}に移動」、英語: "Move to {ディスプレイ名}"）
+    let target_candidates = [
+        format!("{}に移動", display_name),
+        format!("Move to {}", display_name),
+    ];
+    let target_condition = build_name_match_condition(
+        "n",
+        &target_candidates
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>(),
+    );
 
     let script = format!(
         r#"
@@ -210,14 +270,14 @@ tell application "System Events"
       set targetItem to missing value
       repeat with mi in (every menu item of winMenu)
         set n to (name of mi)
-        if n is "{target}" then
+        if {condition} then
           set targetItem to mi
           exit repeat
         end if
       end repeat
 
       if targetItem is missing value then
-        return "NotFound"
+        return "Error: ディスプレイ移動メニュー項目が見つかりません"
       end if
 
       click targetItem
@@ -230,24 +290,8 @@ end tell
 "#,
         app = escaped_app_name,
         find_menu = FIND_WINDOW_MENU_SCRIPT,
-        target = escaped_target_name
+        condition = target_condition
     );
 
-    let output = run_osascript(&script).map_err(|e| WindowMenuError { message: e.message })?;
-    let result_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-    if result_str == "Success" {
-        Ok(())
-    } else {
-        Err(WindowMenuError {
-            message: if result_str.is_empty() {
-                format!(
-                    "ディスプレイ移動メニュー操作に失敗しました: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                )
-            } else {
-                result_str
-            },
-        })
-    }
+    run_menu_action_script(&script, "ディスプレイ移動メニュー操作に失敗しました")
 }
