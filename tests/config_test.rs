@@ -817,6 +817,58 @@ fn test_validate_display_bounds_size_larger_than_display() {
     assert_eq!(warnings[0].app_name, "Safari");
 }
 
+/// validate_layout_bounds() が、size が丸ごと省略された position: {x: "left", y: "top"}
+/// の組み合わせで誤って「ウィンドウの下端超過」ワーニングを出さないことを確認
+///
+/// 回帰テスト: 以前は size 省略時にウィンドウ高さをディスプレイ全高と仮定していたため、
+/// y: "top" のメニューバーオフセット（MACOS_MENU_BAR_HEIGHT = 25px）と組み合わさると、
+/// どのディスプレイ・どのアプリでも必ず「下端がディスプレイの高さを超える」という
+/// 偽陽性のワーニングが発生し、該当ウィンドウの配置処理自体がスキップされていた
+/// （実運用で RightCheat の配置がスキップされる形で発覚）。
+#[test]
+fn test_validate_display_bounds_position_only_top_no_false_positive() {
+    // 目的: size を省略した position のみの設定（Issue #120の任意指定）で、
+    //      y: "top" 指定時に偽陽性のワーニングが発生しないことを確認
+    // 検証項目: size が None の場合は現在のウィンドウサイズが未確定であるため、
+    //          個別フィールド null の場合と同様に境界チェック対象外となること
+
+    let layout = LayoutFile {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "SDM27U9M2*30".to_string(),
+                windows: vec![AppWindowConfig {
+                    tiling: None,
+                    app: "RightCheat".to_string(),
+                    position: Some(Position {
+                        x: json!("left"),
+                        y: json!("top"),
+                    }),
+                    size: None, // サイズを丸ごと省略（現在のサイズを維持）
+                }],
+            }],
+        }],
+    };
+
+    let connected_displays = vec![DisplayInfo {
+        name: "SDM27U9M2*30".to_string(),
+        width: 2560,
+        height: 1440,
+        origin_x: 0,
+        origin_y: 0,
+    }];
+
+    // 検証: size省略 + y:"top" の組み合わせでもワーニングが発生しない
+    let result = validate_layout_bounds(&layout, &connected_displays);
+    assert!(result.is_ok());
+    let warnings = result.unwrap();
+    assert!(
+        warnings.is_empty(),
+        "size省略時に偽陽性のワーニングが発生しています: {:?}",
+        warnings
+    );
+}
+
 /// validate_layout_bounds() が接続されているディスプレイを正確に判定することを確認
 #[test]
 fn test_validate_display_exists_ok() {

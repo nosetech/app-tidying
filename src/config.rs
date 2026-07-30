@@ -611,7 +611,7 @@ fn validate_log_rotation_config(log_rotation: &LogRotationConfig) -> Result<(), 
 /// ウィンドウの座標・サイズがディスプレイの境界内に収まっているかを検証
 /// ディスプレイ外の座標や、画面より大きいサイズが設定されている場合は警告を返す
 ///
-/// # 個別フィールド部分指定（Issue #120）とのチェック対象外について
+/// # 個別フィールド部分指定・size省略（Issue #120）とのチェック対象外について
 ///
 /// `position`/`size` の個別フィールド（`x`/`y`/`width`/`height`）が `null`（部分指定で
 /// 未指定）の場合、この時点では未指定側の値（現在のウィンドウ位置・サイズ）が確定して
@@ -620,6 +620,16 @@ fn validate_log_rotation_config(log_rotation: &LogRotationConfig) -> Result<(), 
 /// 取得する前）に行われるため、未指定側の実際の値を用いた境界チェックはできず、
 /// 意図的にスキップしている（`null` 自体は `validate_value` で許容される正当な値であり、
 /// 構文エラーではない）。
+///
+/// `size` フィールド自体が丸ごと省略されている場合（`window.size == None`）も同様に
+/// 境界チェックをスキップする。以前は `size` 省略時にウィンドウ高さをディスプレイの
+/// 全高と仮定していたが、この仮定は `position.y == "top"` （メニューバー分オフセット
+/// する `MACOS_MENU_BAR_HEIGHT` を加算する一方、高さは全高のまま）と組み合わさると
+/// 必ず「下端がディスプレイの高さを超える」という誤検知を起こしていた
+/// （実際の配置処理 `process_window`／`parse_position_value` では現在のウィンドウ
+/// サイズを維持したまま `y` のみ変更するため、実際には問題は起きない）。
+/// `size` 省略時も現在のウィンドウサイズは未確定であるため、個別フィールド `null` の
+/// 場合と同様にチェック対象外とするのが一貫した扱いである。
 fn validate_display_bounds(
     window: &AppWindowConfig,
     display_info: &crate::applescript::DisplayInfo,
@@ -627,31 +637,26 @@ fn validate_display_bounds(
 ) -> Option<ValidationWarning> {
     // 座標をピクセル単位で計算してチェック
     if let Some(ref position) = window.position {
-        // サイズを計算（デフォルトはディスプレイサイズ）
-        let window_width = if let Some(ref size) = window.size {
-            match calculate_size_for_validation(&size.width, display_info.width) {
-                Ok(w) => w,
-                // width が null（個別フィールド部分指定）等、現在値が未確定で計算できない場合は
-                // 境界チェック対象外とする（関数冒頭のドキュメントコメント参照）
-                Err(_) => return None,
-            }
-        } else {
-            display_info.width
+        // size が丸ごと省略されている場合、現在のウィンドウサイズが未確定であるため
+        // 境界チェック対象外とする（関数冒頭のドキュメントコメント参照）
+        let size = window.size.as_ref()?;
+
+        let window_width = match calculate_size_for_validation(&size.width, display_info.width) {
+            Ok(w) => w,
+            // width が null（個別フィールド部分指定）等、現在値が未確定で計算できない場合は
+            // 境界チェック対象外とする（関数冒頭のドキュメントコメント参照）
+            Err(_) => return None,
         };
 
-        let window_height = if let Some(ref size) = window.size {
-            match calculate_size_for_validation(&size.height, display_info.height) {
-                Ok(h) => h,
-                Err(_) => return None,
-            }
-        } else {
-            display_info.height
+        let window_height = match calculate_size_for_validation(&size.height, display_info.height) {
+            Ok(h) => h,
+            Err(_) => return None,
         };
 
         // 座標を計算
         let (x, y) = match calculate_position_for_validation(
             position,
-            window.size.as_ref(),
+            Some(size),
             display_info.width,
             display_info.height,
             window_width,
