@@ -301,13 +301,16 @@ fn process_window(
         .map_err(|e| format!("アプリ起動失敗: {}", e))?;
 
     // 2. ウィンドウの存在確認
-    let window_exists = match applescript::get_all_windows(&window_config.app) {
-        Ok(windows) => !windows.is_empty(),
+    //    取得したウィンドウ一覧は、position/size の個別フィールドが未指定（null）の
+    //    場合に現在値で補完するため（Issue #120）保持しておく。
+    let mut current_windows = match applescript::get_all_windows(&window_config.app) {
+        Ok(windows) => windows,
         Err(e) => {
             log::warn!("ウィンドウ一覧取得でエラーが発生しました: {}", e);
-            false
+            Vec::new()
         }
     };
+    let window_exists = !current_windows.is_empty();
 
     // 3. ウィンドウが存在しない場合は新規作成
     if !window_exists {
@@ -317,68 +320,74 @@ fn process_window(
 
         // 新規ウィンドウの作成を待機
         thread::sleep(Duration::from_millis(500));
+
+        // 新規作成後のウィンドウ位置・サイズを再取得する（position/size の個別フィールド
+        // 部分指定時、未指定側の補完に使用するため。取得に失敗した場合、null フィールドの
+        // 補完が必要なウィンドウ設定では、後続の fill_absent_position/fill_absent_size が
+        // None を返し、ウィンドウ操作がスキップされる（WARN ログはそちらで出力される）
+        current_windows = match applescript::get_all_windows(&window_config.app) {
+            Ok(windows) => windows,
+            Err(e) => {
+                log::warn!(
+                    "新規作成したウィンドウの情報取得に失敗しました（position/size の \
+                     個別フィールド部分指定がある場合、該当ウィンドウの操作をスキップします）: {}",
+                    e
+                );
+                Vec::new()
+            }
+        };
     }
 
-    // 4. OS標準メニュー操作を優先的に試行する
-    //    position/size が「対象とする組み合わせ」（Issue #118）に一致する場合のみ実行する。
-    //    それ以外のパターン（third・数値指定・絶対座標等）では、余計な activate や
-    //    ディスプレイ移動を行わず、そのまま既存の直接プロパティ設定処理へ進む
-    //    （不要な副作用の防止。特に position 未指定・size のみ指定のケースで、
-    //    ディスプレイ移動だけ実行されて position が中途半端に変化することを避ける）。
-    //    メニュー操作が成功した場合は以降の直接プロパティ設定処理をスキップする。
-    //    失敗しても既存の直接プロパティ設定処理へそのままフォールスルーするため、
-    //    ここでのエラーは致命的として扱わない。
-    if let Some(tile_keyword) = crate::config::resolve_tile_keyword(
-        window_config.position.as_ref(),
-        window_config.size.as_ref(),
-    ) {
-        // 4-1. ディスプレイ移動を試行する
-        //      「[ディスプレイ名]に移動」メニュー項目は、ウィンドウが現在表示されていない
-        //      ディスプレイに対してのみ表示されるため（Issue #116 で実機確認済み）、
-        //      既に対象ディスプレイ上にある場合は見つからずエラーになるが、これは想定内の
-        //      挙動であり、後続の絶対座標計算処理（ディスプレイ原点を加算する処理）で
-        //      最終的にカバーされるため DEBUG ログに留める。
-        //      タイリング操作はウィンドウが現在表示されているディスプレイを基準に行われる
-        //      ため、タイリングを試行するより前に実行する必要がある。
-        match applescript::move_window_to_display_via_menu(&window_config.app, &display_info.name) {
-            Ok(()) => {
-                log::info!(
-                    "'{}' をディスプレイ '{}' へメニュー操作で移動しました",
-                    window_config.app,
-                    display_info.name
-                );
-            }
-            Err(e) => {
-                log::debug!(
-                    "'{}' のディスプレイ移動メニュー操作をスキップしました（既に対象ディスプレイ上にある可能性があります）: {}",
-                    window_config.app,
-                    e.message
-                );
-            }
-        }
+    // 4. position/size の個別フィールドが未指定（null）の場合、現在のウィンドウ位置・
+    //    サイズで補完する（Issue #120）。
+    //    位置は、parse_position_value 側で再度ディスプレイ原点が加算されるため、
+    //    ディスプレイ相対座標に変換してから渡す。
+    let first_window = current_windows.first();
+    let current_position_relative = first_window.map(|w| {
+        (
+            w.position.0 - display_info.origin_x,
+            w.position.1 - display_info.origin_y,
+        )
+    });
+    let current_size = first_window.map(|w| w.size);
 
-        // 4-2. OS標準タイリング機能を試行する
-        match applescript::tile_window_via_menu(&window_config.app, &tile_keyword) {
-            Ok(()) => {
-                log::info!(
-                    "'{}' をOS標準タイリング機能（{}）で配置しました",
-                    window_config.app,
-                    tile_keyword.menu_item_name()
+    // null フィールドの補完に現在値が必要だが取得できなかった場合、
+    // 中途半端な位置・サイズで配置してしまうことを避けるため、このウィンドウの
+    // 位置・サイズ操作自体をスキップする（レビュー指摘 3-1 対応）。
+    let filled_size = match window_config.size.as_ref() {
+        Some(size) => match crate::config::fill_absent_size(size, current_size) {
+            Some(filled) => Some(filled),
+            None => {
+                log::warn!(
+                    "'{}' の size に未指定フィールド（null）がありますが、現在のウィンドウ \
+                     サイズを取得できなかったため、このウィンドウの位置・サイズ変更をスキップします",
+                    window_config.app
                 );
                 return Ok(());
             }
-            Err(e) => {
-                log::warn!(
-                    "'{}' のOS標準タイリング操作に失敗したため、直接プロパティ設定にフォールバックします: {}",
-                    window_config.app,
-                    e.message
-                );
+        },
+        None => None,
+    };
+    let filled_position = match window_config.position.as_ref() {
+        Some(position) => {
+            match crate::config::fill_absent_position(position, current_position_relative) {
+                Some(filled) => Some(filled),
+                None => {
+                    log::warn!(
+                        "'{}' の position に未指定フィールド（null）がありますが、現在の \
+                         ウィンドウ位置を取得できなかったため、このウィンドウの位置・サイズ \
+                         変更をスキップします",
+                        window_config.app
+                    );
+                    return Ok(());
+                }
             }
         }
-    }
+        None => None,
+    };
 
     // 5. サイズを計算
-    let (size_opt, position_opt) = if let Some(ref size) = window_config.size {
+    let (size_opt, position_opt) = if let Some(ref size) = filled_size {
         let size_value = serde_json::to_value(size)
             .map_err(|e| format!("サイズ情報のシリアライズに失敗しました: {}", e))?;
         let (width, height) = crate::config::parse_size_value(
@@ -389,7 +398,7 @@ fn process_window(
         )
         .map_err(|e| format!("サイズ計算失敗: {}", e))?;
 
-        let position = if let Some(ref position) = window_config.position {
+        let position = if let Some(ref position) = filled_position {
             let position_value = serde_json::to_value(position)
                 .map_err(|e| format!("位置情報のシリアライズに失敗しました: {}", e))?;
             let (x, y) = crate::config::parse_position_value(
@@ -409,7 +418,7 @@ fn process_window(
         };
 
         (Some((width, height)), position)
-    } else if let Some(ref position) = window_config.position {
+    } else if let Some(ref position) = filled_position {
         // サイズ指定なしの場合はディスプレイサイズを使用
         let position_value = serde_json::to_value(position)
             .map_err(|e| format!("位置情報のシリアライズに失敗しました: {}", e))?;
