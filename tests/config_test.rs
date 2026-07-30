@@ -1409,20 +1409,17 @@ fn test_tile_keyword_traits() {
 //
 // ブラックボックステスト観点（同値分割）:
 //   - 有効値クラス: x/y（width/height）ともに具体的な値（文字列パターン or 数値）
-//     → current を渡しても変更されない
+//     → current の Some/None に関わらず変更されず、常に Some を返す
 //   - 未指定値クラス: 片方のみ null / 両方 null
-//     → null のフィールドのみ current の値で補完され、具体的な値を持つフィールドは
-//       変更されない
-//   - current 引数の同値分割: Some(...)（取得成功） / None（取得失敗）
+//     → current が Some の場合、null のフィールドのみ current の値で補完され、
+//       具体的な値を持つフィールドは変更されない
+//     → current が None の場合、補完できないため None を返す（呼び出し側は
+//       該当ウィンドウの位置・サイズ操作をスキップする想定。レビュー指摘 3-1 対応）
 //
 // ホワイトボックステスト観点（分岐網羅）:
 //   - fill_absent_position/fill_absent_size 内の `value_is_absent(...)` による
 //     if/else 分岐（x, y / width, height それぞれ）の true/false を網羅する
-//   - `current.unwrap_or((0, 0))` の Some/None 分岐を網羅する
-
-/// current が渡された場合に current の座標へフォールバックする際のヘルパー
-/// （テストの意図を明確にするための定数）
-const FALLBACK_ORIGIN: (i32, i32) = (0, 0);
+//   - `(x_absent || y_absent) && current.is_none()` の早期 None リターン分岐を網羅する
 
 // --- fill_absent_position() ---
 
@@ -1436,9 +1433,33 @@ fn test_fill_absent_position_both_specified_pattern_unchanged() {
         y: json!("top"),
     };
 
-    let filled = fill_absent_position(&position, Some((999, 888)));
+    let filled =
+        fill_absent_position(&position, Some((999, 888))).expect("null が無いため常に Some");
 
     // 検証: x/y ともに元の値のまま（current の値 999/888 で上書きされていない）
+    assert_eq!(filled.x, json!("left"));
+    assert_eq!(filled.y, json!("top"));
+}
+
+/// x/y ともに具体的な値が指定されている場合、current が None（取得失敗）でも
+/// 補完が不要なため Some を返すことを確認
+#[test]
+fn test_fill_absent_position_both_specified_current_none_still_some() {
+    // 目的: 補完不要（null が無い）な場合は current が None でも早期 None を返さないことを確認
+    // 検証項目: (x_absent || y_absent) が false のため、current.is_none() のガード条件に
+    //          関わらず Some が返る分岐を検証
+    let position = Position {
+        x: json!("left"),
+        y: json!("top"),
+    };
+
+    let filled = fill_absent_position(&position, None);
+
+    assert!(
+        filled.is_some(),
+        "null フィールドが無ければ current が None でも Some"
+    );
+    let filled = filled.unwrap();
     assert_eq!(filled.x, json!("left"));
     assert_eq!(filled.y, json!("top"));
 }
@@ -1453,7 +1474,8 @@ fn test_fill_absent_position_both_specified_numeric_unchanged() {
         y: json!(60),
     };
 
-    let filled = fill_absent_position(&position, Some((999, 888)));
+    let filled =
+        fill_absent_position(&position, Some((999, 888))).expect("null が無いため常に Some");
 
     assert_eq!(filled.x, json!(50));
     assert_eq!(filled.y, json!(60));
@@ -1470,7 +1492,8 @@ fn test_fill_absent_position_x_null_only() {
         y: json!("top"),
     };
 
-    let filled = fill_absent_position(&position, Some((123, 456)));
+    let filled =
+        fill_absent_position(&position, Some((123, 456))).expect("current が Some のため補完可能");
 
     assert_eq!(
         filled.x,
@@ -1491,7 +1514,8 @@ fn test_fill_absent_position_y_null_only() {
         y: json!(null),
     };
 
-    let filled = fill_absent_position(&position, Some((123, 456)));
+    let filled =
+        fill_absent_position(&position, Some((123, 456))).expect("current が Some のため補完可能");
 
     assert_eq!(filled.x, json!("left"), "具体的な値を持つ x は変更されない");
     assert_eq!(
@@ -1510,19 +1534,20 @@ fn test_fill_absent_position_both_null_with_current() {
         y: json!(null),
     };
 
-    let filled = fill_absent_position(&position, Some((321, 654)));
+    let filled =
+        fill_absent_position(&position, Some((321, 654))).expect("current が Some のため補完可能");
 
     assert_eq!(filled.x, json!(321));
     assert_eq!(filled.y, json!(654));
 }
 
 /// x/y ともに null かつ current が None（現在位置取得失敗）の場合、
-/// 境界値としてディスプレイ原点相当の (0, 0) にフォールバックすることを確認
+/// 補完できないため None を返すことを確認（レビュー指摘 3-1 対応）
 #[test]
-fn test_fill_absent_position_both_null_without_current_fallback_zero() {
+fn test_fill_absent_position_both_null_without_current_returns_none() {
     // 目的: current 引数の同値分割「None（取得失敗）」クラスを検証
-    // 検証項目: current.unwrap_or((0, 0)) の None 分岐が正しく機能し、
-    //          null フィールドがディスプレイ原点相当の 0 になること
+    // 検証項目: 未指定フィールドを 0 埋めするのではなく、補完不可を示す None を返し、
+    //          呼び出し側（process_window）がウィンドウ操作をスキップできるようにする
     let position = Position {
         x: json!(null),
         y: json!(null),
@@ -1530,15 +1555,18 @@ fn test_fill_absent_position_both_null_without_current_fallback_zero() {
 
     let filled = fill_absent_position(&position, None);
 
-    assert_eq!(filled.x, json!(FALLBACK_ORIGIN.0));
-    assert_eq!(filled.y, json!(FALLBACK_ORIGIN.1));
+    assert!(
+        filled.is_none(),
+        "null フィールドがあり current も取得できない場合は None を返す"
+    );
 }
 
-/// x のみ null かつ current が None の場合、null 側のみ 0 にフォールバックし、
-/// 具体的な値を持つ y は変更されないことを確認
+/// x のみ null かつ current が None の場合も、
+/// もう片方（y）が具体的な値であっても補完不可のため None を返すことを確認
 #[test]
-fn test_fill_absent_position_x_null_current_none_y_specified() {
+fn test_fill_absent_position_x_null_current_none_y_specified_returns_none() {
     // 目的: 「片方のみ未指定」×「current が None」の組み合わせ（相互作用テスト）を検証
+    // 検証項目: y が具体的な値でも、x 側の補完に current が必要なため全体として None になる
     let position = Position {
         x: json!(null),
         y: json!(200),
@@ -1546,12 +1574,10 @@ fn test_fill_absent_position_x_null_current_none_y_specified() {
 
     let filled = fill_absent_position(&position, None);
 
-    assert_eq!(
-        filled.x,
-        json!(0),
-        "current が None の場合、null な x は 0 になる"
+    assert!(
+        filled.is_none(),
+        "x が null で current が None の場合、y が具体的な値でも None を返す"
     );
-    assert_eq!(filled.y, json!(200), "具体的な値を持つ y は変更されない");
 }
 
 /// fill_absent_position() の結果をそのまま parse_position_value() に渡しても
@@ -1569,7 +1595,8 @@ fn test_fill_absent_position_integration_with_parse_position_value() {
     };
 
     // 現在のウィンドウ位置 (300, 400) で補完
-    let filled = fill_absent_position(&position, Some((300, 400)));
+    let filled =
+        fill_absent_position(&position, Some((300, 400))).expect("current が Some のため補完可能");
     let filled_value = serde_json::to_value(&filled).expect("Position のシリアライズに失敗");
 
     let result = parse_position_value(&filled_value, None, 1920, 1080, 800, 600, "position");
@@ -1592,7 +1619,7 @@ fn test_fill_absent_size_both_specified_pattern_unchanged() {
         height: json!("third"),
     };
 
-    let filled = fill_absent_size(&size, Some((999, 888)));
+    let filled = fill_absent_size(&size, Some((999, 888))).expect("null が無いため常に Some");
 
     assert_eq!(filled.width, json!("half"));
     assert_eq!(filled.height, json!("third"));
@@ -1608,7 +1635,7 @@ fn test_fill_absent_size_both_specified_numeric_unchanged() {
         height: json!(600),
     };
 
-    let filled = fill_absent_size(&size, Some((999, 888)));
+    let filled = fill_absent_size(&size, Some((999, 888))).expect("null が無いため常に Some");
 
     assert_eq!(filled.width, json!(800));
     assert_eq!(filled.height, json!(600));
@@ -1624,7 +1651,7 @@ fn test_fill_absent_size_width_null_only() {
         height: json!("max"),
     };
 
-    let filled = fill_absent_size(&size, Some((700, 500)));
+    let filled = fill_absent_size(&size, Some((700, 500))).expect("current が Some のため補完可能");
 
     assert_eq!(
         filled.width,
@@ -1648,7 +1675,7 @@ fn test_fill_absent_size_height_null_only() {
         height: json!(null),
     };
 
-    let filled = fill_absent_size(&size, Some((700, 500)));
+    let filled = fill_absent_size(&size, Some((700, 500))).expect("current が Some のため補完可能");
 
     assert_eq!(
         filled.width,
@@ -1671,18 +1698,24 @@ fn test_fill_absent_size_both_null_with_current() {
         height: json!(null),
     };
 
-    let filled = fill_absent_size(&size, Some((640, 480)));
+    let filled = fill_absent_size(&size, Some((640, 480))).expect("current が Some のため補完可能");
 
     assert_eq!(filled.width, json!(640));
     assert_eq!(filled.height, json!(480));
 }
 
 /// width/height ともに null かつ current が None（現在サイズ取得失敗）の場合、
-/// 境界値として (0, 0) にフォールバックすることを確認
+/// 補完できないため None を返すことを確認（レビュー指摘 3-1 対応）
+///
+/// 旧実装では (0, 0) にフォールバックしていたが、`parse_size_value` の
+/// 「正の値であること」というバリデーションに必ず抵触してエラーになり、
+/// 片方だけ正しく指定されていてもウィンドウ操作全体が失敗する非対称な挙動だった。
+/// 現在は None を返し、呼び出し側が該当ウィンドウの処理を明確な WARN と共に
+/// スキップする方針に変更した。
 #[test]
-fn test_fill_absent_size_both_null_without_current_fallback_zero() {
+fn test_fill_absent_size_both_null_without_current_returns_none() {
     // 目的: current 引数の同値分割「None（取得失敗）」クラスを検証
-    // 検証項目: current.unwrap_or((0, 0)) の None 分岐が正しく機能すること
+    // 検証項目: 未指定フィールドを 0 埋めするのではなく、補完不可を示す None を返すこと
     let size = Size {
         width: json!(null),
         height: json!(null),
@@ -1690,8 +1723,30 @@ fn test_fill_absent_size_both_null_without_current_fallback_zero() {
 
     let filled = fill_absent_size(&size, None);
 
-    assert_eq!(filled.width, json!(FALLBACK_ORIGIN.0));
-    assert_eq!(filled.height, json!(FALLBACK_ORIGIN.1));
+    assert!(
+        filled.is_none(),
+        "null フィールドがあり current も取得できない場合は None を返す"
+    );
+}
+
+/// width のみ null かつ current が None の場合も、
+/// height が具体的な値であっても補完不可のため None を返すことを確認
+#[test]
+fn test_fill_absent_size_width_null_current_none_height_specified_returns_none() {
+    // 目的: 「片方のみ未指定」×「current が None」の組み合わせ（相互作用テスト）を検証
+    // 検証項目: height が具体的な値（"half"）でも、width 側の補完に current が必要なため
+    //          全体として None になる（片方だけ適用されて中途半端な結果にはならない）
+    let size = Size {
+        width: json!(null),
+        height: json!("half"),
+    };
+
+    let filled = fill_absent_size(&size, None);
+
+    assert!(
+        filled.is_none(),
+        "width が null で current が None の場合、height が具体的な値でも None を返す"
+    );
 }
 
 /// fill_absent_size() の結果を parse_size_value() に渡すと、
@@ -1705,7 +1760,7 @@ fn test_fill_absent_size_integration_with_parse_size_value_success() {
         height: json!(null),
     };
 
-    let filled = fill_absent_size(&size, Some((640, 480)));
+    let filled = fill_absent_size(&size, Some((640, 480))).expect("current が Some のため補完可能");
     let filled_value = serde_json::to_value(&filled).expect("Size のシリアライズに失敗");
 
     let result = parse_size_value(&filled_value, 1920, 1080, "size");
@@ -1714,32 +1769,4 @@ fn test_fill_absent_size_integration_with_parse_size_value_success() {
     let (width, height) = result.unwrap();
     assert_eq!(width, 640);
     assert_eq!(height, 480);
-}
-
-/// current が取得できず (0, 0) にフォールバックした Size を parse_size_value() に
-/// 渡すと、「サイズは正の値である必要がある」というエラーになることを確認する
-///
-/// この挙動は CLAUDE.md にも明記されている既知の制限であり、現在のウィンドウサイズが
-/// 取得できない場合（新規ウィンドウ作成直後の取得失敗等）は、width/height 側を
-/// null のまま指定するとエラーになりうることを回帰的に確認するためのテスト
-#[test]
-fn test_fill_absent_size_integration_with_parse_size_value_zero_fallback_error() {
-    // 目的: current が None の場合のフォールバック値 (0, 0) が、
-    //      parse_size_value の「正の値であること」というバリデーションに
-    //      抵触してエラーになる境界ケースを確認
-    let size = Size {
-        width: json!(null),
-        height: json!(null),
-    };
-
-    let filled = fill_absent_size(&size, None);
-    let filled_value = serde_json::to_value(&filled).expect("Size のシリアライズに失敗");
-
-    let result = parse_size_value(&filled_value, 1920, 1080, "size");
-
-    // 検証: width/height が 0 になるため、parse_size_value は正の値要求違反でエラーを返す
-    assert!(
-        result.is_err(),
-        "current が取得できず 0 にフォールバックした場合、parse_size_value はエラーになる"
-    );
 }

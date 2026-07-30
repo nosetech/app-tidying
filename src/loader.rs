@@ -322,14 +322,15 @@ fn process_window(
         thread::sleep(Duration::from_millis(500));
 
         // 新規作成後のウィンドウ位置・サイズを再取得する（position/size の個別フィールド
-        // 部分指定時、未指定側の補完に使用するため。取得に失敗した場合は補完せず
-        // ディスプレイ原点相当の値をフォールバックとして使用する）
+        // 部分指定時、未指定側の補完に使用するため。取得に失敗した場合、null フィールドの
+        // 補完が必要なウィンドウ設定では、後続の fill_absent_position/fill_absent_size が
+        // None を返し、ウィンドウ操作がスキップされる（WARN ログはそちらで出力される）
         current_windows = match applescript::get_all_windows(&window_config.app) {
             Ok(windows) => windows,
             Err(e) => {
-                log::debug!(
+                log::warn!(
                     "新規作成したウィンドウの情報取得に失敗しました（position/size の \
-                     部分指定の補完はディスプレイ原点相当の値にフォールバックします）: {}",
+                     個別フィールド部分指定がある場合、該当ウィンドウの操作をスキップします）: {}",
                     e
                 );
                 Vec::new()
@@ -341,22 +342,49 @@ fn process_window(
     //    サイズで補完する（Issue #120）。
     //    位置は、parse_position_value 側で再度ディスプレイ原点が加算されるため、
     //    ディスプレイ相対座標に変換してから渡す。
-    let current_position_relative = current_windows.first().map(|w| {
+    let first_window = current_windows.first();
+    let current_position_relative = first_window.map(|w| {
         (
             w.position.0 - display_info.origin_x,
             w.position.1 - display_info.origin_y,
         )
     });
-    let current_size = current_windows.first().map(|w| w.size);
+    let current_size = first_window.map(|w| w.size);
 
-    let filled_size = window_config
-        .size
-        .as_ref()
-        .map(|size| crate::config::fill_absent_size(size, current_size));
-    let filled_position = window_config
-        .position
-        .as_ref()
-        .map(|position| crate::config::fill_absent_position(position, current_position_relative));
+    // null フィールドの補完に現在値が必要だが取得できなかった場合、
+    // 中途半端な位置・サイズで配置してしまうことを避けるため、このウィンドウの
+    // 位置・サイズ操作自体をスキップする（レビュー指摘 3-1 対応）。
+    let filled_size = match window_config.size.as_ref() {
+        Some(size) => match crate::config::fill_absent_size(size, current_size) {
+            Some(filled) => Some(filled),
+            None => {
+                log::warn!(
+                    "'{}' の size に未指定フィールド（null）がありますが、現在のウィンドウ \
+                     サイズを取得できなかったため、このウィンドウの位置・サイズ変更をスキップします",
+                    window_config.app
+                );
+                return Ok(());
+            }
+        },
+        None => None,
+    };
+    let filled_position = match window_config.position.as_ref() {
+        Some(position) => {
+            match crate::config::fill_absent_position(position, current_position_relative) {
+                Some(filled) => Some(filled),
+                None => {
+                    log::warn!(
+                        "'{}' の position に未指定フィールド（null）がありますが、現在の \
+                         ウィンドウ位置を取得できなかったため、このウィンドウの位置・サイズ \
+                         変更をスキップします",
+                        window_config.app
+                    );
+                    return Ok(());
+                }
+            }
+        }
+        None => None,
+    };
 
     // 5. サイズを計算
     let (size_opt, position_opt) = if let Some(ref size) = filled_size {

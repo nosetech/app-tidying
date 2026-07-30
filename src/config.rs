@@ -15,12 +15,15 @@ const MACOS_MENU_BAR_HEIGHT: i32 = 25;
 /// 値は以下のいずれかの形式で指定できます：
 /// - 文字列: `"left"`, `"right"`, `"top"`, `"bottom"`
 /// - 数値: ピクセル単位の絶対座標
+/// - `null`（またはキー自体を省略）: 未指定。`x`/`y` を片方だけ指定した場合、
+///   未指定側は変更されず現在のウィンドウ位置が維持される（Issue #120。
+///   [`fill_absent_position`] を参照）
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Position {
-    /// X座標値（`"left"`, `"right"` または 0以上の数値）
+    /// X座標値（`"left"`, `"right"`、0以上の数値、または未指定を表す `null`）
     #[serde(default)]
     pub x: serde_json::Value,
-    /// Y座標値（`"top"`, `"bottom"` または 0以上の数値）
+    /// Y座標値（`"top"`, `"bottom"`、0以上の数値、または未指定を表す `null`）
     #[serde(default)]
     pub y: serde_json::Value,
 }
@@ -31,12 +34,15 @@ pub struct Position {
 /// 値は以下のいずれかの形式で指定できます：
 /// - 文字列: `"half"`（1/2）, `"third"`（1/3）, `"max"`（フル）
 /// - 数値: ピクセル単位のサイズ
+/// - `null`（またはキー自体を省略）: 未指定。`width`/`height` を片方だけ指定した場合、
+///   未指定側は変更されず現在のウィンドウサイズが維持される（Issue #120。
+///   [`fill_absent_size`] を参照）
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Size {
-    /// 幅（`"half"`, `"third"`, `"max"` または 1以上の数値）
+    /// 幅（`"half"`, `"third"`, `"max"`、1以上の数値、または未指定を表す `null`）
     #[serde(default)]
     pub width: serde_json::Value,
-    /// 高さ（`"half"`, `"third"`, `"max"` または 1以上の数値）
+    /// 高さ（`"half"`, `"third"`, `"max"`、1以上の数値、または未指定を表す `null`）
     #[serde(default)]
     pub height: serde_json::Value,
 }
@@ -561,6 +567,16 @@ fn validate_log_rotation_config(log_rotation: &LogRotationConfig) -> Result<(), 
 
 /// ウィンドウの座標・サイズがディスプレイの境界内に収まっているかを検証
 /// ディスプレイ外の座標や、画面より大きいサイズが設定されている場合は警告を返す
+///
+/// # 個別フィールド部分指定（Issue #120）とのチェック対象外について
+///
+/// `position`/`size` の個別フィールド（`x`/`y`/`width`/`height`）が `null`（部分指定で
+/// 未指定）の場合、この時点では未指定側の値（現在のウィンドウ位置・サイズ）が確定して
+/// いないため、`calculate_size_for_validation`/`calculate_position_for_validation` は
+/// `Err` を返す。この検証は `load_layout` の実行直後（`process_window` で現在値を
+/// 取得する前）に行われるため、未指定側の実際の値を用いた境界チェックはできず、
+/// 意図的にスキップしている（`null` 自体は `validate_value` で許容される正当な値であり、
+/// 構文エラーではない）。
 fn validate_display_bounds(
     window: &AppWindowConfig,
     display_info: &crate::applescript::DisplayInfo,
@@ -572,7 +588,9 @@ fn validate_display_bounds(
         let window_width = if let Some(ref size) = window.size {
             match calculate_size_for_validation(&size.width, display_info.width) {
                 Ok(w) => w,
-                Err(_) => return None, // エラーは構文チェックで処理済み
+                // width が null（個別フィールド部分指定）等、現在値が未確定で計算できない場合は
+                // 境界チェック対象外とする（関数冒頭のドキュメントコメント参照）
+                Err(_) => return None,
             }
         } else {
             display_info.width
@@ -581,7 +599,7 @@ fn validate_display_bounds(
         let window_height = if let Some(ref size) = window.size {
             match calculate_size_for_validation(&size.height, display_info.height) {
                 Ok(h) => h,
-                Err(_) => return None, // エラーは構文チェックで処理済み
+                Err(_) => return None,
             }
         } else {
             display_info.height
@@ -597,7 +615,7 @@ fn validate_display_bounds(
             window_height,
         ) {
             Ok((x, y)) => (x, y),
-            Err(_) => return None, // エラーは構文チェックで処理済み
+            Err(_) => return None,
         };
 
         // ウィンドウの右端がディスプレイを超えるかチェック
@@ -1223,27 +1241,40 @@ fn value_is_absent(value: &serde_json::Value) -> bool {
 /// 変更せず現在のウィンドウ位置を維持したいため、`load` 実行時にディスプレイ相対座標へ
 /// 変換済みの現在位置（`current`）で補完してから、既存の [`parse_position_value`] に渡す。
 ///
+/// `x`/`y` のどちらも `null` でない場合（補完が不要な場合）は `current` を使用しないため、
+/// `current` が `None` でも常に `Some` を返す。
+///
 /// # Arguments
 /// * `position` - `layout.json` の位置指定（一部フィールドが `null` の可能性がある）
 /// * `current` - 現在のウィンドウ位置（ディスプレイ原点を差し引いた相対座標）。
-///   取得できなかった場合は `None`（この場合はディスプレイ原点 `(0, 0)` を補完値として使用する）
+///   取得できなかった場合は `None`
 ///
 /// # Returns
-/// `x`/`y` の `null` フィールドを補完した新しい `Position`
-pub fn fill_absent_position(position: &Position, current: Option<(i32, i32)>) -> Position {
+/// * `Some(Position)` - `x`/`y` の `null` フィールドを補完した新しい `Position`
+/// * `None` - `null` フィールドの補完が必要だが `current` が取得できなかった場合。
+///   呼び出し側は、現在値が不明な状態で位置を確定させることを避けるため、
+///   このウィンドウの位置・サイズ操作自体をスキップすることを想定している
+pub fn fill_absent_position(position: &Position, current: Option<(i32, i32)>) -> Option<Position> {
+    let x_absent = value_is_absent(&position.x);
+    let y_absent = value_is_absent(&position.y);
+
+    if (x_absent || y_absent) && current.is_none() {
+        return None;
+    }
+
     let (current_x, current_y) = current.unwrap_or((0, 0));
-    Position {
-        x: if value_is_absent(&position.x) {
+    Some(Position {
+        x: if x_absent {
             serde_json::json!(current_x)
         } else {
             position.x.clone()
         },
-        y: if value_is_absent(&position.y) {
+        y: if y_absent {
             serde_json::json!(current_y)
         } else {
             position.y.clone()
         },
-    }
+    })
 }
 
 /// `Size` の `width`/`height` のうち未指定（`null`）のフィールドを、現在のウィンドウサイズで補完する
@@ -1252,27 +1283,39 @@ pub fn fill_absent_position(position: &Position, current: Option<(i32, i32)>) ->
 /// 側は変更せず現在のウィンドウサイズを維持したいため、現在サイズ（`current`）で補完してから
 /// 既存の [`parse_size_value`] に渡す。
 ///
+/// `width`/`height` のどちらも `null` でない場合（補完が不要な場合）は `current` を
+/// 使用しないため、`current` が `None` でも常に `Some` を返す。
+///
 /// # Arguments
 /// * `size` - `layout.json` のサイズ指定（一部フィールドが `null` の可能性がある）
 /// * `current` - 現在のウィンドウサイズ（幅, 高さ）。取得できなかった場合は `None`
-///   （この場合は `(0, 0)` を補完値として使用する）
 ///
 /// # Returns
-/// `width`/`height` の `null` フィールドを補完した新しい `Size`
-pub fn fill_absent_size(size: &Size, current: Option<(i32, i32)>) -> Size {
+/// * `Some(Size)` - `width`/`height` の `null` フィールドを補完した新しい `Size`
+/// * `None` - `null` フィールドの補完が必要だが `current` が取得できなかった場合。
+///   呼び出し側は、現在値が不明な状態でサイズを確定させることを避けるため、
+///   このウィンドウの位置・サイズ操作自体をスキップすることを想定している
+pub fn fill_absent_size(size: &Size, current: Option<(i32, i32)>) -> Option<Size> {
+    let width_absent = value_is_absent(&size.width);
+    let height_absent = value_is_absent(&size.height);
+
+    if (width_absent || height_absent) && current.is_none() {
+        return None;
+    }
+
     let (current_width, current_height) = current.unwrap_or((0, 0));
-    Size {
-        width: if value_is_absent(&size.width) {
+    Some(Size {
+        width: if width_absent {
             serde_json::json!(current_width)
         } else {
             size.width.clone()
         },
-        height: if value_is_absent(&size.height) {
+        height: if height_absent {
             serde_json::json!(current_height)
         } else {
             size.height.clone()
         },
-    }
+    })
 }
 
 // 注意: 以前存在した `resolve_tile_keyword()`（position/size のパターン指定から
