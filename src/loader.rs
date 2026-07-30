@@ -432,7 +432,7 @@ fn process_window(
         None => None,
     };
 
-    // 5. サイズを計算
+    // 6. サイズを計算
     let (size_opt, position_opt) = if let Some(ref size) = filled_size {
         let size_value = serde_json::to_value(size)
             .map_err(|e| format!("サイズ情報のシリアライズに失敗しました: {}", e))?;
@@ -512,7 +512,7 @@ fn process_window(
         return Ok(());
     }
 
-    // 6. ウィンドウを移動・リサイズ
+    // 7. ウィンドウを移動・リサイズ
     applescript::resize_window(&window_config.app, position_opt, size_opt).map_err(|e| {
         log::warn!(
             "ウィンドウのリサイズに失敗しました: アプリ: {}, 位置: {:?}, サイズ: {:?}, AppleScript エラー: {}",

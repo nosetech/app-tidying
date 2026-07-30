@@ -68,7 +68,7 @@ pub struct AppWindowConfig {
     /// `position`/`size` とは相互排他（同時指定はバリデーションエラー）。
     /// version 1.0 の layout.json では指定できません。詳細は
     /// [`parse_tile_keyword`] を参照
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tiling: Option<String>,
 }
 
@@ -438,7 +438,7 @@ fn validate_window_config(
     if window.tiling.is_some() && (window.position.is_some() || window.size.is_some()) {
         return Err(AppConfigError {
             message: format!(
-                "ディスプレイ '{}' のアプリ '{}' の設定で 'tiling' と 'position'/'size' を同時に指定することはできません",
+                "ディスプレイ '{}' のアプリ '{}' のウィンドウ設定でエラー: 'tiling' と 'position'/'size' を同時に指定することはできません",
                 display_name, window.app
             ),
         });
@@ -450,7 +450,7 @@ fn validate_window_config(
         if version == "1.0" {
             return Err(AppConfigError {
                 message: format!(
-                    "ディスプレイ '{}' のアプリ '{}' の設定でエラー: version 1.0 では 'tiling' \
+                    "ディスプレイ '{}' のアプリ '{}' のウィンドウ設定でエラー: version 1.0 では 'tiling' \
                      フィールドはサポートされていません（version 2.0 を指定してください）",
                     display_name, window.app
                 ),

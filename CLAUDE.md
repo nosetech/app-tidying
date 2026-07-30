@@ -380,8 +380,8 @@ OS標準タイリング相当のキーワードを直接指定できます（lay
 
 - 同一ウィンドウ設定内で `tiling` と `position`/`size`（どちらか一方でも）を同時に
   指定した場合は、バリデーションエラーとなります（例:
-  `ディスプレイ 'Built-in' のアプリ 'Google Chrome' の設定で 'tiling' と
-  'position'/'size' を同時に指定することはできません`）
+  `ディスプレイ 'Built-in' のアプリ 'Google Chrome' のウィンドウ設定でエラー:
+  'tiling' と 'position'/'size' を同時に指定することはできません`）
 - ここでの「指定」は JSON上に `position`/`size` キー自体が存在するかどうかで
   判定します。値がすべて `null`（例: `{"size": {"width": null, "height": null}}`）で
   あっても、キーが存在すれば「指定あり」として `tiling` との同時指定エラーの
