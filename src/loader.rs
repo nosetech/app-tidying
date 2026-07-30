@@ -319,7 +319,65 @@ fn process_window(
         thread::sleep(Duration::from_millis(500));
     }
 
-    // 4. サイズを計算
+    // 4. OS標準メニュー操作を優先的に試行する
+    //    position/size が「対象とする組み合わせ」（Issue #118）に一致する場合のみ実行する。
+    //    それ以外のパターン（third・数値指定・絶対座標等）では、余計な activate や
+    //    ディスプレイ移動を行わず、そのまま既存の直接プロパティ設定処理へ進む
+    //    （不要な副作用の防止。特に position 未指定・size のみ指定のケースで、
+    //    ディスプレイ移動だけ実行されて position が中途半端に変化することを避ける）。
+    //    メニュー操作が成功した場合は以降の直接プロパティ設定処理をスキップする。
+    //    失敗しても既存の直接プロパティ設定処理へそのままフォールスルーするため、
+    //    ここでのエラーは致命的として扱わない。
+    if let Some(tile_keyword) = crate::config::resolve_tile_keyword(
+        window_config.position.as_ref(),
+        window_config.size.as_ref(),
+    ) {
+        // 4-1. ディスプレイ移動を試行する
+        //      「[ディスプレイ名]に移動」メニュー項目は、ウィンドウが現在表示されていない
+        //      ディスプレイに対してのみ表示されるため（Issue #116 で実機確認済み）、
+        //      既に対象ディスプレイ上にある場合は見つからずエラーになるが、これは想定内の
+        //      挙動であり、後続の絶対座標計算処理（ディスプレイ原点を加算する処理）で
+        //      最終的にカバーされるため DEBUG ログに留める。
+        //      タイリング操作はウィンドウが現在表示されているディスプレイを基準に行われる
+        //      ため、タイリングを試行するより前に実行する必要がある。
+        match applescript::move_window_to_display_via_menu(&window_config.app, &display_info.name) {
+            Ok(()) => {
+                log::info!(
+                    "'{}' をディスプレイ '{}' へメニュー操作で移動しました",
+                    window_config.app,
+                    display_info.name
+                );
+            }
+            Err(e) => {
+                log::debug!(
+                    "'{}' のディスプレイ移動メニュー操作をスキップしました（既に対象ディスプレイ上にある可能性があります）: {}",
+                    window_config.app,
+                    e.message
+                );
+            }
+        }
+
+        // 4-2. OS標準タイリング機能を試行する
+        match applescript::tile_window_via_menu(&window_config.app, &tile_keyword) {
+            Ok(()) => {
+                log::info!(
+                    "'{}' をOS標準タイリング機能（{}）で配置しました",
+                    window_config.app,
+                    tile_keyword.menu_item_name()
+                );
+                return Ok(());
+            }
+            Err(e) => {
+                log::warn!(
+                    "'{}' のOS標準タイリング操作に失敗したため、直接プロパティ設定にフォールバックします: {}",
+                    window_config.app,
+                    e.message
+                );
+            }
+        }
+    }
+
+    // 5. サイズを計算
     let (size_opt, position_opt) = if let Some(ref size) = window_config.size {
         let size_value = serde_json::to_value(size)
             .map_err(|e| format!("サイズ情報のシリアライズに失敗しました: {}", e))?;
@@ -399,13 +457,8 @@ fn process_window(
         return Ok(());
     }
 
-    // 5. ウィンドウを移動・リサイズ
-    applescript::resize_window(
-        &window_config.app,
-        position_opt,
-        size_opt,
-    )
-    .map_err(|e| {
+    // 6. ウィンドウを移動・リサイズ
+    applescript::resize_window(&window_config.app, position_opt, size_opt).map_err(|e| {
         log::warn!(
             "ウィンドウのリサイズに失敗しました: アプリ: {}, 位置: {:?}, サイズ: {:?}, AppleScript エラー: {}",
             window_config.app,

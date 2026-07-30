@@ -1126,3 +1126,161 @@ fn parse_height_value(
         }),
     }
 }
+
+// =============================================================================
+// OS標準タイリング判定（Issue #118）
+// =============================================================================
+
+/// macOS標準の「ウインドウ」メニューで実現可能な配置パターン
+///
+/// `position`/`size` が特定のパターン指定（`left`/`right`/`top`/`bottom`、`half`/`max`）の
+/// 組み合わせの場合、`System Events` の `position`/`size` プロパティを直接設定する代わりに、
+/// この列挙値に対応するメニュー項目（「移動とサイズ変更」サブメニュー、または
+/// 「画面全体に表示」）をクリックして配置する。
+///
+/// `Left`/`Right`/`Top`/`Bottom`/`TopLeft`/`TopRight`/`BottomLeft`/`BottomRight` は
+/// 「ウインドウ」メニュー配下の「移動とサイズ変更」サブメニューの項目に対応し、
+/// `FullScreen` のみ「ウインドウ」メニュー直下の項目（サブメニューを経由しない）に対応する。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileKeyword {
+    /// 左半分（「移動とサイズ変更」＞「左」）
+    Left,
+    /// 右半分（「移動とサイズ変更」＞「右」）
+    Right,
+    /// 上半分（「移動とサイズ変更」＞「上」）
+    Top,
+    /// 下半分（「移動とサイズ変更」＞「下」）
+    Bottom,
+    /// 左上4分割（「移動とサイズ変更」＞「左上」）
+    TopLeft,
+    /// 右上4分割（「移動とサイズ変更」＞「右上」）
+    TopRight,
+    /// 左下4分割（「移動とサイズ変更」＞「左下」）
+    BottomLeft,
+    /// 右下4分割（「移動とサイズ変更」＞「右下」）
+    BottomRight,
+    /// 画面全体に表示（macOS標準のフルスクリーン機能。「移動とサイズ変更」の配下ではない）
+    FullScreen,
+}
+
+impl TileKeyword {
+    /// 対応するAppleScriptメニュー項目名（日本語表記）を返す
+    ///
+    /// ログ出力用。実際のメニュー項目探索では、表記揺れに対応するため
+    /// [`menu_item_name_candidates`](Self::menu_item_name_candidates) が返す
+    /// 複数候補を使用する。
+    pub fn menu_item_name(&self) -> &'static str {
+        self.menu_item_name_candidates()[0]
+    }
+
+    /// メニュー項目名の候補一覧（日本語表記・英語表記）を返す
+    ///
+    /// macOSの言語設定によりメニュー項目の表記が異なるため、AppleScript側の
+    /// 検索ではこの候補を順に試す。日本語表記を先頭に置く（`menu_item_name()` が
+    /// 先頭要素を返す前提のため）。英語表記はmacOS標準の表記を想定しているが、
+    /// 実機での検証は日本語環境でのみ行っている（Issue #118）。
+    pub fn menu_item_name_candidates(&self) -> &'static [&'static str] {
+        match self {
+            TileKeyword::Left => &["左", "Left"],
+            TileKeyword::Right => &["右", "Right"],
+            TileKeyword::Top => &["上", "Top"],
+            TileKeyword::Bottom => &["下", "Bottom"],
+            TileKeyword::TopLeft => &["左上", "Top Left"],
+            TileKeyword::TopRight => &["右上", "Top Right"],
+            TileKeyword::BottomLeft => &["左下", "Bottom Left"],
+            TileKeyword::BottomRight => &["右下", "Bottom Right"],
+            TileKeyword::FullScreen => &["画面全体に表示", "Enter Full Screen"],
+        }
+    }
+
+    /// 「移動とサイズ変更」サブメニュー配下の項目かどうか
+    ///
+    /// `false` の場合（`FullScreen`）は「ウインドウ」メニュー直下の項目として扱う。
+    pub fn is_submenu_item(&self) -> bool {
+        !matches!(self, TileKeyword::FullScreen)
+    }
+}
+
+/// `serde_json::Value` が指定した文字列と一致するかどうかを判定する
+///
+/// 値が数値や `null`（未指定）の場合は常に `false` を返す。
+fn value_is_str(value: &serde_json::Value, expected: &str) -> bool {
+    value.as_str() == Some(expected)
+}
+
+/// `serde_json::Value` が未指定（`null`）かどうかを判定する
+fn value_is_absent(value: &serde_json::Value) -> bool {
+    value.is_null()
+}
+
+/// `position`/`size` のパターン指定から、OS標準タイリングで実現可能な配置かどうかを判定する
+///
+/// `layout.json` の `position.x`/`position.y` が `left`/`right`/`top`/`bottom`、
+/// `size.width`/`size.height` が `half`/`max` の組み合わせである場合にのみ
+/// `Some(TileKeyword)` を返す。`third` や数値指定を含む場合、または表に一致しない
+/// 組み合わせの場合は `None` を返し、呼び出し側は既存の直接プロパティ設定にフォールバックする。
+///
+/// # 対応する組み合わせ
+///
+/// | position.x | position.y | size.width | size.height | 結果 |
+/// | --- | --- | --- | --- | --- |
+/// | `left` | (なし) | `half` | (なし) | `Left` |
+/// | `right` | (なし) | `half` | (なし) | `Right` |
+/// | (なし) | `top` | (なし) | `half` | `Top` |
+/// | (なし) | `bottom` | (なし) | `half` | `Bottom` |
+/// | `left` | `top` | `half` | `half` | `TopLeft` |
+/// | `right` | `top` | `half` | `half` | `TopRight` |
+/// | `left` | `bottom` | `half` | `half` | `BottomLeft` |
+/// | `right` | `bottom` | `half` | `half` | `BottomRight` |
+/// | (任意) | (任意) | `max` | `max` | `FullScreen` |
+///
+/// # Arguments
+/// * `position` - `layout.json` の位置指定（`None` の場合は位置未指定）
+/// * `size` - `layout.json` のサイズ指定（`None` の場合はサイズ未指定）
+///
+/// # Returns
+/// * `Some(TileKeyword)` - OS標準タイリングで実現可能な組み合わせ
+/// * `None` - 対応する組み合わせがない（直接プロパティ設定を使用する）
+pub fn resolve_tile_keyword(
+    position: Option<&Position>,
+    size: Option<&Size>,
+) -> Option<TileKeyword> {
+    let width_is_max = size.is_some_and(|s| value_is_str(&s.width, "max"));
+    let height_is_max = size.is_some_and(|s| value_is_str(&s.height, "max"));
+    if width_is_max && height_is_max {
+        return Some(TileKeyword::FullScreen);
+    }
+
+    let x_is_left = position.is_some_and(|p| value_is_str(&p.x, "left"));
+    let x_is_right = position.is_some_and(|p| value_is_str(&p.x, "right"));
+    let x_is_absent = position.is_none_or(|p| value_is_absent(&p.x));
+
+    let y_is_top = position.is_some_and(|p| value_is_str(&p.y, "top"));
+    let y_is_bottom = position.is_some_and(|p| value_is_str(&p.y, "bottom"));
+    let y_is_absent = position.is_none_or(|p| value_is_absent(&p.y));
+
+    let width_is_half = size.is_some_and(|s| value_is_str(&s.width, "half"));
+    let width_is_absent = size.is_none_or(|s| value_is_absent(&s.width));
+
+    let height_is_half = size.is_some_and(|s| value_is_str(&s.height, "half"));
+    let height_is_absent = size.is_none_or(|s| value_is_absent(&s.height));
+
+    match (
+        x_is_left,
+        x_is_right,
+        y_is_top,
+        y_is_bottom,
+        width_is_half,
+        height_is_half,
+    ) {
+        (true, false, true, false, true, true) => Some(TileKeyword::TopLeft),
+        (false, true, true, false, true, true) => Some(TileKeyword::TopRight),
+        (true, false, false, true, true, true) => Some(TileKeyword::BottomLeft),
+        (false, true, false, true, true, true) => Some(TileKeyword::BottomRight),
+        (true, false, _, _, true, _) if y_is_absent && height_is_absent => Some(TileKeyword::Left),
+        (false, true, _, _, true, _) if y_is_absent && height_is_absent => Some(TileKeyword::Right),
+        (_, _, true, false, _, true) if x_is_absent && width_is_absent => Some(TileKeyword::Top),
+        (_, _, false, true, _, true) if x_is_absent && width_is_absent => Some(TileKeyword::Bottom),
+        _ => None,
+    }
+}

@@ -9,6 +9,7 @@
 //!
 //! - アプリケーション操作: `launch_or_activate_app()`, `get_running_applications()`
 //! - ウィンドウ操作: `get_all_windows()`, `resize_window()`, `create_new_window()`
+//! - ウィンドウメニュー操作: `tile_window_via_menu()`, `move_window_to_display_via_menu()`
 //! - ディスプレイ情報: `get_all_connected_displays()`, `get_display_info()`
 //! - ユーティリティ: `escape_applescript_string()`, `parse_window_list()` 他
 //!
@@ -21,6 +22,7 @@ pub mod display;
 pub mod osascript;
 pub mod utils;
 pub mod window;
+pub mod window_menu;
 
 // 以下の pub use は、外部ユーザーおよびテストコードから使用される公開 API です。
 // binary では使用されていないものも含まれていますが、library として公開 API を提供するために
@@ -42,3 +44,5 @@ pub use window::{
     create_new_window, get_all_windows, resize_window, WindowInfo, WindowInfoError,
     WindowResizeError, WindowResizeResult,
 };
+#[allow(unused_imports)]
+pub use window_menu::{move_window_to_display_via_menu, tile_window_via_menu, WindowMenuError};

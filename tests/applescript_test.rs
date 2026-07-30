@@ -1,9 +1,11 @@
 use apptidying::applescript::{
     escape_applescript_string, get_all_connected_displays, get_all_windows, get_display_info,
-    get_running_applications, launch_or_activate_app, parse_single_window, parse_window_list,
-    resize_window, AppInfo, AppLaunchError, AppLaunchResult, DisplayInfo, RunningAppsError,
-    WindowInfo, WindowInfoError,
+    get_running_applications, launch_or_activate_app, move_window_to_display_via_menu,
+    parse_single_window, parse_window_list, resize_window, tile_window_via_menu, AppInfo,
+    AppLaunchError, AppLaunchResult, DisplayInfo, RunningAppsError, WindowInfo, WindowInfoError,
+    WindowMenuError,
 };
+use apptidying::config::TileKeyword;
 
 // =============================================================================
 // escape_applescript_string() Tests
@@ -2920,4 +2922,195 @@ fn test_displayed_name_not_binary_name() {
         !binary_name_found || !apps.iter().any(|app| app.name == "app" && rightcheat_found),
         "RightCheat がバイナリ名 'app' として取得されています（displayed name が機能していない可能性）"
     );
+}
+
+// =============================================================================
+// WindowMenuError Tests (Issue #118)
+//
+// WindowMenuError 自体は osascript に依存しないため、CI環境でも実行可能。
+// AppLaunchError / WindowResizeError の既存テストパターンを踏襲する。
+// =============================================================================
+
+#[test]
+fn test_window_menu_error_creation() {
+    // WindowMenuError が正しく作成できることを確認
+    let error = WindowMenuError {
+        message: "Test error message".to_string(),
+    };
+    assert_eq!(error.message, "Test error message");
+}
+
+#[test]
+fn test_window_menu_error_display() {
+    // Display トレイトが正しく実装されていることを確認
+    let error = WindowMenuError {
+        message: "Test error".to_string(),
+    };
+    assert_eq!(format!("{}", error), "Test error");
+}
+
+#[test]
+fn test_window_menu_error_display_with_special_chars() {
+    // 特殊文字を含むエラーメッセージ（AppleScriptのエラー出力にはダブルクオートや
+    // 改行が含まれることがあるため、そのまま表示されることを確認）
+    let error = WindowMenuError {
+        message: "Error: \"移動とサイズ変更\" not found\nPath: /tmp".to_string(),
+    };
+    assert_eq!(
+        format!("{}", error),
+        "Error: \"移動とサイズ変更\" not found\nPath: /tmp"
+    );
+}
+
+#[test]
+fn test_window_menu_error_empty_message() {
+    // 空のエラーメッセージ（境界値テスト）
+    let error = WindowMenuError {
+        message: "".to_string(),
+    };
+    assert_eq!(error.message, "");
+    assert_eq!(format!("{}", error), "");
+}
+
+#[test]
+fn test_window_menu_error_long_message() {
+    // 非常に長いエラーメッセージ（境界値テスト）
+    let long_message = "Error: ".to_string() + &"a".repeat(10000);
+    let error = WindowMenuError {
+        message: long_message.clone(),
+    };
+    assert_eq!(error.message.len(), 10007);
+    assert_eq!(format!("{}", error), long_message);
+}
+
+#[test]
+fn test_window_menu_error_is_error_trait() {
+    // std::error::Error トレイトが実装されていることを確認
+    let error = WindowMenuError {
+        message: "Test error".to_string(),
+    };
+    let _: &dyn std::error::Error = &error;
+}
+
+#[test]
+fn test_window_menu_error_debug() {
+    // Debug トレイトが実装されていることを確認
+    let error = WindowMenuError {
+        message: "Test error".to_string(),
+    };
+    let debug_str = format!("{:?}", error);
+    assert!(debug_str.contains("WindowMenuError"));
+    assert!(debug_str.contains("Test error"));
+}
+
+// =============================================================================
+// tile_window_via_menu() Integration Tests (osascript required)
+// =============================================================================
+
+// 注: 以下のテストは osascript 実行（System Events経由のメニュー操作）に依存するため、
+// #[ignore] を付与。ローカル macOS 環境で `cargo test -- --ignored` で実行する。
+// 実際のウィンドウ移動結果までは検証せず、存在しないアプリケーションを指定した場合に
+// Err が返ること（メニュー探索が失敗として扱われること）を中心に確認する。
+
+#[test]
+#[ignore]
+fn test_tile_window_via_menu_nonexistent_app() {
+    // 目的: 存在しないアプリケーション名を指定した場合、
+    //       「ウインドウ」メニューの探索（アプリの activate）に失敗し、
+    //       Err(WindowMenuError) が返されることを確認
+    let result = tile_window_via_menu("NonExistentApp123456", &TileKeyword::Left);
+
+    assert!(result.is_err(), "存在しないアプリケーションでは Err を期待");
+}
+
+#[test]
+#[ignore]
+fn test_tile_window_via_menu_empty_app_name() {
+    // 目的: 空文字列のアプリケーション名でテスト（境界値テスト）
+    let result = tile_window_via_menu("", &TileKeyword::FullScreen);
+
+    assert!(result.is_err(), "空文字列のアプリ名では Err を期待");
+}
+
+#[test]
+#[ignore]
+fn test_tile_window_via_menu_all_submenu_variants_nonexistent_app() {
+    // 目的: 「移動とサイズ変更」サブメニュー配下の8バリアントすべてで、
+    //       is_submenu_item() = true 側の探索ロジック（サブメニューを一段掘る分岐）が
+    //       例外なく実行され、存在しないアプリに対して Err を返すことを確認
+    let submenu_variants = [
+        TileKeyword::Left,
+        TileKeyword::Right,
+        TileKeyword::Top,
+        TileKeyword::Bottom,
+        TileKeyword::TopLeft,
+        TileKeyword::TopRight,
+        TileKeyword::BottomLeft,
+        TileKeyword::BottomRight,
+    ];
+
+    for keyword in submenu_variants {
+        let result = tile_window_via_menu("NonExistentApp123456", &keyword);
+        assert!(
+            result.is_err(),
+            "{:?} でも存在しないアプリでは Err を期待",
+            keyword
+        );
+    }
+}
+
+#[test]
+#[ignore]
+fn test_tile_window_via_menu_full_screen_variant_nonexistent_app() {
+    // 目的: 「ウインドウ」メニュー直下（サブメニューを経由しない）の
+    //       FullScreen（is_submenu_item() = false）の探索ロジックが
+    //       例外なく実行され、存在しないアプリに対して Err を返すことを確認
+    let result = tile_window_via_menu("NonExistentApp123456", &TileKeyword::FullScreen);
+
+    assert!(
+        result.is_err(),
+        "FullScreen でも存在しないアプリでは Err を期待"
+    );
+}
+
+// =============================================================================
+// move_window_to_display_via_menu() Integration Tests (osascript required)
+// =============================================================================
+
+// 注: 以下のテストも osascript 実行に依存するため #[ignore] を付与。
+// ローカル macOS 環境で `cargo test -- --ignored` で実行する。
+
+#[test]
+#[ignore]
+fn test_move_window_to_display_via_menu_nonexistent_app() {
+    // 目的: 存在しないアプリケーション名を指定した場合、Err(WindowMenuError) が
+    //       返されることを確認
+    let result = move_window_to_display_via_menu("NonExistentApp123456", "Built-in");
+
+    assert!(result.is_err(), "存在しないアプリケーションでは Err を期待");
+}
+
+#[test]
+#[ignore]
+fn test_move_window_to_display_via_menu_nonexistent_display() {
+    // 目的: 実在するアプリ（Finder）に対して、存在しないディスプレイ名
+    //       （「[ディスプレイ名]に移動」メニュー項目が存在しない名前）を指定した場合、
+    //       メニュー項目が見つからず Err(WindowMenuError) が返されることを確認。
+    //       これは仕様上想定内の失敗（呼び出し側は既存の絶対座標移動へフォールバックする）
+    let result = move_window_to_display_via_menu("Finder", "NonExistentDisplay999");
+
+    assert!(
+        result.is_err(),
+        "存在しないディスプレイ名では Err を期待（メニュー項目が見つからないため）"
+    );
+}
+
+#[test]
+#[ignore]
+fn test_move_window_to_display_via_menu_empty_display_name() {
+    // 目的: 空文字列のディスプレイ名でテスト（境界値テスト）
+    //       「に移動」だけのメニュー項目は通常存在しないため Err を期待
+    let result = move_window_to_display_via_menu("Finder", "");
+
+    assert!(result.is_err(), "空文字列のディスプレイ名では Err を期待");
 }
