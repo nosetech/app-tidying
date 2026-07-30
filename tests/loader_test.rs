@@ -229,10 +229,9 @@ fn create_test_config_no_position_no_size() -> LayoutFile {
 
 /// position.x のみ数値指定、y は null（未指定）の設定を作成
 ///
-/// x/y ともに "left"/"right"/"top"/"bottom" 等のパターン文字列ではなく数値を使うのは、
-/// resolve_tile_keyword()（Issue #118 の OS標準タイリング判定）が反応してメニュー操作の
-/// コードパスに入ってしまうのを避け、fill_absent_position() 側の直接プロパティ設定
-/// コードパス（process_window() の手順5・6）を確実に検証するため
+/// position/size 指定時は常に直接プロパティ設定処理を使用する（Issue #123 の設計変更に
+/// 伴い OS標準タイリング機能は position/size 経由では動作しない）ため、x/y の値には
+/// パターン文字列・数値のどちらを使っても良いが、既存の慣例に合わせて数値を使用する
 fn create_test_config_position_x_only(x: i64) -> LayoutFile {
     let display_name = get_first_connected_display_name();
     LayoutFile {
@@ -275,9 +274,6 @@ fn create_test_config_position_y_only(y: i64) -> LayoutFile {
 }
 
 /// size.width のみ数値指定、height は null（未指定）の設定を作成
-///
-/// width/height も同様の理由（resolve_tile_keyword() への非干渉）から
-/// "half"/"third"/"max" ではなく数値を使用する
 fn create_test_config_size_width_only(width: i64) -> LayoutFile {
     let display_name = get_first_connected_display_name();
     LayoutFile {
