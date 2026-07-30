@@ -57,6 +57,15 @@ fn get_menu_action_lock() -> &'static Mutex<()> {
     MENU_ACTION_LOCK.get_or_init(|| Mutex::new(()))
 }
 
+/// [`move_window_to_display_via_menu`] が「ディスプレイ移動メニュー項目が
+/// 見つかりません」で失敗した場合に返すメッセージ
+///
+/// このメッセージは、ウィンドウが既に対象ディスプレイ上にあるためメニュー項目自体が
+/// 表示されない、という想定内のケースを示す。[`WindowMenuError::is_display_menu_item_not_found`]
+/// で判定できる（Issue #122のコードレビューで指摘。詳細は
+/// [`move_window_to_display_via_menu`] のドキュメントを参照）。
+const DISPLAY_MENU_ITEM_NOT_FOUND_MESSAGE: &str = "ディスプレイ移動メニュー項目が見つかりません";
+
 /// ウィンドウメニュー操作エラー
 #[derive(Debug)]
 pub struct WindowMenuError {
@@ -70,6 +79,23 @@ impl std::fmt::Display for WindowMenuError {
 }
 
 impl std::error::Error for WindowMenuError {}
+
+impl WindowMenuError {
+    /// [`move_window_to_display_via_menu`] が「ディスプレイ移動メニュー項目が
+    /// 見つからない」ことを理由に失敗したかどうかを判定する
+    ///
+    /// このケースは、ウィンドウが既に対象ディスプレイ上にあるために発生する想定内の
+    /// 失敗であり、異常とはみなさない（呼び出し元の `loader::process_window` は
+    /// この場合は無視して後続の [`tile_window_via_menu`] を実行する）。
+    ///
+    /// これが `false` を返す場合（「ウインドウ」メニュー自体が見つからない、
+    /// Accessibility API の権限がない等）は、想定外の異常な失敗であるため、
+    /// 呼び出し元は WARN レベルでログ出力するなど、区別して扱うべきである
+    /// （Issue #122のコードレビューで指摘）。
+    pub fn is_display_menu_item_not_found(&self) -> bool {
+        self.message.contains(DISPLAY_MENU_ITEM_NOT_FOUND_MESSAGE)
+    }
+}
 
 /// 「ウインドウ」メニューを探索するAppleScript共通部分
 ///
@@ -262,11 +288,17 @@ end tell
 /// `System Events` 経由でクリックする。このメニュー項目は、ウィンドウが
 /// 現在表示されていないディスプレイに対してのみ表示されるため（Issue #116
 /// で実機確認済み）、既にウィンドウが対象ディスプレイ上にある場合は
-/// メニュー項目が見つからず `Err` を返す。これは異常な失敗ではなく想定内の
-/// ケースであるため、呼び出し元（`loader::process_window`）はこの `Err` を
-/// 無視し、後続の [`tile_window_via_menu`] をそのまま実行する（Issue #121/#122。
-/// `tiling` 指定時は `position`/`size` によるフォールバックが存在しないため、
-/// 本関数の失敗自体を許容できるのはこのケースのみである点に注意）。
+/// メニュー項目が見つからず `Err` を返す（[`WindowMenuError::is_display_menu_item_not_found`]
+/// が `true` を返す）。これは異常な失敗ではなく想定内のケースであるため、呼び出し元
+/// （`loader::process_window`）はこの場合に限り `Err` を無視し、後続の
+/// [`tile_window_via_menu`] をそのまま実行する（Issue #121/#122。`tiling` 指定時は
+/// `position`/`size` によるフォールバックが存在しないため、本関数の失敗自体を
+/// 許容できるのはこのケースのみである点に注意）。
+///
+/// 一方、`is_display_menu_item_not_found()` が `false` を返す場合（「ウインドウ」
+/// メニュー自体が見つからない、Accessibility API の権限がない等）は想定外の異常な
+/// 失敗であるため、呼び出し元はこれを区別してWARNレベルでログ出力する
+/// （Issue #122のコードレビューで指摘）。
 ///
 /// # Arguments
 /// * `app_name` - アプリケーション名
@@ -320,7 +352,7 @@ tell application "System Events"
       end repeat
 
       if targetItem is missing value then
-        return "Error: ディスプレイ移動メニュー項目が見つかりません"
+        return "Error: {not_found_message}"
       end if
 
       click targetItem
@@ -333,7 +365,8 @@ end tell
 "#,
         app = escaped_app_name,
         find_menu = FIND_WINDOW_MENU_SCRIPT,
-        condition = target_condition
+        condition = target_condition,
+        not_found_message = DISPLAY_MENU_ITEM_NOT_FOUND_MESSAGE
     );
 
     run_menu_action_script(&script, "ディスプレイ移動メニュー操作に失敗しました")

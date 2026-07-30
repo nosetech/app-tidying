@@ -346,16 +346,27 @@ fn process_window(
             .map_err(|e| format!("無効な tiling 値です: {}", e.message))?;
 
         // ウィンドウが既に対象ディスプレイ上にある場合、ディスプレイ移動メニュー項目は
-        // 表示されずエラーになるが、これは異常ではないため無視する
-        // （src/applescript/window_menu.rs の move_window_to_display_via_menu を参照）。
+        // 表示されずエラーになるが、これは異常ではないため無視する。それ以外の理由
+        // （ウインドウメニュー自体が見つからない、権限エラー等）による失敗は想定外の
+        // 異常であるため、区別してWARNレベルでログ出力する（いずれの場合も、後続の
+        // タイル配置操作は変わらず実行する。Issue #122のコードレビューで指摘。
+        // src/applescript/window_menu.rs の move_window_to_display_via_menu を参照）。
         if let Err(e) =
             applescript::move_window_to_display_via_menu(&window_config.app, &display_info.name)
         {
-            log::debug!(
-                "アプリ '{}' のディスプレイ移動メニュー操作は実行されませんでした（既に対象ディスプレイ上にある可能性があります）: {}",
-                window_config.app,
-                e
-            );
+            if e.is_display_menu_item_not_found() {
+                log::debug!(
+                    "アプリ '{}' は既に対象ディスプレイ '{}' 上にあるため、ディスプレイ移動メニュー操作をスキップしました",
+                    window_config.app,
+                    display_info.name
+                );
+            } else {
+                log::warn!(
+                    "アプリ '{}' のディスプレイ移動メニュー操作でエラーが発生しました（タイル配置は続行します）: {}",
+                    window_config.app,
+                    e
+                );
+            }
         }
 
         // tiling指定時は position/size によるフォールバック（直接プロパティ設定）が

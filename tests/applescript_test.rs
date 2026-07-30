@@ -3004,6 +3004,64 @@ fn test_window_menu_error_debug() {
 }
 
 // =============================================================================
+// WindowMenuError::is_display_menu_item_not_found() Tests（Issue #122のコードレビュー対応）
+//
+// move_window_to_display_via_menu() が「ディスプレイ移動メニュー項目が見つからない」
+// ことを理由に失敗した場合（＝ウィンドウが既に対象ディスプレイ上にある想定内のケース）と、
+// それ以外の理由（ウインドウメニュー自体が見つからない、権限エラー等の異常）による
+// 失敗を区別できることを確認する。
+// =============================================================================
+
+#[test]
+fn test_is_display_menu_item_not_found_true_for_display_menu_item_message() {
+    // 目的: move_window_to_display_via_menu() の「ディスプレイ移動メニュー項目が
+    //      見つかりません」というメッセージを含むエラーが、想定内のケースとして
+    //      判定されることを確認
+    // 検証項目: 同値分割における「想定内の失敗」クラス
+
+    let error = WindowMenuError {
+        message: "ディスプレイ移動メニュー項目が見つかりません".to_string(),
+    };
+    assert!(error.is_display_menu_item_not_found());
+}
+
+#[test]
+fn test_is_display_menu_item_not_found_false_for_window_menu_not_found() {
+    // 目的: 「ウインドウ」メニュー自体が見つからない場合（想定外の異常）は、
+    //      ディスプレイ移動メニュー項目未検出とは区別されることを確認
+    // 検証項目: 同値分割における「想定外の異常」クラス（ウインドウメニュー未検出）
+
+    let error = WindowMenuError {
+        message: "OS標準タイリング操作に失敗しました: Error: ウインドウメニューが見つかりません"
+            .to_string(),
+    };
+    assert!(!error.is_display_menu_item_not_found());
+}
+
+#[test]
+fn test_is_display_menu_item_not_found_false_for_other_errors() {
+    // 目的: AppleScript例外や権限エラー等、メニュー項目未検出以外のエラーメッセージが
+    //      想定外の異常として区別されることを確認
+    // 検証項目: 同値分割における「想定外の異常」クラス（任意のosascriptエラー）
+
+    let error = WindowMenuError {
+        message: "ディスプレイ移動メニュー操作に失敗しました: execution error".to_string(),
+    };
+    assert!(!error.is_display_menu_item_not_found());
+}
+
+#[test]
+fn test_is_display_menu_item_not_found_false_for_empty_message() {
+    // 目的: 空文字列（境界値）が想定内のケースとして誤判定されないことを確認
+    // 検証項目: 境界値分析（メッセージ長 0）
+
+    let error = WindowMenuError {
+        message: String::new(),
+    };
+    assert!(!error.is_display_menu_item_not_found());
+}
+
+// =============================================================================
 // tile_window_via_menu() Integration Tests (osascript required)
 // =============================================================================
 

@@ -343,3 +343,173 @@ fn test_parse_config_multiple_layouts_and_displays() {
     assert_eq!(cfg.layouts[0].displays.len(), 2);
     assert_eq!(cfg.layouts[1].displays.len(), 1);
 }
+
+// =============================================================================
+// tiling フィールドのJSON文字列経由デシリアライズテスト（Issue #121/#122）
+//
+// tests/config_test.rs のテストは AppWindowConfig を直接構築しているため、
+// 「JSON上のキー存在で判定する」という設計の要となる serde のデシリアライズ挙動を
+// 経由していない。以下はコードレビュー指摘に基づき、実際のJSON文字列を
+// parse_layout_from_json() でパースする形で同じ観点を検証する。
+// =============================================================================
+
+#[test]
+fn test_parse_config_tiling_valid_keyword() {
+    // 目的: layout.json の tiling フィールドの文字列値が、実際のJSONパースを経由して
+    //      AppWindowConfig::tiling に正しくデシリアライズされることを確認
+    // 検証項目: version 2.0 + tiling のみ指定という組み合わせが構文検証を通過し、
+    //          tiling フィールドの値が期待通りに読み込まれること
+
+    let json = r#"{
+        "version": "2.0",
+        "layouts": [
+            {
+                "displays": [
+                    {
+                        "name": "Built-in",
+                        "windows": [
+                            { "app": "Google Chrome", "tiling": "top-left" }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }"#;
+
+    let config = config::parse_layout_from_json(json);
+    assert!(config.is_ok(), "{:?}", config.err());
+    let cfg = config.unwrap();
+    let window = &cfg.layouts[0].displays[0].windows[0];
+    assert_eq!(window.tiling, Some("top-left".to_string()));
+    assert!(window.position.is_none());
+    assert!(window.size.is_none());
+}
+
+#[test]
+fn test_parse_config_tiling_explicit_null_treated_as_none() {
+    // 目的: JSON上で "tiling": null が明示的に指定された場合、None として
+    //      デシリアライズされ、position/size との相互排他エラーの対象に
+    //      ならないことを確認
+    // 検証項目: tiling キーが存在していても値が null であれば「指定なし」として
+    //          扱われること（position/size の x/y/width/height と異なり、
+    //          tiling 自体は文字列フィールドのため部分指定という概念がない）
+
+    let json = r#"{
+        "version": "2.0",
+        "layouts": [
+            {
+                "displays": [
+                    {
+                        "name": "Built-in",
+                        "windows": [
+                            {
+                                "app": "Safari",
+                                "tiling": null,
+                                "position": { "x": "left", "y": "top" }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }"#;
+
+    let config = config::parse_layout_from_json(json);
+    assert!(config.is_ok(), "{:?}", config.err());
+    let cfg = config.unwrap();
+    let window = &cfg.layouts[0].displays[0].windows[0];
+    assert_eq!(window.tiling, None);
+}
+
+#[test]
+fn test_parse_config_tiling_and_position_with_null_subfields_conflict() {
+    // 目的: CLAUDE.md「position/sizeとの相互排他制約」に明記されているエッジケース
+    //      （position/size の中身がすべて null であっても、キー自体が存在すれば
+    //      「指定あり」として扱われる）を、実際のJSONパース経由で確認する
+    // 検証項目: "position": {"x": null, "y": null} のようにキーは存在するが
+    //          値がすべて未指定のケースでも、tiling との同時指定エラーになること
+
+    let json = r#"{
+        "version": "2.0",
+        "layouts": [
+            {
+                "displays": [
+                    {
+                        "name": "Built-in",
+                        "windows": [
+                            {
+                                "app": "Safari",
+                                "tiling": "left",
+                                "position": { "x": null, "y": null }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }"#;
+
+    let config = config::parse_layout_from_json(json);
+    assert!(config.is_err());
+    assert!(config
+        .unwrap_err()
+        .message
+        .contains("'tiling' と 'position'/'size' を同時に指定することはできません"));
+}
+
+#[test]
+fn test_parse_config_tiling_invalid_keyword_via_json() {
+    // 目的: JSON文字列経由で不正な tiling 値が指定された場合にエラーになることを確認
+    // 検証項目: エラーメッセージに「無効な tiling 値」が含まれること
+
+    let json = r#"{
+        "version": "2.0",
+        "layouts": [
+            {
+                "displays": [
+                    {
+                        "name": "Built-in",
+                        "windows": [
+                            { "app": "Safari", "tiling": "diagonal" }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }"#;
+
+    let config = config::parse_layout_from_json(json);
+    assert!(config.is_err());
+    assert!(config.unwrap_err().message.contains("無効な tiling 値"));
+}
+
+#[test]
+fn test_parse_config_tiling_in_version_1_0_via_json() {
+    // 目的: JSON文字列経由で version 1.0 の layout.json に tiling フィールドが
+    //      混入した場合にエラーになることを確認
+    // 検証項目: エラーメッセージに「version 1.0 では 'tiling' フィールドは
+    //          サポートされていません」が含まれること
+
+    let json = r#"{
+        "version": "1.0",
+        "layouts": [
+            {
+                "displays": [
+                    {
+                        "name": "Built-in",
+                        "windows": [
+                            { "app": "Safari", "tiling": "left" }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }"#;
+
+    let config = config::parse_layout_from_json(json);
+    assert!(config.is_err());
+    assert!(config
+        .unwrap_err()
+        .message
+        .contains("version 1.0 では 'tiling' フィールドはサポートされていません"));
+}
