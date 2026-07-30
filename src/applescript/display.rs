@@ -83,8 +83,23 @@ impl std::error::Error for DisplayError {}
 /// JXA を使用して macOS の NSScreen API からすべての接続ディスプレイ情報を取得します。
 /// 各ディスプレイの名前、解像度（幅・高さ）、原点座標を取得します。
 ///
+/// # 座標系の変換について
+///
+/// `NSScreen.frame` は Cocoa の座標系（メインディスプレイの**左下**が原点、Y軸は**上向き**が正）
+/// で値を返しますが、ウィンドウ移動に使用する `System Events`（Accessibility API）の座標系は
+/// メインディスプレイの**左上**が原点、Y軸は**下向き**が正であり、Y軸の向きが逆になります
+/// （X軸はどちらも左端が原点・右向きが正で一致するため変換不要）。
+///
+/// このズレを放置すると、内蔵ディスプレイと外部ディスプレイの高さが異なる、または
+/// 縦方向にオフセットして配置されている環境で、`origin_y` を使った絶対座標計算
+///（`loader.rs`・`saver.rs`）が破綻し、意図しないディスプレイへウィンドウが配置される
+/// 不具合が発生する。そのため本関数内で `NSScreen.mainScreen` の高さを基準に
+/// `accessibility_origin_y = main_screen_height - (cocoa_origin_y + display_height)`
+/// という変換を行い、`origin_y` は常に Accessibility 座標系の値として返す。
+///
 /// # Returns
-/// * `Ok(Vec<DisplayInfo>)` - ディスプレイ情報のベクトル
+/// * `Ok(Vec<DisplayInfo>)` - ディスプレイ情報のベクトル（`origin_x`/`origin_y` は
+///   Accessibility 座標系＝`System Events` の `position of window` と同じ座標系）
 /// * `Err(DisplayError)` - 失敗（ディスプレイなし、パース失敗など）
 ///
 /// # Examples
@@ -104,22 +119,27 @@ pub fn get_all_connected_displays() -> Result<Vec<DisplayInfo>, DisplayError> {
 ObjC.import('AppKit')
 
 const screens = $.NSScreen.screens
-let displays = []
 
 if (screens.count === 0) {
     "error: ディスプレイが接続されていません"
 } else {
+    // メインディスプレイ（メニューバーがあるディスプレイ）の高さを基準に、
+    // Cocoa座標系（左下原点・Y軸上向き）からAccessibility座標系（左上原点・Y軸下向き）へ変換する
+    const mainScreenHeight = $.NSScreen.mainScreen.frame.size.height
+    let displays = []
+
     for (let i = 0; i < screens.count; i++) {
         const screen = screens.objectAtIndex(i)
         const displayName = ObjC.unwrap(screen.localizedName) || "Unknown"
         const frame = screen.frame
+        const height = Math.round(frame.size.height)
 
         const display = {
             name: displayName,
             width: Math.round(frame.size.width),
-            height: Math.round(frame.size.height),
+            height: height,
             origin_x: Math.round(frame.origin.x),
-            origin_y: Math.round(frame.origin.y)
+            origin_y: Math.round(mainScreenHeight - (frame.origin.y + height))
         }
         displays.push(display)
     }
