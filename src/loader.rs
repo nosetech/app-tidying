@@ -338,7 +338,42 @@ fn process_window(
         };
     }
 
-    // 4. position/size の個別フィールドが未指定（null）の場合、現在のウィンドウ位置・
+    // 4. tiling指定がある場合はOS標準タイリング機能（メニュー操作）で配置する
+    //    （Issue #121/#122）。tiling と position/size は validate_window_config で
+    //    相互排他が保証されているため、以降の position/size 処理は行わない。
+    if let Some(ref tiling) = window_config.tiling {
+        let tile_keyword = crate::config::parse_tile_keyword(tiling)
+            .map_err(|e| format!("無効な tiling 値です: {}", e.message))?;
+
+        // ウィンドウが既に対象ディスプレイ上にある場合、ディスプレイ移動メニュー項目は
+        // 表示されずエラーになるが、これは異常ではないため無視する
+        // （src/applescript/window_menu.rs の move_window_to_display_via_menu を参照）。
+        if let Err(e) =
+            applescript::move_window_to_display_via_menu(&window_config.app, &display_info.name)
+        {
+            log::debug!(
+                "アプリ '{}' のディスプレイ移動メニュー操作は実行されませんでした（既に対象ディスプレイ上にある可能性があります）: {}",
+                window_config.app,
+                e
+            );
+        }
+
+        // tiling指定時は position/size によるフォールバック（直接プロパティ設定）が
+        // 存在しないため、メニュー操作が失敗した場合はそのまま部分失敗として扱う
+        // （Issue #121で決定。呼び出し元の load_layout が WARN 通知・失敗集計を行う）。
+        applescript::tile_window_via_menu(&window_config.app, &tile_keyword).map_err(|e| {
+            log::warn!(
+                "アプリ '{}' のOS標準タイリング操作に失敗しました: {}",
+                window_config.app,
+                e
+            );
+            format!("OS標準タイリング操作に失敗しました: {}", e)
+        })?;
+
+        return Ok(());
+    }
+
+    // 5. position/size の個別フィールドが未指定（null）の場合、現在のウィンドウ位置・
     //    サイズで補完する（Issue #120）。
     //    位置は、parse_position_value 側で再度ディスプレイ原点が加算されるため、
     //    ディスプレイ相対座標に変換してから渡す。

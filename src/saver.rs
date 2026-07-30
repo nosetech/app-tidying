@@ -142,6 +142,8 @@ pub fn save_layout(
                     width: serde_json::json!(window.size.0),
                     height: serde_json::json!(window.size.1),
                 }),
+                // save は version 1.0 形式の position/size のみを書き出す現行仕様を維持する
+                tiling: None,
             };
 
             // ディスプレイごとにウィンドウを分類

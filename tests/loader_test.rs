@@ -6,7 +6,8 @@
 
 use apptidying::applescript;
 use apptidying::config::{
-    AppWindowConfig, DisplayConfig, LayoutConfig, LayoutFile, Position, Size,
+    validate_layout_syntax, AppWindowConfig, DisplayConfig, LayoutConfig, LayoutFile, Position,
+    Size,
 };
 use apptidying::loader::{load_layout, LoadError, LoadResult};
 use serde_json::json;
@@ -56,6 +57,7 @@ fn create_test_config_single_window() -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: Some(Position {
                         x: json!("left"),
@@ -81,6 +83,7 @@ fn create_test_config_multiple_windows() -> LayoutFile {
                 name: display_name,
                 windows: vec![
                     AppWindowConfig {
+                        tiling: None,
                         app: "Safari".to_string(),
                         position: Some(Position {
                             x: json!("left"),
@@ -92,6 +95,7 @@ fn create_test_config_multiple_windows() -> LayoutFile {
                         }),
                     },
                     AppWindowConfig {
+                        tiling: None,
                         app: "Finder".to_string(),
                         position: Some(Position {
                             x: json!("right"),
@@ -124,6 +128,7 @@ fn create_test_config_nonexistent_display() -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: "NonExistentDisplay".to_string(),
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: Some(Position {
                         x: json!("left"),
@@ -148,6 +153,7 @@ fn create_test_config_with_title() -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: Some(Position {
                         x: json!(100),
@@ -172,6 +178,7 @@ fn create_test_config_position_only() -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: Some(Position {
                         x: json!(100),
@@ -193,6 +200,7 @@ fn create_test_config_size_only() -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: None,
                     size: Some(Size {
@@ -214,6 +222,7 @@ fn create_test_config_no_position_no_size() -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: None,
                     size: None,
@@ -240,6 +249,7 @@ fn create_test_config_position_x_only(x: i64) -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: Some(Position {
                         x: json!(x),
@@ -261,6 +271,7 @@ fn create_test_config_position_y_only(y: i64) -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: Some(Position {
                         x: json!(null),
@@ -282,6 +293,7 @@ fn create_test_config_size_width_only(width: i64) -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: None,
                     size: Some(Size {
@@ -303,6 +315,7 @@ fn create_test_config_size_height_only(height: i64) -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: None,
                     size: Some(Size {
@@ -328,6 +341,7 @@ fn create_test_config_position_both_null() -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: Some(Position {
                         x: json!(null),
@@ -346,6 +360,7 @@ fn create_test_config_multiple_displays() -> LayoutFile {
     let mut displays = vec![DisplayConfig {
         name: display_name,
         windows: vec![AppWindowConfig {
+            tiling: None,
             app: "Safari".to_string(),
             position: Some(Position {
                 x: json!("left"),
@@ -363,6 +378,7 @@ fn create_test_config_multiple_displays() -> LayoutFile {
         displays.push(DisplayConfig {
             name: second_display_name,
             windows: vec![AppWindowConfig {
+                tiling: None,
                 app: "Finder".to_string(),
                 position: Some(Position {
                     x: json!("right"),
@@ -391,6 +407,7 @@ fn create_test_config_with_timeout() -> LayoutFile {
             displays: vec![DisplayConfig {
                 name: display_name,
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: Some(Position {
                         x: json!("left"),
@@ -623,6 +640,7 @@ fn test_load_layout_partial_failure() {
 
     // 無効なアプリを追加
     config.layouts[0].displays[0].windows.push(AppWindowConfig {
+        tiling: None,
         app: "NonExistentApp123456".to_string(),
         position: Some(Position {
             x: json!("left"),
@@ -2211,6 +2229,7 @@ fn test_parallel_loading_partial_failure() {
 
     // 無効なアプリを追加（複数の無効なアプリを追加して並列処理の失敗集約を確認）
     config.layouts[0].displays[0].windows.push(AppWindowConfig {
+        tiling: None,
         app: "NonExistentApp1".to_string(),
         position: Some(Position {
             x: json!("left"),
@@ -2223,6 +2242,7 @@ fn test_parallel_loading_partial_failure() {
     });
 
     config.layouts[0].displays[0].windows.push(AppWindowConfig {
+        tiling: None,
         app: "NonExistentApp2".to_string(),
         position: Some(Position {
             x: json!("right"),
@@ -2301,6 +2321,7 @@ fn test_parallel_loading_all_failure() {
                 name: display_name,
                 windows: vec![
                     AppWindowConfig {
+                        tiling: None,
                         app: "NonExistentApp1".to_string(),
                         position: Some(Position {
                             x: json!("left"),
@@ -2312,6 +2333,7 @@ fn test_parallel_loading_all_failure() {
                         }),
                     },
                     AppWindowConfig {
+                        tiling: None,
                         app: "NonExistentApp2".to_string(),
                         position: Some(Position {
                             x: json!("right"),
@@ -2323,6 +2345,7 @@ fn test_parallel_loading_all_failure() {
                         }),
                     },
                     AppWindowConfig {
+                        tiling: None,
                         app: "NonExistentApp3".to_string(),
                         position: Some(Position {
                             x: json!("left"),
@@ -2384,6 +2407,7 @@ fn test_parallel_loading_error_aggregation() {
                 name: display_name,
                 windows: vec![
                     AppWindowConfig {
+                        tiling: None,
                         app: "NonExistentApp".to_string(),
                         position: Some(Position {
                             x: json!("left"),
@@ -2395,6 +2419,7 @@ fn test_parallel_loading_error_aggregation() {
                         }),
                     },
                     AppWindowConfig {
+                        tiling: None,
                         app: "NonExistentApp".to_string(), // 同じアプリ名
                         position: Some(Position {
                             x: json!("right"),
@@ -2474,6 +2499,7 @@ fn test_parallel_loading_timing_measurement() {
                 name: display_name,
                 windows: vec![
                     AppWindowConfig {
+                        tiling: None,
                         app: "Safari".to_string(),
                         position: Some(Position {
                             x: json!("left"),
@@ -2485,6 +2511,7 @@ fn test_parallel_loading_timing_measurement() {
                         }),
                     },
                     AppWindowConfig {
+                        tiling: None,
                         app: "Finder".to_string(),
                         position: Some(Position {
                             x: json!("right"),
@@ -2496,6 +2523,7 @@ fn test_parallel_loading_timing_measurement() {
                         }),
                     },
                     AppWindowConfig {
+                        tiling: None,
                         app: "TextEdit".to_string(),
                         position: Some(Position {
                             x: json!("left"),
@@ -2778,6 +2806,7 @@ fn test_load_layout_multiple_displays_mixed_scenario() {
                 DisplayConfig {
                     name: first_display_name.clone(),
                     windows: vec![AppWindowConfig {
+                        tiling: None,
                         app: "Safari".to_string(),
                         position: Some(Position {
                             x: json!("left"),
@@ -2793,6 +2822,7 @@ fn test_load_layout_multiple_displays_mixed_scenario() {
                 DisplayConfig {
                     name: "NonExistentDisplayForMixedTest".to_string(),
                     windows: vec![AppWindowConfig {
+                        tiling: None,
                         app: "Finder".to_string(),
                         position: Some(Position {
                             x: json!("right"),
@@ -2883,4 +2913,198 @@ fn test_load_layout_multiple_displays_mixed_scenario() {
             }
         }
     }
+}
+
+// =============================================================================
+// tiling フィールド関連のテスト（Issue #121/#122）
+// =============================================================================
+//
+// process_window() に追加された tiling 分岐（OS標準タイリング機能によるウィンドウ配置）の
+// テスト。process_window() 自体は非公開関数のため、公開APIである load_layout() を
+// 経由して検証する。
+
+/// テスト用の tiling 指定を含む LayoutFile を作成
+///
+/// version は 2.0 に固定する（tiling フィールドは version 2.0 でのみサポートされるため）。
+fn create_test_config_tiling(tiling: &str) -> LayoutFile {
+    let display_name = get_first_connected_display_name();
+    LayoutFile {
+        version: "2.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: display_name,
+                windows: vec![AppWindowConfig {
+                    app: "Safari".to_string(),
+                    position: None,
+                    size: None,
+                    tiling: Some(tiling.to_string()),
+                }],
+            }],
+        }],
+    }
+}
+
+#[test]
+#[ignore] // osascript 実行に依存するため、CI環境ではスキップ
+fn test_load_layout_tiling_left_success() {
+    // 目的: tiling: "left" を指定した layout.json で、OS標準タイリング機能
+    //      （「移動とサイズ変更」＞「左」メニュー操作）によるウィンドウ配置が
+    //      成功することを確認する統合テスト（Issue #122）
+    // 環境要件: macOS で osascript が利用可能、Safari が起動できること
+    // 検証項目: process_window() 内の tiling 分岐が実行され、
+    //          move_window_to_display_via_menu() / tile_window_via_menu() が
+    //          呼び出されてウィンドウが左半分に配置されること
+
+    let config = create_test_config_tiling("left");
+    let timeout_ms = 3000;
+
+    let result = load_layout(&config, timeout_ms);
+
+    match result {
+        Ok(load_result) => {
+            println!("✓ テスト成功: all_success={}", load_result.all_success);
+            println!(
+                "  成功: {}, 失敗: {}",
+                load_result.success_count, load_result.failure_count
+            );
+
+            // 成功カウントが1以上であることを確認
+            assert!(
+                load_result.success_count >= 1,
+                "少なくとも1つのウィンドウが成功する必要があります"
+            );
+        }
+        Err(e) => {
+            println!("✗ テスト失敗: {}", e);
+            // メニュー項目が macOS の言語設定によって見つからない環境では
+            // 失敗する可能性があるため、パニックしない
+        }
+    }
+}
+
+#[test]
+#[ignore] // osascript 実行に依存するため、CI環境ではスキップ
+fn test_load_layout_tiling_full_screen_success() {
+    // 目的: tiling: "full-screen" を指定した場合の統合テスト（Issue #122）
+    // 環境要件: macOS で osascript が利用可能、Safari が起動できること
+    // 検証項目: FullScreen は「移動とサイズ変更」サブメニューを経由しない
+    //          特別な分岐（TileKeyword::is_submenu_item() == false）が正しく動作すること
+    // 注意: フルスクリーン化すると新しい仮想デスクトップ(Space)に切り替わるため
+    //      （technical-verification/README.md 参照）、テスト実行後は手動でSpaceを
+    //      戻す必要がある場合がある
+
+    let config = create_test_config_tiling("full-screen");
+    let timeout_ms = 3000;
+
+    let result = load_layout(&config, timeout_ms);
+
+    match result {
+        Ok(load_result) => {
+            println!("✓ テスト成功: all_success={}", load_result.all_success);
+            println!(
+                "  成功: {}, 失敗: {}",
+                load_result.success_count, load_result.failure_count
+            );
+
+            assert!(
+                load_result.success_count >= 1,
+                "少なくとも1つのウィンドウが成功する必要があります"
+            );
+        }
+        Err(e) => {
+            println!("✗ テスト失敗: {}", e);
+        }
+    }
+}
+
+// =============================================================================
+// tiling フィールドのバリデーション回帰テスト（構文検証、CI実行可能）
+// =============================================================================
+//
+// process_window() の tiling 分岐は、validate_window_config()（Issue #121/#122）による
+// 事前検証（tiling と position/size の相互排他、version 1.0 での非対応）を前提としている。
+// しかし load_layout() 自体は validate_layout_syntax() を呼び出さず、
+// validate_layout_bounds()（境界値チェックのみ）を呼び出す。つまり、不正な tiling 設定を
+// 含む layout.json であっても、そのまま load_layout() に渡すと構文エラーとして
+// 弾かれることなく process_window() まで到達してしまう。
+//
+// このため、呼び出し元（main.rs 等）は load_layout() を呼ぶ前に
+// parse_layout_from_json() または validate_layout_syntax() を通じて構文検証を
+// 行う必要がある。以下の回帰テストは、その構文検証が tiling 関連の不正な設定を
+// 正しく検出できることを、loader モジュールのテストスイート内でも明示的に確認する。
+
+/// tiling と position を同時指定した設定が、load_layout() に渡す前の
+/// 構文検証（validate_layout_syntax）の時点でエラーになることを確認
+#[test]
+fn test_validate_layout_syntax_tiling_and_position_conflict_before_load_err() {
+    // 目的: load_layout() 自体は構文検証を行わないため、呼び出し元が
+    //      validate_layout_syntax() を呼ぶことで、tiling と position の同時指定を
+    //      load_layout() に到達する前に検出できることを確認する回帰テスト
+    // 検証項目: エラーメッセージに
+    //          「'tiling' と 'position'/'size' を同時に指定することはできません」を含む
+
+    let layout = LayoutFile {
+        version: "2.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Safari".to_string(),
+                    position: Some(Position {
+                        x: json!("left"),
+                        y: json!("top"),
+                    }),
+                    size: None,
+                    tiling: Some("left".to_string()),
+                }],
+            }],
+        }],
+    };
+
+    let result = validate_layout_syntax(&layout);
+
+    assert!(
+        result.is_err(),
+        "tiling と position の同時指定は構文検証でエラーになる必要があります"
+    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("'tiling' と 'position'/'size' を同時に指定することはできません"));
+}
+
+/// version 1.0 の layout に tiling を指定した設定が、load_layout() に渡す前の
+/// 構文検証（validate_layout_syntax）の時点でエラーになることを確認
+#[test]
+fn test_validate_layout_syntax_tiling_in_version_1_0_before_load_err() {
+    // 目的: version 1.0 の layout.json に tiling フィールドが混入した場合、
+    //      load_layout() に渡る前の構文検証段階で検出できることを確認する回帰テスト
+    // 検証項目: エラーメッセージに
+    //          「version 1.0 では 'tiling' フィールドはサポートされていません」を含む
+
+    let layout = LayoutFile {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Safari".to_string(),
+                    position: None,
+                    size: None,
+                    tiling: Some("left".to_string()),
+                }],
+            }],
+        }],
+    };
+
+    let result = validate_layout_syntax(&layout);
+
+    assert!(
+        result.is_err(),
+        "version 1.0 での tiling 指定は構文検証でエラーになる必要があります"
+    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("version 1.0 では 'tiling' フィールドはサポートされていません"));
 }

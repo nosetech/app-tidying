@@ -61,6 +61,15 @@ pub struct AppWindowConfig {
     /// ウィンドウのサイズ（幅と高さ）。オプション
     #[serde(default)]
     pub size: Option<Size>,
+    /// OS標準タイリング指定（layout.json version 2.0、Issue #121/#122）
+    ///
+    /// `"left"`, `"right"`, `"top"`, `"bottom"`, `"top-left"`, `"top-right"`,
+    /// `"bottom-left"`, `"bottom-right"`, `"full-screen"` のいずれかを指定します。
+    /// `position`/`size` とは相互排他（同時指定はバリデーションエラー）。
+    /// version 1.0 の layout.json では指定できません。詳細は
+    /// [`parse_tile_keyword`] を参照
+    #[serde(default)]
+    pub tiling: Option<String>,
 }
 
 /// ディスプレイの設定
@@ -375,11 +384,11 @@ pub fn validate_settings_syntax(settings: &AppSettings) -> Result<(), AppConfigE
 
 /// layout.json の構文チェックを実行する
 pub fn validate_layout_syntax(layout: &LayoutFile) -> Result<(), AppConfigError> {
-    // バージョンチェック
-    if layout.version != "1.0" {
+    // バージョンチェック（Issue #121/#122: version 2.0 で tiling フィールドを追加サポート）
+    if layout.version != "1.0" && layout.version != "2.0" {
         return Err(AppConfigError {
             message: format!(
-                "サポートされていないバージョン: {}（サポート: 1.0）",
+                "サポートされていないバージョン: {}（サポート: 1.0, 2.0）",
                 layout.version
             ),
         });
@@ -410,7 +419,7 @@ pub fn validate_layout_syntax(layout: &LayoutFile) -> Result<(), AppConfigError>
 
             // ウィンドウの座標・サイズをチェック
             for window in &display.windows {
-                validate_window_config(window, &display.name)?;
+                validate_window_config(window, &display.name, &layout.version)?;
             }
         }
     }
@@ -421,7 +430,41 @@ pub fn validate_layout_syntax(layout: &LayoutFile) -> Result<(), AppConfigError>
 fn validate_window_config(
     window: &AppWindowConfig,
     display_name: &str,
+    version: &str,
 ) -> Result<(), AppConfigError> {
+    // tiling と position/size の相互排他チェック（Issue #121で決定。
+    // 「指定」はJSON上のキー存在で判定するため、position/size の中身が
+    // null（未指定）であってもキー自体が存在すれば「指定あり」として扱う）
+    if window.tiling.is_some() && (window.position.is_some() || window.size.is_some()) {
+        return Err(AppConfigError {
+            message: format!(
+                "ディスプレイ '{}' のアプリ '{}' の設定で 'tiling' と 'position'/'size' を同時に指定することはできません",
+                display_name, window.app
+            ),
+        });
+    }
+
+    // tiling が指定されている場合のバリデーション
+    if let Some(ref tiling) = window.tiling {
+        // version 1.0 では tiling フィールドは非対応（Issue #121で決定）
+        if version == "1.0" {
+            return Err(AppConfigError {
+                message: format!(
+                    "ディスプレイ '{}' のアプリ '{}' の設定でエラー: version 1.0 では 'tiling' \
+                     フィールドはサポートされていません（version 2.0 を指定してください）",
+                    display_name, window.app
+                ),
+            });
+        }
+
+        parse_tile_keyword(tiling).map_err(|e| AppConfigError {
+            message: format!(
+                "ディスプレイ '{}' のアプリ '{}' のウィンドウ設定でエラー: {}",
+                display_name, window.app, e.message
+            ),
+        })?;
+    }
+
     // 座標が指定されている場合のバリデーション
     if let Some(ref position) = window.position {
         validate_position(position).map_err(|e| AppConfigError {
@@ -1223,6 +1266,56 @@ impl TileKeyword {
     /// `false` の場合（`FullScreen`）は「ウインドウ」メニュー直下の項目として扱う。
     pub fn is_submenu_item(&self) -> bool {
         !matches!(self, TileKeyword::FullScreen)
+    }
+}
+
+/// layout.json の `tiling` フィールドで指定可能なキーワード一覧（Issue #121で決定）
+///
+/// 英語・小文字・ケバブケース表記で固定し、エイリアスや大文字表記は許容しない。
+/// `position`/`size` のパターン指定（`left`/`right`/`half`/`third`/`max` 等）との
+/// 表記一貫性を優先している。
+const TILE_KEYWORD_VALUES: &[&str] = &[
+    "left",
+    "right",
+    "top",
+    "bottom",
+    "top-left",
+    "top-right",
+    "bottom-left",
+    "bottom-right",
+    "full-screen",
+];
+
+/// `tiling` フィールドの文字列値を [`TileKeyword`] にパースする
+///
+/// layout.json の `tiling` フィールドの値（例: `"left"`, `"top-left"`）を検証しつつ
+/// 対応する `TileKeyword` に変換する。許容されるキーワード一覧にないキーワードは
+/// バリデーションエラーとなる（Issue #121で決定。エイリアス・大文字表記は非対応）。
+///
+/// # Arguments
+/// * `value` - `tiling` フィールドの文字列値
+///
+/// # Returns
+/// * `Ok(TileKeyword)` - 対応する `TileKeyword`
+/// * `Err(AppConfigError)` - 未知のキーワードが指定された場合
+pub fn parse_tile_keyword(value: &str) -> Result<TileKeyword, AppConfigError> {
+    match value {
+        "left" => Ok(TileKeyword::Left),
+        "right" => Ok(TileKeyword::Right),
+        "top" => Ok(TileKeyword::Top),
+        "bottom" => Ok(TileKeyword::Bottom),
+        "top-left" => Ok(TileKeyword::TopLeft),
+        "top-right" => Ok(TileKeyword::TopRight),
+        "bottom-left" => Ok(TileKeyword::BottomLeft),
+        "bottom-right" => Ok(TileKeyword::BottomRight),
+        "full-screen" => Ok(TileKeyword::FullScreen),
+        _ => Err(AppConfigError {
+            message: format!(
+                "無効な tiling 値: '{}' ({} を指定)",
+                value,
+                TILE_KEYWORD_VALUES.join(", ")
+            ),
+        }),
     }
 }
 

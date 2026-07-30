@@ -296,6 +296,7 @@ fn test_save_layout_file_creates_directory() {
             displays: vec![DisplayConfig {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "TestApp".to_string(),
                     position: Some(Position {
                         x: json!(0),
@@ -343,6 +344,7 @@ fn test_save_layout_file_writes_json() {
                 name: "Built-in".to_string(),
                 windows: vec![
                     AppWindowConfig {
+                        tiling: None,
                         app: "Safari".to_string(),
                         position: Some(Position {
                             x: json!(100),
@@ -354,6 +356,7 @@ fn test_save_layout_file_writes_json() {
                         }),
                     },
                     AppWindowConfig {
+                        tiling: None,
                         app: "Finder".to_string(),
                         position: Some(Position {
                             x: json!("left"),

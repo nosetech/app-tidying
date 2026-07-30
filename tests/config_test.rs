@@ -1,9 +1,9 @@
 use apptidying::applescript::DisplayInfo;
 use apptidying::config::{
     fill_absent_position, fill_absent_size, parse_position_value, parse_settings_from_json,
-    parse_size_value, validate_layout, validate_layout_bounds, validate_layout_syntax,
-    AppWindowConfig, DisplayConfig, LayoutConfig, LayoutFile, LogRotationConfig, Position, Size,
-    TileKeyword,
+    parse_size_value, parse_tile_keyword, validate_layout, validate_layout_bounds,
+    validate_layout_syntax, AppWindowConfig, DisplayConfig, LayoutConfig, LayoutFile,
+    LogRotationConfig, Position, Size, TileKeyword,
 };
 use serde_json::json;
 
@@ -683,6 +683,7 @@ fn test_validate_layout_syntax_version_ok() {
             displays: vec![DisplayConfig {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Google Chrome".to_string(),
                     position: None,
                     size: None,
@@ -699,15 +700,18 @@ fn test_validate_layout_syntax_version_ok() {
 /// validate_layout_syntax() がサポートされていないバージョンでエラーを返すことを確認
 #[test]
 fn test_validate_layout_syntax_version_ng() {
-    // 目的: サポートされていないバージョン (2.0) の設定がエラーになることを確認
-    // 検証項目: バージョン 2.0 がエラーになる
+    // 目的: サポートされていないバージョン (3.0) の設定がエラーになることを確認
+    // 検証項目: バージョン 3.0 がエラーになる
+    // 補足: version 2.0 は Issue #121/#122 (tilingフィールド) によりサポート対象と
+    //      なったため、本テストでは非対応バージョンとして 3.0 を使用する
 
     let layout = LayoutFile {
-        version: "2.0".to_string(),
+        version: "3.0".to_string(),
         layouts: vec![LayoutConfig {
             displays: vec![DisplayConfig {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Google Chrome".to_string(),
                     position: None,
                     size: None,
@@ -737,6 +741,7 @@ fn test_validate_display_bounds_position_out_of_display() {
             displays: vec![DisplayConfig {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Google Chrome".to_string(),
                     position: Some(Position {
                         x: json!(1800), // 1800 から始まる
@@ -780,6 +785,7 @@ fn test_validate_display_bounds_size_larger_than_display() {
             displays: vec![DisplayConfig {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Safari".to_string(),
                     position: Some(Position {
                         x: json!("left"),
@@ -823,6 +829,7 @@ fn test_validate_display_exists_ok() {
             displays: vec![DisplayConfig {
                 name: "External Display".to_string(),
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Xcode".to_string(),
                     position: None,
                     size: None,
@@ -867,6 +874,7 @@ fn test_validate_display_exists_ng() {
             displays: vec![DisplayConfig {
                 name: "Nonexistent Display".to_string(),
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "Terminal".to_string(),
                     position: None,
                     size: None,
@@ -907,6 +915,7 @@ fn test_validate_config_bounds_all_warnings() {
                 DisplayConfig {
                     name: "Built-in".to_string(),
                     windows: vec![AppWindowConfig {
+                        tiling: None,
                         app: "Chrome".to_string(),
                         position: Some(Position {
                             x: json!(1900),
@@ -922,6 +931,7 @@ fn test_validate_config_bounds_all_warnings() {
                 DisplayConfig {
                     name: "Disconnected".to_string(),
                     windows: vec![AppWindowConfig {
+                        tiling: None,
                         app: "Safari".to_string(),
                         position: None,
                         size: None,
@@ -960,6 +970,7 @@ fn test_validate_layout_syntax_and_bounds() {
             displays: vec![DisplayConfig {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "App".to_string(),
                     position: Some(Position {
                         x: json!(2000),
@@ -1243,6 +1254,7 @@ fn test_validate_layout_bounds_with_max_no_warning() {
             displays: vec![DisplayConfig {
                 name: "Built-in".to_string(),
                 windows: vec![AppWindowConfig {
+                    tiling: None,
                     app: "TestApp".to_string(),
                     position: Some(Position {
                         x: json!("left"),
@@ -1769,4 +1781,404 @@ fn test_fill_absent_size_integration_with_parse_size_value_success() {
     let (width, height) = result.unwrap();
     assert_eq!(width, 640);
     assert_eq!(height, 480);
+}
+
+// =============================================================================
+// parse_tile_keyword() のテスト（Issue #121/#122）
+// =============================================================================
+//
+// layout.json の tiling フィールドの文字列値を TileKeyword に変換する
+// parse_tile_keyword() の単体テスト。
+//
+// ブラックボックステスト観点（同値分割）:
+//   - 有効値クラス: TILE_KEYWORD_VALUES に定義された9種類のキーワード
+//     → 対応する TileKeyword バリアントに変換される
+//   - 無効値クラス: 大文字表記、ハイフンなしのエイリアス、存在しないキーワード、空文字列
+//     → いずれも AppConfigError を返す（表記揺れは許容しない、Issue #121で決定）
+//
+// 境界値分析:
+//   - 空文字列（最短の無効な入力）でエラーになることを確認
+
+/// 9種類の有効なキーワードすべてが対応する TileKeyword バリアントに変換されることを確認
+#[test]
+fn test_parse_tile_keyword_valid_keywords_returns_expected_variant() {
+    // 目的: TILE_KEYWORD_VALUES で定義された全キーワードが正しくパースされることを確認
+    // 検証項目: 同値分割における「有効値クラス」の代表値（9キーワードすべて）を網羅
+
+    let cases = [
+        ("left", TileKeyword::Left),
+        ("right", TileKeyword::Right),
+        ("top", TileKeyword::Top),
+        ("bottom", TileKeyword::Bottom),
+        ("top-left", TileKeyword::TopLeft),
+        ("top-right", TileKeyword::TopRight),
+        ("bottom-left", TileKeyword::BottomLeft),
+        ("bottom-right", TileKeyword::BottomRight),
+        ("full-screen", TileKeyword::FullScreen),
+    ];
+
+    for (input, expected) in cases {
+        let result = parse_tile_keyword(input);
+        assert!(result.is_ok(), "'{}' は有効なキーワードのはず", input);
+        assert_eq!(
+            result.unwrap(),
+            expected,
+            "'{}' は {:?} にパースされるべき",
+            input,
+            expected
+        );
+    }
+}
+
+/// 大文字表記（例: "Left"）はサポート対象外の表記のため、エラーになることを確認
+#[test]
+fn test_parse_tile_keyword_uppercase_value_returns_err() {
+    // 目的: キーワードは英語・小文字・ケバブケースに固定されており、
+    //      大文字を含む表記は許容されないことを確認
+    // 検証項目: 同値分割における「無効値クラス」の代表値（大文字表記）
+
+    let result = parse_tile_keyword("Left");
+
+    assert!(result.is_err(), "大文字表記はエラーになる必要があります");
+    assert!(result.unwrap_err().message.contains("無効な tiling 値"));
+}
+
+/// ハイフンなしのエイリアス（例: "fullscreen"）はエラーになることを確認
+#[test]
+fn test_parse_tile_keyword_alias_without_hyphen_returns_err() {
+    // 目的: "full-screen" のエイリアスである "fullscreen"（ハイフンなし表記）が
+    //      許容されないことを確認（表記揺れを許容しない設計、Issue #121で決定）
+    // 検証項目: 同値分割における「無効値クラス」の代表値（エイリアス表記）
+
+    let result = parse_tile_keyword("fullscreen");
+
+    assert!(
+        result.is_err(),
+        "ハイフンなしのエイリアスはエラーになる必要があります"
+    );
+    assert!(result.unwrap_err().message.contains("fullscreen"));
+}
+
+/// 存在しないキーワード（例: "diagonal"）はエラーになることを確認
+#[test]
+fn test_parse_tile_keyword_unknown_keyword_returns_err() {
+    // 目的: 許容キーワード一覧に存在しない値がエラーになることを確認
+    // 検証項目: 同値分割における「無効値クラス」の代表値（未知のキーワード）
+
+    let result = parse_tile_keyword("diagonal");
+
+    assert!(
+        result.is_err(),
+        "未知のキーワードはエラーになる必要があります"
+    );
+    assert!(result.unwrap_err().message.contains("diagonal"));
+}
+
+/// 空文字列はエラーになることを確認（境界値: 最短の無効な入力）
+#[test]
+fn test_parse_tile_keyword_empty_string_returns_err() {
+    // 目的: 空文字列という境界値でもエラーとして扱われることを確認
+    // 検証項目: 境界値分析（文字列長 0 のケース）
+
+    let result = parse_tile_keyword("");
+
+    assert!(result.is_err(), "空文字列はエラーになる必要があります");
+}
+
+/// エラーメッセージに許容されるキーワード一覧がすべて含まれることを確認
+#[test]
+fn test_parse_tile_keyword_error_message_contains_all_allowed_keywords() {
+    // 目的: エラーメッセージがユーザーに正しい修正方法を示せるよう、
+    //      許容キーワード一覧（カンマ区切り）が含まれることを確認
+    // 検証項目: エラーメッセージのフォーマット網羅
+
+    let result = parse_tile_keyword("invalid-keyword");
+    let message = result.unwrap_err().message;
+
+    assert!(message.contains(
+        "left, right, top, bottom, top-left, top-right, bottom-left, bottom-right, full-screen"
+    ));
+}
+
+// =============================================================================
+// tiling フィールドのバリデーションテスト（Issue #121/#122、validate_window_config経由）
+// =============================================================================
+//
+// tiling と position/size の相互排他チェック、および version 1.0 での
+// tiling 非対応チェックを validate_layout_syntax() 経由で検証する。
+//
+// ブラックボックステスト観点（同値分割・組み合わせテスト/相互作用テスト）:
+//   - tiling のみ指定 × version 2.0 → 成功
+//   - tiling と position/size の組み合わせ（position のみ/size のみ/両方）× version 2.0
+//     → いずれもエラー（相互排他）
+//   - tiling 指定 × version 1.0 → エラー（バージョン非対応）
+//   - tiling に不正なキーワード × version 2.0 → エラー（parse_tile_keyword のラップ確認）
+//   - tiling/position/size すべて None × version 2.0 → 成功（Issue #120 との回帰確認）
+
+/// version 2.0 で tiling のみ指定した場合、バリデーションが成功することを確認
+#[test]
+fn test_validate_layout_syntax_tiling_only_version_2_0_ok() {
+    // 目的: tiling フィールドのみを指定した version 2.0 の設定が
+    //      正常に検証を通過することを確認
+    // 検証項目: position/size がどちらも None であれば、
+    //          tiling 指定単独では相互排他違反にならないこと
+
+    let layout = LayoutFile {
+        version: "2.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Google Chrome".to_string(),
+                    position: None,
+                    size: None,
+                    tiling: Some("left".to_string()),
+                }],
+            }],
+        }],
+    };
+
+    let result = validate_layout_syntax(&layout);
+    assert!(
+        result.is_ok(),
+        "tiling のみの指定は成功するはず: {:?}",
+        result.err()
+    );
+}
+
+/// version 2.0 で tiling と position を同時指定した場合、相互排他エラーになることを確認
+#[test]
+fn test_validate_layout_syntax_tiling_and_position_conflict_err() {
+    // 目的: tiling と position の同時指定が相互排他バリデーションでエラーになることを確認
+    // 検証項目: エラーメッセージに
+    //          「'tiling' と 'position'/'size' を同時に指定することはできません」を含む
+
+    let layout = LayoutFile {
+        version: "2.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Google Chrome".to_string(),
+                    position: Some(Position {
+                        x: json!("left"),
+                        y: json!("top"),
+                    }),
+                    size: None,
+                    tiling: Some("left".to_string()),
+                }],
+            }],
+        }],
+    };
+
+    let result = validate_layout_syntax(&layout);
+    assert!(
+        result.is_err(),
+        "tiling と position の同時指定はエラーになる必要があります"
+    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("'tiling' と 'position'/'size' を同時に指定することはできません"));
+}
+
+/// version 2.0 で tiling と size を同時指定した場合、相互排他エラーになることを確認
+#[test]
+fn test_validate_layout_syntax_tiling_and_size_conflict_err() {
+    // 目的: tiling と size の同時指定が相互排他バリデーションでエラーになることを確認
+    // 検証項目: position が指定されていない場合でも、size のみとの組み合わせでエラーになること
+
+    let layout = LayoutFile {
+        version: "2.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Google Chrome".to_string(),
+                    position: None,
+                    size: Some(Size {
+                        width: json!("half"),
+                        height: json!("half"),
+                    }),
+                    tiling: Some("left".to_string()),
+                }],
+            }],
+        }],
+    };
+
+    let result = validate_layout_syntax(&layout);
+    assert!(
+        result.is_err(),
+        "tiling と size の同時指定はエラーになる必要があります"
+    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("'tiling' と 'position'/'size' を同時に指定することはできません"));
+}
+
+/// version 2.0 で tiling と position と size をすべて同時指定した場合、エラーになることを確認
+#[test]
+fn test_validate_layout_syntax_tiling_position_size_all_conflict_err() {
+    // 目的: tiling と position/size がすべて指定された最も厳しい組み合わせでも
+    //      相互排他チェックが正しく機能することを確認（相互作用テスト）
+    // 検証項目: position/size の中身（値そのもの）に関わらず、
+    //          キーの存在だけで「指定あり」と判定されること
+
+    let layout = LayoutFile {
+        version: "2.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Google Chrome".to_string(),
+                    position: Some(Position {
+                        x: json!("left"),
+                        y: json!("top"),
+                    }),
+                    size: Some(Size {
+                        width: json!("half"),
+                        height: json!("half"),
+                    }),
+                    tiling: Some("top-left".to_string()),
+                }],
+            }],
+        }],
+    };
+
+    let result = validate_layout_syntax(&layout);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("'tiling' と 'position'/'size' を同時に指定することはできません"));
+}
+
+/// version 1.0 で tiling を指定した場合、バージョン非対応エラーになることを確認
+#[test]
+fn test_validate_layout_syntax_tiling_unsupported_in_version_1_0_err() {
+    // 目的: tiling フィールドが version 1.0 ではサポートされないことを確認
+    // 検証項目: エラーメッセージに
+    //          「version 1.0 では 'tiling' フィールドはサポートされていません」を含む
+
+    let layout = LayoutFile {
+        version: "1.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Google Chrome".to_string(),
+                    position: None,
+                    size: None,
+                    tiling: Some("left".to_string()),
+                }],
+            }],
+        }],
+    };
+
+    let result = validate_layout_syntax(&layout);
+    assert!(
+        result.is_err(),
+        "version 1.0 での tiling 指定はエラーになる必要があります"
+    );
+    assert!(result
+        .unwrap_err()
+        .message
+        .contains("version 1.0 では 'tiling' フィールドはサポートされていません"));
+}
+
+/// version 2.0 で不正な tiling 値を指定した場合、parse_tile_keyword() のエラーが
+/// ラップされて返されることを確認
+#[test]
+fn test_validate_layout_syntax_tiling_invalid_keyword_err() {
+    // 目的: parse_tile_keyword() のエラーが validate_window_config() 経由で
+    //      正しくラップされ、ディスプレイ名・アプリ名を含む詳細なメッセージになることを確認
+    // 検証項目: エラーメッセージにディスプレイ名・アプリ名・元のエラーメッセージが含まれること
+
+    let layout = LayoutFile {
+        version: "2.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Google Chrome".to_string(),
+                    position: None,
+                    size: None,
+                    tiling: Some("invalid-keyword".to_string()),
+                }],
+            }],
+        }],
+    };
+
+    let result = validate_layout_syntax(&layout);
+    assert!(
+        result.is_err(),
+        "不正な tiling 値はエラーになる必要があります"
+    );
+    let message = result.unwrap_err().message;
+    assert!(message.contains("Built-in"), "ディスプレイ名が含まれるべき");
+    assert!(message.contains("Google Chrome"), "アプリ名が含まれるべき");
+    assert!(
+        message.contains("無効な tiling 値"),
+        "parse_tile_keyword() のエラーがラップされるべき"
+    );
+}
+
+/// version 2.0 で tiling/position/size がすべて None（アプリ名のみ）の場合、
+/// 成功することを確認（Issue #120 との回帰確認）
+#[test]
+fn test_validate_layout_syntax_tiling_position_size_all_none_version_2_0_ok() {
+    // 目的: tiling を追加した後も、既存の「アプリ起動のみ」ユースケース（Issue #120）が
+    //      version 2.0 でも引き続き成功することを確認する回帰テスト
+    // 検証項目: tiling/position/size すべて None でもバリデーションエラーにならないこと
+
+    let layout = LayoutFile {
+        version: "2.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Finder".to_string(),
+                    position: None,
+                    size: None,
+                    tiling: None,
+                }],
+            }],
+        }],
+    };
+
+    let result = validate_layout_syntax(&layout);
+    assert!(
+        result.is_ok(),
+        "すべて None の場合は成功するはず: {:?}",
+        result.err()
+    );
+}
+
+/// version 2.0 の layout がバージョンチェックを通過することを確認
+#[test]
+fn test_validate_layout_syntax_version_2_0_ok() {
+    // 目的: Issue #121/#122 で追加サポートされた version 2.0 が
+    //      バージョンチェックを通過することを確認
+    // 検証項目: version "2.0" の layout.json が validate_layout_syntax() でエラーにならないこと
+    //          （既存の test_validate_layout_syntax_version_ok は version 1.0 を検証しており、
+    //          2.0 単独の確認テストが不足していたため追加）
+
+    let layout = LayoutFile {
+        version: "2.0".to_string(),
+        layouts: vec![LayoutConfig {
+            displays: vec![DisplayConfig {
+                name: "Built-in".to_string(),
+                windows: vec![AppWindowConfig {
+                    app: "Google Chrome".to_string(),
+                    position: None,
+                    size: None,
+                    tiling: None,
+                }],
+            }],
+        }],
+    };
+
+    let result = validate_layout_syntax(&layout);
+    assert!(result.is_ok());
 }

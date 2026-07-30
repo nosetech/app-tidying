@@ -72,8 +72,10 @@ fn test_parse_config_missing_version() {
 
 #[test]
 fn test_parse_config_unsupported_version() {
+    // version 2.0 は Issue #121/#122（tilingフィールド）によりサポート対象と
+    // なったため、非対応バージョンとして 3.0 を使用する
     let json = r#"{
-        "version": "2.0",
+        "version": "3.0",
         "layouts": []
     }"#;
 
