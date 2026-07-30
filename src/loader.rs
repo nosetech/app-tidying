@@ -301,13 +301,16 @@ fn process_window(
         .map_err(|e| format!("アプリ起動失敗: {}", e))?;
 
     // 2. ウィンドウの存在確認
-    let window_exists = match applescript::get_all_windows(&window_config.app) {
-        Ok(windows) => !windows.is_empty(),
+    //    取得したウィンドウ一覧は、position/size の個別フィールドが未指定（null）の
+    //    場合に現在値で補完するため（Issue #120）保持しておく。
+    let mut current_windows = match applescript::get_all_windows(&window_config.app) {
+        Ok(windows) => windows,
         Err(e) => {
             log::warn!("ウィンドウ一覧取得でエラーが発生しました: {}", e);
-            false
+            Vec::new()
         }
     };
+    let window_exists = !current_windows.is_empty();
 
     // 3. ウィンドウが存在しない場合は新規作成
     if !window_exists {
@@ -317,6 +320,21 @@ fn process_window(
 
         // 新規ウィンドウの作成を待機
         thread::sleep(Duration::from_millis(500));
+
+        // 新規作成後のウィンドウ位置・サイズを再取得する（position/size の個別フィールド
+        // 部分指定時、未指定側の補完に使用するため。取得に失敗した場合は補完せず
+        // ディスプレイ原点相当の値をフォールバックとして使用する）
+        current_windows = match applescript::get_all_windows(&window_config.app) {
+            Ok(windows) => windows,
+            Err(e) => {
+                log::debug!(
+                    "新規作成したウィンドウの情報取得に失敗しました（position/size の \
+                     部分指定の補完はディスプレイ原点相当の値にフォールバックします）: {}",
+                    e
+                );
+                Vec::new()
+            }
+        };
     }
 
     // 4. OS標準メニュー操作を優先的に試行する
@@ -377,8 +395,29 @@ fn process_window(
         }
     }
 
-    // 5. サイズを計算
-    let (size_opt, position_opt) = if let Some(ref size) = window_config.size {
+    // 5. position/size の個別フィールドが未指定（null）の場合、現在のウィンドウ位置・
+    //    サイズで補完する（Issue #120）。
+    //    位置は、parse_position_value 側で再度ディスプレイ原点が加算されるため、
+    //    ディスプレイ相対座標に変換してから渡す。
+    let current_position_relative = current_windows.first().map(|w| {
+        (
+            w.position.0 - display_info.origin_x,
+            w.position.1 - display_info.origin_y,
+        )
+    });
+    let current_size = current_windows.first().map(|w| w.size);
+
+    let filled_size = window_config
+        .size
+        .as_ref()
+        .map(|size| crate::config::fill_absent_size(size, current_size));
+    let filled_position = window_config
+        .position
+        .as_ref()
+        .map(|position| crate::config::fill_absent_position(position, current_position_relative));
+
+    // 6. サイズを計算
+    let (size_opt, position_opt) = if let Some(ref size) = filled_size {
         let size_value = serde_json::to_value(size)
             .map_err(|e| format!("サイズ情報のシリアライズに失敗しました: {}", e))?;
         let (width, height) = crate::config::parse_size_value(
@@ -389,7 +428,7 @@ fn process_window(
         )
         .map_err(|e| format!("サイズ計算失敗: {}", e))?;
 
-        let position = if let Some(ref position) = window_config.position {
+        let position = if let Some(ref position) = filled_position {
             let position_value = serde_json::to_value(position)
                 .map_err(|e| format!("位置情報のシリアライズに失敗しました: {}", e))?;
             let (x, y) = crate::config::parse_position_value(
@@ -409,7 +448,7 @@ fn process_window(
         };
 
         (Some((width, height)), position)
-    } else if let Some(ref position) = window_config.position {
+    } else if let Some(ref position) = filled_position {
         // サイズ指定なしの場合はディスプレイサイズを使用
         let position_value = serde_json::to_value(position)
             .map_err(|e| format!("位置情報のシリアライズに失敗しました: {}", e))?;
@@ -457,7 +496,7 @@ fn process_window(
         return Ok(());
     }
 
-    // 6. ウィンドウを移動・リサイズ
+    // 7. ウィンドウを移動・リサイズ
     applescript::resize_window(&window_config.app, position_opt, size_opt).map_err(|e| {
         log::warn!(
             "ウィンドウのリサイズに失敗しました: アプリ: {}, 位置: {:?}, サイズ: {:?}, AppleScript エラー: {}",

@@ -472,7 +472,9 @@ fn validate_value(
             }
         }
         serde_json::Value::Null => {
-            // null は許可
+            // null は許可（Issue #120: x/y または width/height を片方だけ指定した場合、
+            // 未指定側は `fill_absent_position`/`fill_absent_size` により load 実行時に
+            // 現在のウィンドウ位置・サイズで補完されるため、ここではエラーとしない）
         }
         _ => {
             return Err(AppConfigError {
@@ -1211,6 +1213,68 @@ fn value_is_str(value: &serde_json::Value, expected: &str) -> bool {
 /// `serde_json::Value` が未指定（`null`）かどうかを判定する
 fn value_is_absent(value: &serde_json::Value) -> bool {
     value.is_null()
+}
+
+// =============================================================================
+// position/size の個別フィールド部分指定への対応（Issue #120）
+// =============================================================================
+
+/// `Position` の `x`/`y` のうち未指定（`null`）のフィールドを、現在のウィンドウ位置で補完する
+///
+/// `x`/`y` を片方だけ指定した `layout.json` に対応するための関数。指定されていない側は
+/// 変更せず現在のウィンドウ位置を維持したいため、`load` 実行時にディスプレイ相対座標へ
+/// 変換済みの現在位置（`current`）で補完してから、既存の [`parse_position_value`] に渡す。
+///
+/// # Arguments
+/// * `position` - `layout.json` の位置指定（一部フィールドが `null` の可能性がある）
+/// * `current` - 現在のウィンドウ位置（ディスプレイ原点を差し引いた相対座標）。
+///   取得できなかった場合は `None`（この場合はディスプレイ原点 `(0, 0)` を補完値として使用する）
+///
+/// # Returns
+/// `x`/`y` の `null` フィールドを補完した新しい `Position`
+pub fn fill_absent_position(position: &Position, current: Option<(i32, i32)>) -> Position {
+    let (current_x, current_y) = current.unwrap_or((0, 0));
+    Position {
+        x: if value_is_absent(&position.x) {
+            serde_json::json!(current_x)
+        } else {
+            position.x.clone()
+        },
+        y: if value_is_absent(&position.y) {
+            serde_json::json!(current_y)
+        } else {
+            position.y.clone()
+        },
+    }
+}
+
+/// `Size` の `width`/`height` のうち未指定（`null`）のフィールドを、現在のウィンドウサイズで補完する
+///
+/// `width`/`height` を片方だけ指定した `layout.json` に対応するための関数。指定されていない
+/// 側は変更せず現在のウィンドウサイズを維持したいため、現在サイズ（`current`）で補完してから
+/// 既存の [`parse_size_value`] に渡す。
+///
+/// # Arguments
+/// * `size` - `layout.json` のサイズ指定（一部フィールドが `null` の可能性がある）
+/// * `current` - 現在のウィンドウサイズ（幅, 高さ）。取得できなかった場合は `None`
+///   （この場合は `(0, 0)` を補完値として使用する）
+///
+/// # Returns
+/// `width`/`height` の `null` フィールドを補完した新しい `Size`
+pub fn fill_absent_size(size: &Size, current: Option<(i32, i32)>) -> Size {
+    let (current_width, current_height) = current.unwrap_or((0, 0));
+    Size {
+        width: if value_is_absent(&size.width) {
+            serde_json::json!(current_width)
+        } else {
+            size.width.clone()
+        },
+        height: if value_is_absent(&size.height) {
+            serde_json::json!(current_height)
+        } else {
+            size.height.clone()
+        },
+    }
 }
 
 /// `position`/`size` のパターン指定から、OS標準タイリングで実現可能な配置かどうかを判定する
