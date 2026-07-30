@@ -8,22 +8,63 @@
 //! Issue #116（`technical-verification/verify_window_menu_control.sh`）で
 //! 実機検証済みのAppleScriptロジックをRust側に移植したもの。
 //!
+//! # フォールバックについて（Issue #121/#122）
+//!
+//! layout.json の `tiling` フィールドと `position`/`size` は相互排他（同時指定不可）
+//! であるため、本モジュールの関数の呼び出し元（`loader::process_window`）には
+//! フォールバック先となる絶対座標指定が存在しない。そのため、以下の関数の呼び出しが
+//! 失敗した場合、直接プロパティ設定へのフォールバックは行わず、そのウィンドウの
+//! 配置は失敗として扱われる（部分失敗としてWARN通知され、他のウィンドウの処理は
+//! 継続する。詳細はCLAUDE.md「タイリング指定」の「メニュー操作が失敗した場合の
+//! 扱い」を参照）。
+//!
+//! 唯一の例外は [`move_window_to_display_via_menu`] で、ウィンドウが既に対象
+//! ディスプレイ上にありメニュー項目自体が存在しない場合の失敗であり、これは
+//! 異常ではないため呼び出し元で無視される（後続の [`tile_window_via_menu`] は
+//! そのまま実行される）。
+//!
 //! # 既知の制約
 //!
 //! - **Finderの不安定な挙動**: Issue #116 の検証で、Finderは「\[ディスプレイ名\]に移動」
 //!   メニュー項目の表示状態が他アプリと異なる不安定な挙動を示すことを確認している。
-//!   本モジュールの関数はFinderを特別扱いしていないため、失敗時は呼び出し側の
-//!   フォールバック処理（直接プロパティ設定）に委ねる。
+//!   本モジュールの関数はFinderを特別扱いしていない。
 //! - **並列実行時の `activate` 競合**: 本モジュールの関数は対象アプリを
 //!   `activate`（前面化）してからメニュー操作を行う。`loader::load_layout()` は
 //!   同一ディスプレイ内の複数ウィンドウを rayon で並列処理するため、異なるアプリを
 //!   対象とする複数スレッドがほぼ同時に `activate` を実行すると、意図しないアプリが
-//!   前面化された状態でメニュー探索が行われ、操作が失敗する可能性がある。この場合も
-//!   呼び出し側のフォールバック処理により最終的な配置の正しさは維持される。
+//!   前面化された状態でメニュー探索が行われる可能性がある（Issue #122のコードレビュー
+//!   で指摘）。`tiling` 指定時はフォールバックが存在せずこの競合がそのまま操作失敗に
+//!   つながるため、`run_menu_action_script` 内で `MENU_ACTION_LOCK` により
+//!   本モジュールが実行する `activate` からメニュークリックまでの一連の操作を
+//!   プロセス全体で直列化し、競合を防止している。
 
 use crate::applescript::osascript::run_osascript;
 use crate::applescript::utils::escape_applescript_string;
 use crate::config::TileKeyword;
+use std::sync::{Mutex, OnceLock};
+
+/// ウィンドウメニュー操作（`activate`を伴う）の排他制御用 Mutex
+///
+/// `activate` はシステム全体のフォアグラウンドアプリを切り替えるため、複数スレッドが
+/// 異なるアプリに対して同時にメニュー操作を行うと、意図しないアプリが前面化された
+/// 状態でメニュー探索が行われる可能性がある。`loader::load_layout()` が同一
+/// ディスプレイ内の複数ウィンドウを rayon で並列処理するため、
+/// [`run_menu_action_script`] 内で本モジュールの `activate` からメニュークリック
+/// までの一連の操作をプロセス全体で直列化する（Issue #122のコードレビューで指摘）。
+static MENU_ACTION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+fn get_menu_action_lock() -> &'static Mutex<()> {
+    MENU_ACTION_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+/// [`move_window_to_display_via_menu`] が「ディスプレイ移動メニュー項目が
+/// 見つかりません」で失敗した場合に返すメッセージ
+///
+/// このメッセージは、ウィンドウが既に対象ディスプレイ上にあるためメニュー項目自体が
+/// 表示されない、という想定内のケースを示す。[`WindowMenuError::is_display_menu_item_not_found`]
+/// で判定できる（Issue #122のコードレビューで指摘。詳細は
+/// [`move_window_to_display_via_menu`] のドキュメントを参照）。
+const DISPLAY_MENU_ITEM_NOT_FOUND_MESSAGE: &str = "ディスプレイ移動メニュー項目が見つかりません";
 
 /// ウィンドウメニュー操作エラー
 #[derive(Debug)]
@@ -38,6 +79,23 @@ impl std::fmt::Display for WindowMenuError {
 }
 
 impl std::error::Error for WindowMenuError {}
+
+impl WindowMenuError {
+    /// [`move_window_to_display_via_menu`] が「ディスプレイ移動メニュー項目が
+    /// 見つからない」ことを理由に失敗したかどうかを判定する
+    ///
+    /// このケースは、ウィンドウが既に対象ディスプレイ上にあるために発生する想定内の
+    /// 失敗であり、異常とはみなさない（呼び出し元の `loader::process_window` は
+    /// この場合は無視して後続の [`tile_window_via_menu`] を実行する）。
+    ///
+    /// これが `false` を返す場合（「ウインドウ」メニュー自体が見つからない、
+    /// Accessibility API の権限がない等）は、想定外の異常な失敗であるため、
+    /// 呼び出し元は WARN レベルでログ出力するなど、区別して扱うべきである
+    /// （Issue #122のコードレビューで指摘）。
+    pub fn is_display_menu_item_not_found(&self) -> bool {
+        self.message.contains(DISPLAY_MENU_ITEM_NOT_FOUND_MESSAGE)
+    }
+}
 
 /// 「ウインドウ」メニューを探索するAppleScript共通部分
 ///
@@ -74,7 +132,15 @@ fn build_name_match_condition(var_name: &str, candidates: &[&str]) -> String {
 /// `osascript` を実行し、`"Success"` / それ以外 の結果を `Result` に変換する
 ///
 /// メニュー操作系スクリプトはいずれも成功時に `"Success"` を返す規約になっている。
+///
+/// スクリプト内で対象アプリを `activate`（前面化）してからメニュー操作を行うため、
+/// [`MENU_ACTION_LOCK`] により実行全体をプロセス全体で直列化し、並列実行時の
+/// `activate` 競合を防止する（Issue #122のコードレビューで指摘）。
 fn run_menu_action_script(script: &str, failure_prefix: &str) -> Result<(), WindowMenuError> {
+    let _guard = get_menu_action_lock().lock().map_err(|e| WindowMenuError {
+        message: format!("メニュー操作ロックの取得に失敗しました: {}", e),
+    })?;
+
     let output = run_osascript(script).map_err(|e| WindowMenuError { message: e.message })?;
 
     if !output.status.success() {
@@ -222,8 +288,17 @@ end tell
 /// `System Events` 経由でクリックする。このメニュー項目は、ウィンドウが
 /// 現在表示されていないディスプレイに対してのみ表示されるため（Issue #116
 /// で実機確認済み）、既にウィンドウが対象ディスプレイ上にある場合は
-/// メニュー項目が見つからず `Err` を返す。呼び出し側はこれを異常とはせず、
-/// 既存の絶対座標移動処理へフォールバックすればよい。
+/// メニュー項目が見つからず `Err` を返す（[`WindowMenuError::is_display_menu_item_not_found`]
+/// が `true` を返す）。これは異常な失敗ではなく想定内のケースであるため、呼び出し元
+/// （`loader::process_window`）はこの場合に限り `Err` を無視し、後続の
+/// [`tile_window_via_menu`] をそのまま実行する（Issue #121/#122。`tiling` 指定時は
+/// `position`/`size` によるフォールバックが存在しないため、本関数の失敗自体を
+/// 許容できるのはこのケースのみである点に注意）。
+///
+/// 一方、`is_display_menu_item_not_found()` が `false` を返す場合（「ウインドウ」
+/// メニュー自体が見つからない、Accessibility API の権限がない等）は想定外の異常な
+/// 失敗であるため、呼び出し元はこれを区別してWARNレベルでログ出力する
+/// （Issue #122のコードレビューで指摘）。
 ///
 /// # Arguments
 /// * `app_name` - アプリケーション名
@@ -277,7 +352,7 @@ tell application "System Events"
       end repeat
 
       if targetItem is missing value then
-        return "Error: ディスプレイ移動メニュー項目が見つかりません"
+        return "Error: {not_found_message}"
       end if
 
       click targetItem
@@ -290,7 +365,8 @@ end tell
 "#,
         app = escaped_app_name,
         find_menu = FIND_WINDOW_MENU_SCRIPT,
-        condition = target_condition
+        condition = target_condition,
+        not_found_message = DISPLAY_MENU_ITEM_NOT_FOUND_MESSAGE
     );
 
     run_menu_action_script(&script, "ディスプレイ移動メニュー操作に失敗しました")
