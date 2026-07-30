@@ -1207,8 +1207,9 @@ fn parse_height_value(
 ///
 /// **注意**: `position`/`size` のパターン指定から自動推測する仕組み（旧
 /// `resolve_tile_keyword()`、Issue #118）は Issue #123 の設計変更に伴い削除された。
-/// 現在この enum は、Issue #123 で追加予定の layout.json version 2.0 の明示的な
-/// `tiling` フィールド実装（Issue #122）から利用されることを想定している。
+/// 現在この enum は、layout.json version 2.0 の明示的な `tiling` フィールド
+/// （[`AppWindowConfig::tiling`]、Issue #121で設計・Issue #122で実装）から
+/// [`parse_tile_keyword`] を経由して利用される。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TileKeyword {
     /// 左半分（「移動とサイズ変更」＞「左」）
